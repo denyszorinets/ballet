@@ -165,6 +165,33 @@ issued run token.
 :Sensitive: yes — private keys
 :Environment: ``BALLET_CORE_TOKENS_KEY_FILE``
 
+.. _reference-config-services:
+
+``[services]`` (core)
+---------------------
+
+Identities of Ballet's own services (:ref:`run tokens <reference-run-tokens-services>`).
+
+``tokens_dir``
+~~~~~~~~~~~~~~
+
+Directory where Core writes ``gateway.token``, ``knowledge.token`` and
+``runner.token``.
+
+:Type: string (path)
+:Default: ``"data/service-tokens"``
+:Sensitive: yes — the files are credentials
+:Environment: ``BALLET_CORE_SERVICES_TOKENS_DIR``
+
+``token_ttl``
+~~~~~~~~~~~~~
+
+Lifetime of service tokens; they are re-issued every quarter of it.
+
+:Type: duration, at least ``1h``
+:Default: ``"720h"`` (30 days)
+:Environment: ``BALLET_CORE_SERVICES_TOKEN_TTL``
+
 .. _reference-config-web:
 
 ``[web]`` (core)
