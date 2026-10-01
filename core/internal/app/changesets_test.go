@@ -221,3 +221,22 @@ func TestChangesets_StoreRejectsAStaleApplicationAtomically(t *testing.T) {
 	items, _ := tr.ListItems(bob, "WEB", "", "", "", "")
 	assert.Empty(t, items)
 }
+
+func TestChangesets_ThePlannerProposesButNeverDecides(t *testing.T) {
+	cs, _ := newChangesets(t)
+	bob := user(t, "bob", "acme-devs")
+	asPlanner := app.ActingAsPlanner(bob, "s1")
+	proposed, err := cs.Propose(asPlanner, app.ProposeInput{ProjectKey: "WEB", Title: "t", Ops: []changeset.Op{
+		createOp("x", tracker.KindTicket, "x"),
+	}})
+	require.NoError(t, err)
+	assert.Equal(t, "planner:s1", proposed.ProposedBy.Subject)
+	assert.Equal(t, "bob", proposed.ProposedBy.ActingFor)
+
+	_, err = cs.Apply(asPlanner, proposed.ID, []int{0})
+	assert.ErrorIs(t, err, app.ErrForbidden)
+	_, err = cs.Reject(asPlanner, proposed.ID)
+	assert.ErrorIs(t, err, app.ErrForbidden)
+	_, err = cs.Apply(bob, proposed.ID, []int{0})
+	assert.NoError(t, err, "the human approves")
+}

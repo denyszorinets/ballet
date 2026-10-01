@@ -14,8 +14,10 @@ import (
 	"time"
 
 	"github.com/denyszorinets/ballet/core/internal/app"
+	"github.com/denyszorinets/ballet/core/internal/app/plannertools"
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
 	"github.com/denyszorinets/ballet/core/internal/infra/anthropic"
+	"github.com/denyszorinets/ballet/core/internal/infra/knowledge"
 	"github.com/denyszorinets/ballet/core/internal/infra/secrets"
 	"github.com/denyszorinets/ballet/core/internal/infra/servicetokens"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
@@ -227,9 +229,16 @@ func run() error {
 		Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 	}
 	skills := &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID}
+	search := &app.Search{Store: st, Tenancy: st, Authz: authz, Embedder: embed.Hash{}}
+	knowledgeAccess := &app.KnowledgeAccess{Tenancy: st, Authz: authz}
+	changesets := &app.Changesets{Store: st, Tracker: tracker}
 	plannerSvc := &app.Planner{
 		Store: st, Tenancy: st, Authz: authz,
 		LLM: &anthropic.Client{GatewayURL: cfg.Gateway.URL, Tokens: tokenIssuer},
+		Tools: plannertools.All(plannertools.Deps{
+			Tracker: tracker, Changesets: changesets, Skills: skills, Search: search,
+			Knowledge: &knowledge.Client{URL: knowledgeURL, Access: knowledgeAccess, Tokens: tokenIssuer},
+		}),
 		Instructions: func(ctx context.Context, projectKey string) (string, error) {
 			return skills.ProjectSkillBody(ctx, projectKey, cfg.Planner.Skill)
 		},
@@ -245,12 +254,12 @@ func run() error {
 		Credentials:  credentials,
 		Usage:        usage,
 		Skills:       skills,
-		Search:       &app.Search{Store: st, Tenancy: st, Authz: authz, Embedder: embed.Hash{}},
+		Search:       search,
 		Knowledge: &httpapi.KnowledgeProxy{
-			URL: knowledgeURL, Access: &app.KnowledgeAccess{Tenancy: st, Authz: authz}, Tokens: tokenIssuer,
+			URL: knowledgeURL, Access: knowledgeAccess, Tokens: tokenIssuer,
 		},
 		Tracker:    tracker,
-		Changesets: &app.Changesets{Store: st, Tracker: tracker},
+		Changesets: changesets,
 		Planner:    plannerSvc,
 	})
 

@@ -214,7 +214,7 @@ func (pl *Planner) Send(ctx context.Context, sessionID, text string) (planner.Me
 	if strings.TrimSpace(text) == "" || utf8.RuneCountInString(text) > maxMessage {
 		return planner.Message{}, fmt.Errorf("%w: a message must be 1-%d characters", ErrInvalid, maxMessage)
 	}
-	turn, cancel := context.WithCancel(auth.WithIdentity(pl.Context, id))
+	turn, cancel := context.WithCancel(ActingAsPlanner(auth.WithIdentity(pl.Context, id), s.ID))
 	pl.mu.Lock()
 	if pl.turns == nil {
 		pl.turns = map[string]context.CancelFunc{}
