@@ -27,7 +27,8 @@ var durationType = reflect.TypeFor[time.Duration]()
 
 // Load fills dst, a pointer to a struct pre-populated with defaults. Values from
 // the TOML file at path (skipped when path is empty) override defaults;
-// environment variables override the file. Unknown file keys are rejected.
+// environment variables override the file. String lists are comma-separated
+// in environment variables. Unknown file keys are rejected.
 // If dst implements Validator, it is validated last.
 func Load(path, envPrefix string, dst any) error {
 	if path != "" {
@@ -109,6 +110,18 @@ func setFromString(field reflect.Value, raw string) error {
 		return nil
 	}
 	switch field.Kind() {
+	case reflect.Slice:
+		if field.Type().Elem().Kind() != reflect.String {
+			return fmt.Errorf("unsupported type %s", field.Type())
+		}
+		// Comma-separated; surrounding spaces and empty items are dropped.
+		items := []string{}
+		for item := range strings.SplitSeq(raw, ",") {
+			if item = strings.TrimSpace(item); item != "" {
+				items = append(items, item)
+			}
+		}
+		field.Set(reflect.ValueOf(items))
 	case reflect.String:
 		field.SetString(raw)
 	case reflect.Bool:

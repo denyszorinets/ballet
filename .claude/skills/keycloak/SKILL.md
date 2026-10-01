@@ -60,11 +60,18 @@ TOKEN=$(scripts/dev-token.sh bob)
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/me
 ```
 
-Run Core against it:
+Run Core against it (alice becomes org-admin through the bootstrap
+binding; bob and carol need role bindings created by alice):
 
 ```bash
-BALLET_CORE_OIDC_ISSUER_URL=http://localhost:8180/realms/ballet go run ./core/cmd/core
+BALLET_CORE_OIDC_ISSUER_URL=http://localhost:8180/realms/ballet \
+BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS=groups:ballet-admins \
+  go run ./core/cmd/core
 ```
+
+Typical setup for manual tests (as alice): create customer `acme`, then
+bind `acme-devs` → `engineer` @ `customer:acme` and `acme-viewers` →
+`viewer` @ `customer:acme` via `POST /api/v1/role-bindings`.
 
 Decode a token's claims when debugging:
 

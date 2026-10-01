@@ -4,27 +4,28 @@ import (
 	"context"
 
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
+	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
 	"github.com/denyszorinets/ballet/kit/auth"
 )
 
-// Action is an operation subject to authorization.
-type Action string
+// Action is an operation subject to authorization (defined by the rbac policy).
+type Action = rbac.Action
 
-// Actions.
+// Actions used by use cases.
 const (
-	ActCustomerCreate Action = "customer.create"
-	ActCustomerRead   Action = "customer.read"
-	ActCustomerUpdate Action = "customer.update"
-	ActProjectCreate  Action = "project.create"
-	ActProjectRead    Action = "project.read"
-	ActProjectUpdate  Action = "project.update"
+	ActCustomerCreate    = rbac.ActCustomerCreate
+	ActCustomerRead      = rbac.ActCustomerRead
+	ActCustomerUpdate    = rbac.ActCustomerUpdate
+	ActProjectCreate     = rbac.ActProjectCreate
+	ActProjectRead       = rbac.ActProjectRead
+	ActProjectUpdate     = rbac.ActProjectUpdate
+	ActRoleBindingManage = rbac.ActRoleBindingManage
+	ActRoleBindingRead   = rbac.ActRoleBindingRead
 )
 
-// Scope is where an action applies. Empty fields mean organization level.
-type Scope struct {
-	Customer string // customer key
-	Project  string // project key
-}
+// Scope is where an action applies: customer and project keys; empty
+// fields mean organization level.
+type Scope = rbac.Target
 
 // Authorizer decides whether an identity may perform an action in a scope.
 // It returns nil to allow, ErrForbidden to deny.

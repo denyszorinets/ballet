@@ -75,6 +75,35 @@ Identity
    The caller as Core sees it:
    ``{"subject", "email", "name", "groups"}``.
 
+``/me`` also returns ``bindings``: the role bindings that apply to the
+caller (see below for the representation).
+
+Roles and role bindings
+-----------------------
+
+``GET /api/v1/roles`` → ``200`` list of ``{"role", "actions"}``
+
+Binding representation:
+
+.. code-block:: json
+
+   {"id": "0199…", "claim": "groups", "value": "acme-devs", "role": "engineer",
+    "scope": "customer:acme", "bootstrap": false, "created_at": "…"}
+
+``scope`` is ``organization``, ``customer:<key>`` or ``project:<key>``.
+
+``GET /api/v1/role-bindings`` → ``200`` list
+   Bindings the caller may read (``role_binding.read`` at the binding's
+   customer, or organization), bootstrap bindings first.
+
+``POST /api/v1/role-bindings`` — ``{"claim", "value", "role", "scope"}`` → ``201``
+   Requires ``role_binding.manage`` at the scope. ``org-admin`` only at
+   ``organization``; ``customer-admin`` not at project scope. The
+   customer/project must exist (``404``); duplicates are ``409``.
+
+``DELETE /api/v1/role-bindings/{id}`` → ``204``
+   Bootstrap bindings are not stored and return ``404``.
+
 Customers
 ---------
 
