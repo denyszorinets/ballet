@@ -1,0 +1,14 @@
+# Development dependencies for hosts with Docker or Podman:
+#   docker compose -f deploy/dev/compose.yaml up -d
+# Without a container runtime use scripts/dev-keycloak.sh (same result).
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.5
+    command: ["start-dev", "--http-port", "8180", "--hostname", "http://localhost:8180", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "8180:8180"
+    volumes:
+      - ./keycloak/ballet-realm.json:/opt/keycloak/data/import/ballet-realm.json:ro
