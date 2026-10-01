@@ -20,11 +20,40 @@ Workflow
 - Documentation is updated in the same change as the behavior it
   describes.
 
-Documentation
--------------
+Make targets
+------------
 
-.. code-block:: bash
+The Makefile is the entry point for all routine tasks; CI runs the same
+targets. ``make help`` lists them all.
 
-   make docs          # build into docs/_build/html
-   make docs-serve    # live preview on http://127.0.0.1:8000
-   make docs-check    # strict build + link check; must pass before commit
+.. list-table::
+   :header-rows: 1
+
+   * - Target
+     - Purpose
+   * - ``make check``
+     - Everything CI checks for Go and web: gofmt, vet, staticcheck,
+       race tests, standalone module tests, build, web lint/type
+       check/unit tests
+   * - ``make test`` / ``make test-race``
+     - Go tests in every module (with the race detector)
+   * - ``make test-standalone``
+     - Go tests per module with ``GOWORK=off`` (catches hidden workspace
+       dependencies)
+   * - ``make format`` / ``make format-check``
+     - gofmt (rewrite / verify)
+   * - ``make vet`` / ``make lint``
+     - ``go vet`` / staticcheck (pinned version, run via ``go run``)
+   * - ``make build``
+     - Service binaries into ``bin/``
+   * - ``make tidy``
+     - ``go mod tidy`` per module and ``go work sync``
+   * - ``make web-install`` / ``make web-check`` / ``make web-e2e``
+     - Web dependencies, checks, Playwright end-to-end tests
+   * - ``make docs`` / ``make docs-serve`` / ``make docs-check``
+     - Documentation build, live preview, strict build + link check
+   * - ``make clean``
+     - Remove build artifacts
+
+Before committing: ``make check`` and, when docs changed,
+``make docs-check``.
