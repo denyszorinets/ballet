@@ -16,10 +16,12 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
 	"github.com/denyszorinets/ballet/core/internal/transport/httpapi"
+	"github.com/denyszorinets/ballet/core/internal/transport/realtime"
 	"github.com/denyszorinets/ballet/kit/auth/oidc"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 	"github.com/denyszorinets/ballet/kit/config"
 	"github.com/denyszorinets/ballet/kit/health"
+	"github.com/denyszorinets/ballet/kit/rpc"
 	"github.com/denyszorinets/ballet/kit/service"
 )
 
@@ -145,6 +147,10 @@ func run() error {
 		Tracker: &app.Tracker{
 			Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 		},
+	})
+
+	realtime.Register(svc.Mux, realtime.Deps{
+		Verifier: verifier, Now: time.Now, Options: rpc.Options{Logger: svc.Logger},
 	})
 
 	return svc.ListenAndServe(ctx)
