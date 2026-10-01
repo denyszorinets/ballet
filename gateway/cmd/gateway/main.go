@@ -5,17 +5,27 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
-	"github.com/denyszorinets/ballet/kit/health"
-	"github.com/denyszorinets/ballet/kit/server"
+	"github.com/denyszorinets/ballet/kit/config"
+	"github.com/denyszorinets/ballet/kit/service"
 )
 
-const serviceName = "gateway"
+const (
+	serviceName = "gateway"
+	envPrefix   = "BALLET_GATEWAY"
+)
+
+// serviceConfig is the complete gateway configuration.
+type serviceConfig struct {
+	service.Config
+}
+
+func defaultConfig() serviceConfig {
+	return serviceConfig{Config: service.DefaultConfig(":8082")}
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -25,14 +35,20 @@ func main() {
 }
 
 func run() error {
-	addr := flag.String("addr", ":8082", "HTTP listen address")
+	configPath := flag.String("config", os.Getenv(envPrefix+"_CONFIG"), "path to the TOML configuration file")
 	flag.Parse()
+
+	cfg := defaultConfig()
+	if err := config.Load(*configPath, envPrefix, &cfg); err != nil {
+		return err
+	}
+
+	svc, err := service.New(serviceName, cfg.Config, os.Stdout)
+	if err != nil {
+		return err
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	mux := http.NewServeMux()
-	mux.Handle("/healthz", health.Handler(serviceName))
-
-	return server.ListenAndServe(ctx, *addr, mux, 10*time.Second)
+	return svc.ListenAndServe(ctx)
 }

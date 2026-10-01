@@ -37,13 +37,3 @@ func Serve(ctx context.Context, ln net.Listener, handler http.Handler, shutdownT
 	}
 	return nil
 }
-
-// ListenAndServe listens on addr and calls Serve.
-func ListenAndServe(ctx context.Context, addr string, handler http.Handler, shutdownTimeout time.Duration) error {
-	var lc net.ListenConfig
-	ln, err := lc.Listen(ctx, "tcp", addr)
-	if err != nil {
-		return fmt.Errorf("listen on %s: %w", addr, err)
-	}
-	return Serve(ctx, ln, handler, shutdownTimeout)
-}
