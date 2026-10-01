@@ -19,6 +19,7 @@ export default defineConfig({
 		proxy: {
 			'/api': 'http://127.0.0.1:8080',
 			'/healthz': 'http://127.0.0.1:8080',
+			'/config.json': 'http://127.0.0.1:8080',
 			'/rpc': { target: 'ws://127.0.0.1:8080', ws: true }
 		}
 	},
@@ -32,6 +33,7 @@ export default defineConfig({
 					proxy: {
 						'/api': 'http://127.0.0.1:8080',
 						'/healthz': 'http://127.0.0.1:8080',
+						'/config.json': 'http://127.0.0.1:8080',
 						'/rpc': { target: 'ws://127.0.0.1:8080', ws: true }
 					}
 				},

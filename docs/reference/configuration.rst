@@ -165,6 +165,33 @@ issued run token.
 :Sensitive: yes — private keys
 :Environment: ``BALLET_CORE_TOKENS_KEY_FILE``
 
+.. _reference-config-web:
+
+``[web]`` (core)
+----------------
+
+``client_id``
+~~~~~~~~~~~~~
+
+Public OIDC client the web UI signs in with; published to the browser in
+``/config.json`` together with ``[oidc] issuer_url``.
+
+:Type: string
+:Default: ``"ballet-web"``
+:Environment: ``BALLET_CORE_WEB_CLIENT_ID``
+
+``dir``
+~~~~~~~
+
+Directory of the built web UI (``make web-build`` → ``web/build``). When
+set, Core serves it at ``/``, falling back to ``index.html`` for
+client-side routes. Empty: the UI is not served (development uses the
+Vite dev server).
+
+:Type: string (path)
+:Default: ``""``
+:Environment: ``BALLET_CORE_WEB_DIR``
+
 Operational endpoints
 ---------------------
 
@@ -187,3 +214,6 @@ Every service serves these on its ``[server] addr``:
        ``ballet_build_info{service,version}``.
    * - ``GET /.well-known/jwks.json`` (core only)
      - Public keys for verifying run tokens (:doc:`run-tokens`).
+   * - ``GET /config.json`` (core only)
+     - Public runtime configuration of the web UI:
+       ``{"oidc": {"issuer", "client_id"}}``.
