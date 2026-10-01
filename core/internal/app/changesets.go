@@ -84,7 +84,7 @@ func (cs *Changesets) Propose(ctx context.Context, in ProposeInput) (ChangesetVi
 	now := cs.Tracker.Now()
 	ch := changeset.Changeset{
 		ID: cs.Tracker.NewID(), ProjectID: p.ID, Title: in.Title, Summary: in.Summary, Ops: in.Ops,
-		Status: changeset.StatusProposed, ProposedBy: actorOf(id), CreatedAt: now, Version: 1,
+		Status: changeset.StatusProposed, ProposedBy: actorIn(ctx, id), CreatedAt: now, Version: 1,
 	}
 	if err := ch.Validate(); err != nil {
 		return ChangesetView{}, invalid(err)
@@ -96,7 +96,7 @@ func (cs *Changesets) Propose(ctx context.Context, in ProposeInput) (ChangesetVi
 	if _, _, err := cs.build(ctx, ch, all, p, c, id); err != nil {
 		return ChangesetView{}, err
 	}
-	e := changesetEvent(ch, c.ID, "changeset.proposed", actorOf(id), map[string]any{"title": ch.Title, "operations": len(ch.Ops)})
+	e := changesetEvent(ch, c.ID, "changeset.proposed", ch.ProposedBy, map[string]any{"title": ch.Title, "operations": len(ch.Ops)})
 	if err := cs.Store.CreateChangeset(ctx, ch, e); err != nil {
 		return ChangesetView{}, err
 	}
@@ -138,7 +138,7 @@ func (cs *Changesets) Apply(ctx context.Context, changesetID string, approved []
 	if err != nil {
 		return ChangesetView{}, err
 	}
-	if id.Kind != auth.KindHuman {
+	if _, planner := PlannerSessionOf(ctx); planner || id.Kind != auth.KindHuman {
 		return ChangesetView{}, fmt.Errorf("%w: only a human can approve a changeset", ErrForbidden)
 	}
 	approved = slices.Clone(approved)
@@ -181,7 +181,7 @@ func (cs *Changesets) Reject(ctx context.Context, changesetID string) (Changeset
 	if err != nil {
 		return ChangesetView{}, err
 	}
-	if id.Kind != auth.KindHuman {
+	if _, planner := PlannerSessionOf(ctx); planner || id.Kind != auth.KindHuman {
 		return ChangesetView{}, fmt.Errorf("%w: only a human can decide a changeset", ErrForbidden)
 	}
 	if ch.Status != changeset.StatusProposed {
