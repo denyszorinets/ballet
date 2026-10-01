@@ -35,6 +35,7 @@ type EventReader interface {
 // Tracker implements milestone, epic and ticket use cases.
 type Tracker struct {
 	Items   ItemStore
+	Deps    DependencyStore
 	Tenancy TenancyStore
 	Events  EventReader
 	Authz   Authorizer

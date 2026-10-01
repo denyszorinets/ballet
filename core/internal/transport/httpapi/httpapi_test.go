@@ -59,7 +59,7 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 		Tenancy:      &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		RBAC:         r,
 		RoleBindings: &app.RoleBindings{RBAC: r, Tenancy: st, Now: time.Now, NewID: store.NewID},
-		Tracker:      &app.Tracker{Items: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Tracker:      &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 	})
 	return mux
 }
@@ -280,4 +280,43 @@ func TestTrackerAPI_ItemLifecycle(t *testing.T) {
 
 	code, _ = call(t, api, "GET", "/api/v1/items/WEB-99", "alice", "")
 	assert.Equal(t, http.StatusNotFound, code)
+}
+
+func TestDependencyAPI(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	for range 2 {
+		call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"t"}`)
+	}
+	for _, k := range []string{"WEB-1", "WEB-2"} {
+		call(t, api, "POST", "/api/v1/items/"+k+"/transition", "alice", `{"state":"ready","version":1}`)
+	}
+
+	code, d := call(t, api, "POST", "/api/v1/items/WEB-2/dependencies", "alice", `{"type":"blocked_by","item":"WEB-1"}`)
+	require.Equal(t, http.StatusCreated, code, d)
+	assert.Equal(t, "blocked_by", d["type"])
+	assert.Equal(t, "WEB-1", d["item"].(map[string]any)["key"])
+
+	code, body := call(t, api, "POST", "/api/v1/items/WEB-1/dependencies", "alice", `{"type":"blocked_by","item":"WEB-2"}`)
+	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Contains(t, body["message"], "cycle")
+
+	code, run := call(t, api, "GET", "/api/v1/projects/WEB/runnable", "alice", "")
+	require.Equal(t, http.StatusOK, code)
+	require.Len(t, run["items"], 1)
+	assert.Equal(t, "WEB-1", run["items"].([]any)[0].(map[string]any)["key"])
+
+	code, list := call(t, api, "GET", "/api/v1/items/WEB-1/dependencies", "alice", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, "blocks", list["items"].([]any)[0].(map[string]any)["type"])
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/dependencies/"+d["id"].(string), nil)
+	req.Header.Set("X-Test-User", "alice")
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+
+	_, run = call(t, api, "GET", "/api/v1/projects/WEB/runnable", "alice", "")
+	assert.Len(t, run["items"], 2)
 }

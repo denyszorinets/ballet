@@ -19,7 +19,7 @@ func newTracker(t *testing.T) (*app.Tracker, rbacEnv) {
 	env := newRBACEnv(t)
 	seed(t, env)
 	return &app.Tracker{
-		Items: env.store, Tenancy: env.store, Events: env.store, Authz: env.rbac,
+		Items: env.store, Deps: env.store, Tenancy: env.store, Events: env.store, Authz: env.rbac,
 		Now: time.Now, NewID: store.NewID,
 	}, env
 }
