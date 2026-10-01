@@ -17,11 +17,23 @@ import (
 // from the project's sequence inside the same atomic batch, so concurrent
 // creations never collide. Returns the stored item.
 func (s *Store) CreateItem(ctx context.Context, it tracker.Item, e event.Event) (tracker.Item, error) {
-	criteria, err := json.Marshal(nonNil(it.AcceptanceCriteria))
+	stmts, err := createItemStmts(it)
 	if err != nil {
 		return tracker.Item{}, fmt.Errorf("create item: %w", err)
 	}
-	err = s.db.Batch(ctx,
+	if err := s.db.Batch(ctx, append(stmts, s.AppendEvent(e))...); err != nil {
+		return tracker.Item{}, mapWriteErr("create item", err)
+	}
+	return s.ItemByID(ctx, it.ID)
+}
+
+// createItemStmts inserts it with the next number of its project.
+func createItemStmts(it tracker.Item) ([]sqlstore.Stmt, error) {
+	criteria, err := json.Marshal(nonNil(it.AcceptanceCriteria))
+	if err != nil {
+		return nil, err
+	}
+	return []sqlstore.Stmt{
 		sqlstore.ExecOne(`UPDATE projects SET next_item_number = next_item_number + 1 WHERE id = ?`, it.ProjectID),
 		sqlstore.Exec(`INSERT INTO items (id, project_id, number, key, kind, title, description, state, stage, type,
 				acceptance_criteria, review_mode, merge_mode, epic_id, milestone_id, created_at, updated_at, version)
@@ -32,30 +44,31 @@ func (s *Store) CreateItem(ctx context.Context, it tracker.Item, e event.Event) 
 			string(criteria), string(it.Policy.ReviewMode), string(it.Policy.MergeMode),
 			nullable(it.EpicID), nullable(it.MilestoneID), formatTime(it.CreatedAt), formatTime(it.UpdatedAt),
 			it.Version, it.ProjectID),
-		s.AppendEvent(e),
-	)
-	if err != nil {
-		return tracker.Item{}, mapWriteErr("create item", err)
-	}
-	return s.ItemByID(ctx, it.ID)
+	}, nil
 }
 
 // UpdateItem stores it if the stored version equals expectedVersion.
 func (s *Store) UpdateItem(ctx context.Context, it tracker.Item, expectedVersion int64, e event.Event) error {
-	criteria, err := json.Marshal(nonNil(it.AcceptanceCriteria))
+	stmt, err := updateItemStmt(it, expectedVersion)
 	if err != nil {
 		return fmt.Errorf("update item: %w", err)
 	}
-	return mapWriteErr("update item", s.db.Batch(ctx,
-		sqlstore.ExecOne(`UPDATE items SET title = ?, description = ?, state = ?, stage = ?, type = ?,
-				acceptance_criteria = ?, review_mode = ?, merge_mode = ?, epic_id = ?, milestone_id = ?,
-				updated_at = ?, version = ?
-			WHERE id = ? AND version = ?`,
-			it.Title, it.Description, string(it.State), it.Stage, string(it.Type), string(criteria),
-			string(it.Policy.ReviewMode), string(it.Policy.MergeMode), nullable(it.EpicID), nullable(it.MilestoneID),
-			formatTime(it.UpdatedAt), it.Version, it.ID, expectedVersion),
-		s.AppendEvent(e),
-	))
+	return mapWriteErr("update item", s.db.Batch(ctx, stmt, s.AppendEvent(e)))
+}
+
+// updateItemStmt stores it if the stored version equals expectedVersion.
+func updateItemStmt(it tracker.Item, expectedVersion int64) (sqlstore.Stmt, error) {
+	criteria, err := json.Marshal(nonNil(it.AcceptanceCriteria))
+	if err != nil {
+		return sqlstore.Stmt{}, err
+	}
+	return sqlstore.ExecOne(`UPDATE items SET title = ?, description = ?, state = ?, stage = ?, type = ?,
+			acceptance_criteria = ?, review_mode = ?, merge_mode = ?, epic_id = ?, milestone_id = ?,
+			updated_at = ?, version = ?
+		WHERE id = ? AND version = ?`,
+		it.Title, it.Description, string(it.State), it.Stage, string(it.Type), string(criteria),
+		string(it.Policy.ReviewMode), string(it.Policy.MergeMode), nullable(it.EpicID), nullable(it.MilestoneID),
+		formatTime(it.UpdatedAt), it.Version, it.ID, expectedVersion), nil
 }
 
 const itemCols = `id, project_id, number, key, kind, title, description, state, stage, type, acceptance_criteria,
@@ -130,9 +143,9 @@ func scanItem(r scanner) (tracker.Item, error) {
 	return it, err
 }
 
-func nonNil(s []string) []string {
+func nonNil[T any](s []T) []T {
 	if s == nil {
-		return []string{}
+		return []T{}
 	}
 	return s
 }

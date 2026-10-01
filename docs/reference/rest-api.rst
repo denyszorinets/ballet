@@ -323,6 +323,8 @@ Representation:
 
 ``PATCH /api/v1/projects/{project}`` — ``{"name", "description", "version"}`` → ``200``
 
+.. _reference-rest-items:
+
 Milestones, epics and tickets
 -----------------------------
 
@@ -436,5 +438,69 @@ Representation: ``{"id", "type", "item": {"key", "kind", "title", "state"}}``.
 ``GET /api/v1/projects/{project}/runnable`` → ``200`` list of items
    Tickets in state ``ready`` whose blockers are all resolved (``done``
    or ``cancelled``) — what the scheduler may start.
+
+.. _reference-rest-changesets:
+
+Plan changesets
+---------------
+
+A **plan changeset** is a batch of planning changes proposed by the
+planner (or a person) and decided by a human, wholly or operation by
+operation (:doc:`/concepts/workflow`). Proposing needs ``tracker.write``
+on the project; applying and rejecting additionally need a **human**
+caller, so service identities such as the planner can propose but never
+approve.
+
+An operation is one of:
+
+.. code-block:: json
+
+   {"kind": "create_item", "ref": "login",
+    "create": {"kind": "ticket", "title": "Login", "epic": "$auth",
+               "acceptance_criteria": ["OIDC sign-in works"]}}
+
+   {"kind": "update_item",
+    "update": {"item": "WEB-7", "title": "Profile page (needs login)"}}
+
+   {"kind": "add_dependency",
+    "dependency": {"from": "$login", "to": "WEB-7", "type": "blocks"}}
+
+Item references (``epic``, ``milestone``, ``from``, ``to``) are either
+the key of an existing item of the project or ``$`` followed by the
+``ref`` of an **earlier** ``create_item`` operation in the same
+changeset. ``create`` takes the fields of a new item
+(:ref:`reference-rest-items`); ``update`` changes only the fields it
+lists (``""`` for ``epic`` or ``milestone`` removes the relation).
+
+``POST /api/v1/projects/{project}/changesets`` — ``{"title", "summary"?, "operations"}`` → ``201``
+   Validates every operation against the current project as if all were
+   approved (fields, references, relation kinds, no duplicate or cyclic
+   dependencies, at most one update per item, at most 200 operations)
+   and stores the changeset with status ``proposed``. Nothing else
+   changes. ``400`` with the failing operation's number otherwise.
+
+``GET /api/v1/projects/{project}/changesets[?status=proposed|applied|rejected]`` → ``200`` list, newest first
+
+``GET /api/v1/changesets/{changeset}`` → ``200``
+   ``{"id", "project", "title", "summary", "status", "operations",
+   "proposed_by", "created_at", "decided_by"?, "decided_at"?, "approved",
+   "results", "version"}``. Once applied, ``approved`` lists the applied
+   operations (0-based) and ``results`` has one entry per operation:
+   ``{"key"}`` for created or updated items, ``{"dependency"}`` for added
+   dependencies, ``{}`` for operations that were not approved.
+
+``POST /api/v1/changesets/{changeset}/apply`` — ``{"operations": [0, 1, 4]}`` → ``200``
+   Applies exactly the listed operations in one atomic write and marks
+   the changeset ``applied``. Every operation an approved one refers to
+   through ``$ref`` must be approved too (``400`` otherwise). Operations
+   are validated again against the current project; keys of created
+   items are assigned now. ``409`` if the changeset was already decided.
+
+``POST /api/v1/changesets/{changeset}/reject`` → ``200``
+   Marks a proposed changeset ``rejected``; ``409`` if already decided.
+
+Each decision records a ``changeset.applied`` or ``changeset.rejected``
+event; created items, updates and dependencies record their usual
+events, with the changeset ID in the payload.
 
 Every create and update records one event (:doc:`/architecture/data`).
