@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { apiError, type Schemas } from '$lib/api/client';
 	import { getSession, type Session } from '$lib/session';
@@ -112,7 +113,9 @@
 				<tbody>
 					{#each projects as p (p.id)}
 						<tr>
-							<td class="mono">{p.key}</td>
+							<td class="mono"
+								><a href={resolve('/projects/[project]', { project: p.key })}>{p.key}</a></td
+							>
 							<td>{p.name}</td>
 							<td class="muted">{p.description}</td>
 						</tr>

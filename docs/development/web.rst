@@ -38,6 +38,34 @@ refresh token. ``src/lib/session.ts`` creates the shared REST client
 ``getSession()``. The realtime connection starts after sign-in; its state
 is shown in the header.
 
+Pages
+-----
+
+.. list-table::
+   :header-rows: 1
+
+   * - Route
+     - Purpose
+   * - ``/``
+     - Customers the user can see; new customer (org admins)
+   * - ``/customers/{customer}``
+     - Customer: rename, projects, new project
+   * - ``/projects/{project}``
+     - Board: tickets by state, *Blocked* badge for ready tickets with
+       unresolved blockers, quick ticket creation, epics and milestones;
+       live through the ``project:<KEY>`` stream
+   * - ``/items/{item}``
+     - Item: edit (title, description, type, criteria, policy, epic,
+       milestone), state transitions, dependencies, history; live through
+       the ``item:<KEY>`` stream
+   * - ``/access``
+     - Role bindings (users who manage access)
+
+Pages subscribe to their stream *before* loading the snapshot over REST,
+refetch the changed item on each event, and reload on resync. Controls
+are shown according to the user's bindings (``src/lib/permissions.svelte.ts``);
+Core enforces authorization regardless.
+
 Commands
 --------
 
