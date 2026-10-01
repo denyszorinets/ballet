@@ -15,6 +15,7 @@ web/build/
 web/.svelte-kit/
 
 # Local data and configuration
+data/
 *.db
 *.db-shm
 *.db-wal

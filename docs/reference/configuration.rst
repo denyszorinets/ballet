@@ -109,6 +109,25 @@ Audience (``aud``) that access tokens must contain.
 :Default: ``"ballet"``
 :Environment: ``BALLET_CORE_OIDC_AUDIENCE``
 
+.. _reference-config-tokens:
+
+``[tokens]`` (core)
+-------------------
+
+Run token signing (:doc:`run-tokens`).
+
+``key_file``
+~~~~~~~~~~~~
+
+File holding Core's Ed25519 signing keys. Created with a fresh key (mode
+``0600``) if it does not exist. Back it up: losing it invalidates every
+issued run token.
+
+:Type: string (path)
+:Default: ``"data/token-keys.json"``
+:Sensitive: yes — private keys
+:Environment: ``BALLET_CORE_TOKENS_KEY_FILE``
+
 Operational endpoints
 ---------------------
 
@@ -129,3 +148,5 @@ Every service serves these on its ``[server] addr``:
    * - ``GET /metrics``
      - Prometheus metrics: Go runtime, process, and
        ``ballet_build_info{service,version}``.
+   * - ``GET /.well-known/jwks.json`` (core only)
+     - Public keys for verifying run tokens (:doc:`run-tokens`).

@@ -9,9 +9,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/denyszorinets/ballet/core/internal/transport/httpapi"
 	"github.com/denyszorinets/ballet/kit/auth/oidc"
+	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 	"github.com/denyszorinets/ballet/kit/config"
 	"github.com/denyszorinets/ballet/kit/service"
 )
@@ -24,18 +26,29 @@ const (
 // serviceConfig is the complete core configuration.
 type serviceConfig struct {
 	service.Config
-	OIDC oidc.Config `toml:"oidc"`
+	OIDC   oidc.Config  `toml:"oidc"`
+	Tokens tokensConfig `toml:"tokens"`
+}
+
+// tokensConfig configures run token signing (ADR-0006).
+type tokensConfig struct {
+	KeyFile string `toml:"key_file"`
 }
 
 func defaultConfig() serviceConfig {
 	return serviceConfig{
 		Config: service.DefaultConfig(":8080"),
 		OIDC:   oidc.Config{Audience: "ballet"},
+		Tokens: tokensConfig{KeyFile: "data/token-keys.json"},
 	}
 }
 
 func (c serviceConfig) Validate() error {
-	return errors.Join(c.Config.Validate(), c.OIDC.Validate())
+	var errs []error
+	if c.Tokens.KeyFile == "" {
+		errs = append(errs, errors.New("tokens.key_file must not be empty"))
+	}
+	return errors.Join(append(errs, c.Config.Validate(), c.OIDC.Validate())...)
 }
 
 func main() {
@@ -66,7 +79,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	httpapi.Register(svc.Mux, httpapi.Deps{Verifier: verifier})
+	tokenKeys, err := runtoken.LoadKeyRing(cfg.Tokens.KeyFile, time.Now)
+	if err != nil {
+		return err
+	}
+	httpapi.Register(svc.Mux, httpapi.Deps{Verifier: verifier, TokenKeys: tokenKeys})
 
 	return svc.ListenAndServe(ctx)
 }
