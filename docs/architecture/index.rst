@@ -6,6 +6,7 @@ Architecture
 
    overview
    components
+   data
    security
    observability
    integration

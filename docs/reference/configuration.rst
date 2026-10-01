@@ -109,6 +109,22 @@ Audience (``aud``) that access tokens must contain.
 :Default: ``"ballet"``
 :Environment: ``BALLET_CORE_OIDC_AUDIENCE``
 
+.. _reference-config-storage:
+
+``[storage]`` (core)
+--------------------
+
+``path``
+~~~~~~~~
+
+SQLite database file of Core. Its directory is created if missing;
+migrations are applied at startup. Back it up together with
+``[tokens] key_file``.
+
+:Type: string (path)
+:Default: ``"data/core.db"``
+:Environment: ``BALLET_CORE_STORAGE_PATH``
+
 .. _reference-config-tokens:
 
 ``[tokens]`` (core)
@@ -144,7 +160,7 @@ Every service serves these on its ``[server] addr``:
    * - ``GET /readyz``
      - Readiness: ``200`` when every dependency check passes, ``503``
        otherwise, with per-check ``ok``/``failing``. Failure details are
-       logged, not returned.
+       logged, not returned. Core checks ``database``.
    * - ``GET /metrics``
      - Prometheus metrics: Go runtime, process, and
        ``ballet_build_info{service,version}``.
