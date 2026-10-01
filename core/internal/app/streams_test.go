@@ -157,9 +157,9 @@ func TestStreams_ConcurrentWritesAreDeliveredExactlyOnceInOrder(t *testing.T) {
 	}
 	wg.Wait()
 
+	got.waitFor(t, n)
+	time.Sleep(30 * time.Millisecond) // nothing extra may arrive
 	events := got.waitFor(t, n)
-	time.Sleep(30 * time.Millisecond)
-	events = got.waitFor(t, n)
 	require.Len(t, events, n)
 	keys := map[string]bool{}
 	for i, e := range events {
