@@ -26,6 +26,49 @@ export interface FakeCore {
 	knowledge: FakeEntry[];
 	skills: FakeSkill[];
 	pins: { project: string; name: string; version: number; disabled: boolean }[];
+	plannerSessions: FakePlannerSession[];
+	/** Transcripts by session ID. */
+	plannerMessages: Record<string, FakePlannerMessage[]>;
+	changesets: FakeChangeset[];
+}
+
+export interface FakePlannerSession {
+	id: string;
+	project: string;
+	title: string;
+	created_by: string;
+	running: boolean;
+}
+
+export interface FakePlannerMessage {
+	seq: number;
+	role: 'user' | 'assistant';
+	content: {
+		type: 'text' | 'tool_use' | 'tool_result';
+		text?: string;
+		tool_use_id?: string;
+		name?: string;
+		input?: Record<string, unknown>;
+		is_error?: boolean;
+	}[];
+	author?: string;
+}
+
+export interface FakeChangeset {
+	id: string;
+	project: string;
+	title: string;
+	summary: string;
+	status: 'proposed' | 'applied' | 'rejected';
+	operations: {
+		kind: 'create_item' | 'update_item' | 'add_dependency';
+		ref?: string;
+		create?: { kind: 'milestone' | 'epic' | 'ticket'; title: string; epic?: string };
+		update?: { item: string; title?: string };
+		dependency?: { from: string; to: string; type: 'blocks' | 'relates' };
+	}[];
+	approved: number[];
+	results: { key?: string; dependency?: string }[];
 }
 
 export interface FakeSkill {
@@ -150,6 +193,9 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		knowledge: [],
 		skills: [],
 		pins: [],
+		plannerSessions: [],
+		plannerMessages: {},
+		changesets: [],
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
@@ -173,6 +219,12 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		...v,
 		published_by: 'user-alice',
 		published_at: now
+	});
+	const changesetJSON = (c: FakeChangeset) => ({
+		...c,
+		proposed_by: { kind: 'service', subject: 'planner:s', acting_for: 'user-alice' },
+		created_at: now,
+		version: 1
 	});
 	const entryJSON = (e: FakeEntry) => ({
 		id: e.id,
@@ -491,6 +543,96 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				];
 			});
 			return r.fulfill({ json: { items } });
+		}
+		if ((m = path.match(/^\/projects\/([^/]+)\/planner\/sessions$/))) {
+			if (method === 'POST') {
+				const ps: FakePlannerSession = {
+					id: id(),
+					project: m[1],
+					title: body.title,
+					created_by: 'user-alice',
+					running: false
+				};
+				core.plannerSessions.push(ps);
+				core.plannerMessages[ps.id] = [];
+				return r.fulfill({ status: 201, json: withTimes(ps) });
+			}
+			const items = core.plannerSessions.filter((x) => x.project === m![1]).map(withTimes);
+			return r.fulfill({ json: { items } });
+		}
+		if ((m = path.match(/^\/planner\/sessions\/([^/]+)$/))) {
+			const ps = core.plannerSessions.find((x) => x.id === m![1]);
+			if (!ps) return err(r, 404, 'not_found', 'planner session not found');
+			const usage = {
+				input_tokens: 0,
+				output_tokens: 0,
+				cache_read_tokens: 0,
+				cache_write_tokens: 0
+			};
+			const messages = (core.plannerMessages[ps.id] ?? []).map((msg) => ({
+				...msg,
+				usage,
+				created_at: now
+			}));
+			return r.fulfill({ json: { ...withTimes(ps), messages } });
+		}
+		if ((m = path.match(/^\/projects\/([^/]+)\/changesets$/))) {
+			const st = url.searchParams.get('status');
+			const items = core.changesets
+				.filter((c) => c.project === m![1] && (!st || c.status === st))
+				.reverse()
+				.map(changesetJSON);
+			return r.fulfill({ json: { items } });
+		}
+		if ((m = path.match(/^\/changesets\/([^/]+)(\/apply|\/reject)?$/))) {
+			const cs = core.changesets.find((c) => c.id === m![1]);
+			if (!cs) return err(r, 404, 'not_found', 'changeset not found');
+			if (m[2] && cs.status !== 'proposed')
+				return err(r, 409, 'conflict', `changeset is already ${cs.status}`);
+			if (m[2] === '/reject') cs.status = 'rejected';
+			if (m[2] === '/apply') {
+				const approved: number[] = body.operations;
+				const keys: Record<string, string> = {};
+				const resolveRef = (ref?: string) => (ref?.startsWith('$') ? keys[ref.slice(1)] : ref);
+				cs.results = cs.operations.map(() => ({}));
+				for (const i of approved) {
+					const op = cs.operations[i];
+					if (op.create) {
+						const n = core.items.filter((it) => it.project === cs.project).length + 1;
+						const it: FakeItem = {
+							id: id(),
+							key: `${cs.project}-${n}`,
+							project: cs.project,
+							kind: op.create.kind,
+							title: op.create.title,
+							description: '',
+							state: op.create.kind === 'ticket' ? 'backlog' : 'open',
+							version: 1
+						};
+						const epic = resolveRef(op.create.epic);
+						if (epic) it.epic = epic;
+						core.items.push(it);
+						keys[op.ref!] = it.key;
+						cs.results[i] = { key: it.key };
+					} else if (op.update) {
+						const it = core.items.find((x) => x.key === op.update!.item);
+						if (it && op.update.title) it.title = op.update.title;
+						cs.results[i] = { key: op.update.item };
+					} else if (op.dependency) {
+						const d = {
+							id: id(),
+							from: resolveRef(op.dependency.from)!,
+							to: resolveRef(op.dependency.to)!,
+							type: op.dependency.type
+						};
+						core.deps.push(d);
+						cs.results[i] = { dependency: d.id };
+					}
+				}
+				cs.approved = approved;
+				cs.status = 'applied';
+			}
+			return r.fulfill({ json: changesetJSON(cs) });
 		}
 		if (path === '/role-bindings' && method === 'GET')
 			return r.fulfill({ json: { items: core.bindings } });

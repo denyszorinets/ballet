@@ -73,6 +73,15 @@ Pages
    * - ``/skills/{skill}``
      - Skill: draft editor (description, ``SKILL.md``, files), publish,
        unpublished changes and per-version diffs (``src/lib/diff.ts``)
+   * - ``/projects/{project}/planner``
+     - Planner chats of a project; start a chat
+   * - ``/planner/{session}``
+     - Chat with the planner: streamed answers (``planner.watch`` /
+       ``planner.output``), tool calls shown collapsed, proposed
+       changesets as cards to approve wholly or in part, Stop
+   * - ``/projects/{project}/changesets``
+     - The project's changesets by status; approve or reject; live through
+       the ``project:<KEY>`` stream
    * - ``/projects/{project}/skills``
      - Effective skills of a project; pin a version, disable, re-enable
    * - ``/access``
@@ -83,6 +92,12 @@ Markdown written by humans and agents is untrusted: it is rendered with
 ``marked`` and sanitized with DOMPurify (``src/lib/markdown.ts``) before
 it reaches the page, so scripts, event handlers and ``javascript:`` URLs
 are removed.
+
+The changeset card (``src/lib/components/ChangesetCard.svelte``) keeps
+the selection consistent with ``$ref`` dependencies
+(``src/lib/changesets.ts``): selecting an operation selects the
+operations it needs, deselecting one deselects those that need it — the
+same rule Core enforces when applying.
 
 Pages subscribe to their stream *before* loading the snapshot over REST,
 refetch the changed item on each event, and reload on resync. Controls
@@ -109,7 +124,10 @@ Commands
      - Unit tests (Vitest), ``src/**/*.spec.ts``
    * - ``bun run test:e2e``
      - End-to-end tests (Playwright, Google Chrome), ``e2e/*.test.ts``;
-       a fake OIDC provider (``e2e/fixtures/oidc.ts``) replaces Keycloak
+       a fake OIDC provider (``e2e/fixtures/oidc.ts``) replaces Keycloak,
+       a fake Core REST API (``e2e/fixtures/api.ts``) replaces Core, and
+       ``e2e/fixtures/realtime.ts`` replaces the page's ``WebSocket`` with
+       an in-page fake of the realtime API whose requests the test answers
    * - ``bun run test:e2e:live``
      - Live tests (``e2e-live/``) against a running Keycloak + Core + Vite
        dev stack; not run in CI

@@ -47,6 +47,11 @@ export class Auth {
 		return this.user !== null;
 	}
 
+	/** The signed-in user's subject (OIDC "sub"). */
+	get subject(): string {
+		return this.user?.profile?.sub ?? '';
+	}
+
 	get displayName(): string {
 		const p = this.user?.profile;
 		return p?.name ?? p?.preferred_username ?? p?.email ?? p?.sub ?? '';

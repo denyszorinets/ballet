@@ -88,6 +88,19 @@ describe('RealtimeClient against the Go server', () => {
 		expect(got).toEqual([...Array(200).keys()]);
 	});
 
+	it('dispatches notifications to handlers added with on()', async () => {
+		const c = client(await startServer());
+		const got: number[] = [];
+		const off = c.on('test.event', (params) => got.push((params as { i: number }).i));
+		c.connect();
+		await c.call('test.emit', { count: 3 });
+		await waitFor(() => got.length === 3);
+		off();
+		await c.call('test.emit', { count: 2 });
+		await c.call('echo', {});
+		expect(got).toEqual([0, 1, 2]);
+	});
+
 	it('reconnects and resumes subscriptions without gaps or duplicates', async () => {
 		const url = await startServer();
 		const writer = client(url);
