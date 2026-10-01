@@ -3,17 +3,24 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 
+	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/kit/auth"
-	"github.com/denyszorinets/ballet/kit/auth/oidc"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 )
 
 // Deps are the collaborators the REST API needs.
 type Deps struct {
-	Verifier  *oidc.Verifier
-	TokenKeys *runtoken.KeyRing
+	// Authenticate rejects unauthenticated requests and puts the caller's
+	// identity into the request context (oidc.Middleware in production).
+	Authenticate func(http.Handler) http.Handler
+	TokenKeys    *runtoken.KeyRing
+	Tenancy      *app.Tenancy
 }
 
 // Register mounts the REST API on mux. Every /api/ route requires an
@@ -23,7 +30,11 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/v1/me", me)
-	mux.Handle("/api/", oidc.Middleware(d.Verifier)(api))
+	registerTenancy(api, d.Tenancy)
+	api.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
+		writeError(w, fmt.Errorf("%w: no such endpoint", app.ErrNotFound))
+	})
+	mux.Handle("/api/", d.Authenticate(api))
 }
 
 type meResponse struct {
@@ -59,4 +70,48 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// errorBody is the JSON body of every error response.
+type errorBody struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+// writeError maps app errors to HTTP status codes and error codes.
+func writeError(w http.ResponseWriter, err error) {
+	status, code := http.StatusInternalServerError, "internal"
+	switch {
+	case errors.Is(err, app.ErrInvalid):
+		status, code = http.StatusBadRequest, "invalid_argument"
+	case errors.Is(err, app.ErrUnauthorized):
+		status, code = http.StatusUnauthorized, "unauthenticated"
+	case errors.Is(err, app.ErrForbidden):
+		status, code = http.StatusForbidden, "forbidden"
+	case errors.Is(err, app.ErrNotFound):
+		status, code = http.StatusNotFound, "not_found"
+	case errors.Is(err, app.ErrAlreadyExists):
+		status, code = http.StatusConflict, "already_exists"
+	case errors.Is(err, app.ErrConflict):
+		status, code = http.StatusConflict, "conflict"
+	}
+	msg := err.Error()
+	if status == http.StatusInternalServerError {
+		slog.Error("request failed", "error", err)
+		msg = "internal error"
+	}
+	writeJSON(w, status, errorBody{Error: code, Message: msg})
+}
+
+// maxBody limits request bodies.
+const maxBody = 1 << 20
+
+// decode reads a JSON body into dst, rejecting unknown fields.
+func decode(r *http.Request, dst any) error {
+	dec := json.NewDecoder(io.LimitReader(r.Body, maxBody))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return fmt.Errorf("%w: request body: %w", app.ErrInvalid, err)
+	}
+	return nil
 }

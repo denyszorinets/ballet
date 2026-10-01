@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
 	"github.com/denyszorinets/ballet/core/internal/transport/httpapi"
 	"github.com/denyszorinets/ballet/kit/auth/oidc"
@@ -106,7 +107,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	httpapi.Register(svc.Mux, httpapi.Deps{Verifier: verifier, TokenKeys: tokenKeys})
+	// Authorization (RBAC) is wired in #32; until then everything is denied.
+	var authz app.Authorizer = app.DenyAll{}
+	httpapi.Register(svc.Mux, httpapi.Deps{
+		Authenticate: oidc.Middleware(verifier),
+		TokenKeys:    tokenKeys,
+		Tenancy:      &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+	})
 
 	return svc.ListenAndServe(ctx)
 }

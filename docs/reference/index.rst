@@ -7,4 +7,5 @@ Exact, exhaustive descriptions of configuration and interfaces.
    :maxdepth: 1
 
    configuration
+   rest-api
    run-tokens

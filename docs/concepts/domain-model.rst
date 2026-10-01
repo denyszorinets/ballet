@@ -20,14 +20,15 @@ Tenancy
    definitions and role bindings.
 
 **Customer**
-   The isolation boundary. All of a customer's projects share one
+   Identified by an immutable key such as ``acme``. The isolation
+   boundary. All of a customer's projects share one
    knowledge space; nothing — knowledge, tickets, runs, credentials —
    crosses between customers. Holds the default LLM credentials, which
    projects may override.
 
 **Project**
-   A product being built. Has a short key (``ACME``) used in ticket IDs
-   (``ACME-123``), one or more git repositories, and a **process profile**
+   A product being built. Has a short, immutable, globally unique key
+   (``ACME``) used in ticket keys (``ACME-123``), one or more git repositories, and a **process profile**
    (see below).
 
 Planning entities
