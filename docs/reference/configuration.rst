@@ -236,6 +236,33 @@ Vite dev server).
 :Default: ``""``
 :Environment: ``BALLET_CORE_WEB_DIR``
 
+``[knowledge]`` (core)
+----------------------
+
+``url``
+~~~~~~~
+
+Base URL of the Knowledge service, to which Core forwards authorized
+``/api/v1/customers/{customer}/knowledge/...`` requests.
+
+:Type: string (URL)
+:Default: ``"http://localhost:8081"``
+:Environment: ``BALLET_CORE_KNOWLEDGE_URL``
+
+``[core]`` and ``[storage]`` (knowledge)
+----------------------------------------
+
+``core.url``
+   Base URL of Core; Knowledge verifies tokens against Core's JWKS.
+   Default ``"http://localhost:8080"``; ``BALLET_KNOWLEDGE_CORE_URL``.
+
+``storage.path``
+   Knowledge's SQLite database. Default ``"data/knowledge.db"``;
+   ``BALLET_KNOWLEDGE_STORAGE_PATH``.
+
+Knowledge accepts only Core-issued tokens with audience ``knowledge``
+whose customer matches the requested space.
+
 .. _reference-config-gateway:
 
 ``[core]`` (gateway)

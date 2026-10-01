@@ -27,6 +27,7 @@ type Deps struct {
 	Tracker      *app.Tracker
 	Credentials  *app.Credentials
 	Usage        *app.Usage
+	Knowledge    *KnowledgeProxy // nil: knowledge routes not served
 }
 
 // Register mounts the REST API on mux and returns the API routes it
@@ -48,6 +49,7 @@ func Register(mux *http.ServeMux, d Deps) []string {
 	registerDependencies(r, d.Tracker)
 	registerCredentials(r, d.Credentials)
 	registerUsage(r, d.Usage)
+	registerKnowledge(r, d.Knowledge)
 	r.mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, fmt.Errorf("%w: no such endpoint", app.ErrNotFound))
 	})

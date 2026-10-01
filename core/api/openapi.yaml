@@ -285,6 +285,56 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/UsageReport" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/customers/{customer}/knowledge/entries:
+    parameters: [{ $ref: "#/components/parameters/Customer" }]
+    get:
+      operationId: listKnowledgeEntries
+      tags: [knowledge]
+      summary: Entries of the customer's knowledge space (served by Knowledge through Core)
+      parameters:
+        - { name: kind, in: query, schema: { $ref: "#/components/schemas/KnowledgeKind" } }
+        - { name: project, in: query, schema: { type: string }, description: Project key }
+        - { name: item, in: query, schema: { type: string }, description: Linked tracker item key }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeEntryList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createKnowledgeEntry
+      tags: [knowledge]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateKnowledgeEntry" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeEntry" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/customers/{customer}/knowledge/entries/{entry}:
+    parameters: [{ $ref: "#/components/parameters/Customer" }, { $ref: "#/components/parameters/Entry" }]
+    get:
+      operationId: getKnowledgeEntry
+      tags: [knowledge]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeEntry" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateKnowledgeEntry
+      tags: [knowledge]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateKnowledgeEntry" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeEntry" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/customers/{customer}/knowledge/entries/{entry}/versions:
+    parameters: [{ $ref: "#/components/parameters/Customer" }, { $ref: "#/components/parameters/Entry" }]
+    get:
+      operationId: listKnowledgeVersions
+      tags: [knowledge]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeVersionList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -292,6 +342,7 @@ components:
   parameters:
     Customer: { name: customer, in: path, required: true, schema: { type: string }, description: Customer key }
     Project: { name: project, in: path, required: true, schema: { type: string }, description: Project key }
+    Entry: { name: entry, in: path, required: true, schema: { type: string }, description: Knowledge entry ID }
     Provider: { name: provider, in: path, required: true, schema: { type: string, enum: [anthropic, openai] } }
     Item: { name: item, in: path, required: true, schema: { type: string }, description: "Item key, e.g. WEB-42" }
 
@@ -597,3 +648,62 @@ components:
         group_by: { type: string, enum: [ticket, model] }
         items: { type: array, items: { $ref: "#/components/schemas/UsageTotals" } }
         total: { $ref: "#/components/schemas/UsageTotals" }
+
+    KnowledgeKind: { type: string, enum: [document, decision, note, debt] }
+    KnowledgeEntry:
+      type: object
+      additionalProperties: false
+      required: [id, kind, title, body, projects, items, version, created_by, updated_by, created_at, updated_at]
+      properties:
+        id: { type: string }
+        kind: { $ref: "#/components/schemas/KnowledgeKind" }
+        title: { type: string }
+        body: { type: string, description: Markdown }
+        projects: { type: array, items: { type: string } }
+        items: { type: array, items: { type: string }, description: Linked tracker item keys }
+        version: { type: integer, format: int64 }
+        created_by: { type: string }
+        updated_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    KnowledgeEntryList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/KnowledgeEntry" } } }
+    CreateKnowledgeEntry:
+      type: object
+      additionalProperties: false
+      required: [kind, title]
+      properties:
+        kind: { $ref: "#/components/schemas/KnowledgeKind" }
+        title: { type: string }
+        body: { type: string }
+        projects: { type: array, items: { type: string } }
+        items: { type: array, items: { type: string } }
+    UpdateKnowledgeEntry:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, format: int64 }
+        kind: { $ref: "#/components/schemas/KnowledgeKind" }
+        title: { type: string }
+        body: { type: string }
+        projects: { type: array, items: { type: string } }
+        items: { type: array, items: { type: string } }
+    KnowledgeVersion:
+      type: object
+      additionalProperties: false
+      required: [version, title, body, author, created_at]
+      properties:
+        version: { type: integer, format: int64 }
+        title: { type: string }
+        body: { type: string }
+        author: { type: string }
+        created_at: { type: string, format: date-time }
+    KnowledgeVersionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/KnowledgeVersion" } } }

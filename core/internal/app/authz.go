@@ -24,6 +24,8 @@ const (
 	ActTrackerRead       = rbac.ActTrackerRead
 	ActTrackerWrite      = rbac.ActTrackerWrite
 	ActCredentialManage  = rbac.ActCredentialManage
+	ActKnowledgeRead     = rbac.ActKnowledgeRead
+	ActKnowledgeWrite    = rbac.ActKnowledgeWrite
 )
 
 // Scope is where an action applies: customer and project keys; empty

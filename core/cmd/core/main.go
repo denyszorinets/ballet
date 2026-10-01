@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -37,13 +38,19 @@ const (
 // serviceConfig is the complete core configuration.
 type serviceConfig struct {
 	service.Config
-	OIDC     oidc.Config    `toml:"oidc"`
-	Tokens   tokensConfig   `toml:"tokens"`
-	Storage  storageConfig  `toml:"storage"`
-	RBAC     rbacConfig     `toml:"rbac"`
-	Web      webConfig      `toml:"web"`
-	Services servicesConfig `toml:"services"`
-	Secrets  secretsConfig  `toml:"secrets"`
+	OIDC      oidc.Config     `toml:"oidc"`
+	Tokens    tokensConfig    `toml:"tokens"`
+	Storage   storageConfig   `toml:"storage"`
+	RBAC      rbacConfig      `toml:"rbac"`
+	Web       webConfig       `toml:"web"`
+	Services  servicesConfig  `toml:"services"`
+	Secrets   secretsConfig   `toml:"secrets"`
+	Knowledge knowledgeConfig `toml:"knowledge"`
+}
+
+// knowledgeConfig locates the Knowledge service (ADR-0022).
+type knowledgeConfig struct {
+	URL string `toml:"url"`
 }
 
 // secretsConfig locates the key that encrypts secrets at rest.
@@ -94,13 +101,14 @@ type tokensConfig struct {
 
 func defaultConfig() serviceConfig {
 	return serviceConfig{
-		Config:   service.DefaultConfig(":8080"),
-		OIDC:     oidc.Config{Audience: "ballet"},
-		Tokens:   tokensConfig{KeyFile: "data/token-keys.json"},
-		Storage:  storageConfig{Path: "data/core.db"},
-		Web:      webConfig{ClientID: "ballet-web"},
-		Services: servicesConfig{TokensDir: "data/service-tokens", TokenTTL: 30 * 24 * time.Hour},
-		Secrets:  secretsConfig{KeyFile: "data/secrets.key"},
+		Config:    service.DefaultConfig(":8080"),
+		OIDC:      oidc.Config{Audience: "ballet"},
+		Tokens:    tokensConfig{KeyFile: "data/token-keys.json"},
+		Storage:   storageConfig{Path: "data/core.db"},
+		Web:       webConfig{ClientID: "ballet-web"},
+		Services:  servicesConfig{TokensDir: "data/service-tokens", TokenTTL: 30 * 24 * time.Hour},
+		Secrets:   secretsConfig{KeyFile: "data/secrets.key"},
+		Knowledge: knowledgeConfig{URL: "http://localhost:8081"},
 	}
 }
 
@@ -182,6 +190,10 @@ func run() error {
 		svc.Logger.WarnContext(ctx, "no rbac.bootstrap_org_admins configured; only stored role bindings grant access")
 	}
 	authz := &app.RBAC{Store: st, Bootstrap: bootstrap}
+	knowledgeURL, err := url.Parse(cfg.Knowledge.URL)
+	if err != nil || knowledgeURL.Host == "" {
+		return fmt.Errorf("knowledge.url: invalid URL %q", cfg.Knowledge.URL)
+	}
 	credentials := &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID}
 	internalapi.RegisterCredentials(internalAPI, credentials)
 	usage := &app.Usage{Store: st, Tenancy: st, Authz: authz}
@@ -194,6 +206,9 @@ func run() error {
 		RoleBindings: &app.RoleBindings{RBAC: authz, Tenancy: st, Now: time.Now, NewID: store.NewID},
 		Credentials:  credentials,
 		Usage:        usage,
+		Knowledge: &httpapi.KnowledgeProxy{
+			URL: knowledgeURL, Access: &app.KnowledgeAccess{Tenancy: st, Authz: authz}, Tokens: tokenIssuer,
+		},
 		Tracker: &app.Tracker{
 			Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 		},

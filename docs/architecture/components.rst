@@ -33,7 +33,12 @@ Knowledge
 Separate service, separate database
 (:doc:`decisions/0005-knowledge-as-separate-service-with-mcp`).
 
-- Customer-scoped spaces; entries (documents, decisions, notes, debt).
+- Customer-scoped spaces; entries (documents, decisions, notes, debt)
+  with immutable version history and links to projects and tracker
+  items.
+- Humans reach it through Core, which authorizes and forwards with a
+  request-scoped token
+  (:doc:`decisions/0022-humans-reach-knowledge-through-core`).
 - Hybrid full-text + vector search; lineage graph queries
   (:doc:`decisions/0021-hybrid-vector-search-over-all-content`).
 - **Knowledge MCP** for agents; REST API for the UI editor.

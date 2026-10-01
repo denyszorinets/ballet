@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -98,7 +99,9 @@ func TestContract_RegisteredRoutesMatchSpec(t *testing.T) {
 			inSpec = append(inSpec, method+" "+path)
 		}
 	}
-	routes := httpapi.Register(http.NewServeMux(), httpapi.Deps{Authenticate: testUser})
+	routes := httpapi.Register(http.NewServeMux(), httpapi.Deps{
+		Authenticate: testUser, Knowledge: &httpapi.KnowledgeProxy{URL: &url.URL{Scheme: "http", Host: "knowledge"}},
+	})
 	sort.Strings(inSpec)
 	sort.Strings(routes)
 
