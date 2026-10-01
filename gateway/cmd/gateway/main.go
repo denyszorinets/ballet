@@ -14,6 +14,7 @@ import (
 
 	"github.com/denyszorinets/ballet/gateway/internal/core"
 	"github.com/denyszorinets/ballet/gateway/internal/proxy"
+	"github.com/denyszorinets/ballet/gateway/internal/usage"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 	"github.com/denyszorinets/ballet/kit/config"
 	"github.com/denyszorinets/ballet/kit/service"
@@ -86,11 +87,14 @@ func run() error {
 	defer stop()
 
 	coreClient := &core.Client{BaseURL: cfg.Core.URL, Token: runtoken.FileSource(cfg.Core.TokenFile)}
+	reporter := usage.NewReporter(coreClient, svc.Metrics, 2*time.Second, svc.Logger)
+	go reporter.Run(ctx)
 	svc.Mux.Handle("/v1/", &proxy.Anthropic{
 		Verifier:   runtoken.NewRemoteVerifier(cfg.Core.URL+"/.well-known/jwks.json", http.DefaultClient, time.Now),
 		Core:       coreClient,
 		DefaultURL: cfg.Anthropic.URL,
 		Logger:     svc.Logger,
+		Observe:    usage.Observe(reporter.Sink, time.Now),
 	})
 	return svc.ListenAndServe(ctx)
 }

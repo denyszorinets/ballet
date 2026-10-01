@@ -51,11 +51,33 @@ Errors
 
    Errors returned by the provider itself are passed through unchanged.
 
+Usage metering
+--------------
+
+The gateway reads token usage from every response — the ``usage`` object
+of JSON responses, or ``message_start`` / ``message_delta`` events of
+streams, without buffering them — and attributes it to the run token's
+customer, project and ticket:
+
+- **Prometheus** (gateway ``/metrics``): ``ballet_llm_tokens_total``
+  (labels ``customer``, ``project``, ``model``, ``token_type`` =
+  ``input|output|cache_read|cache_write``) and
+  ``ballet_llm_requests_total`` (``customer``, ``project``, ``model``,
+  ``status``).
+- **Core**: records are delivered in batches every 2 seconds to
+  ``POST /internal/v1/usage`` (``usage.write``) and kept while Core is
+  unreachable (up to 100 000). Per-ticket and per-model totals are
+  available at ``GET /api/v1/projects/{project}/usage``
+  (:doc:`rest-api`).
+
 Trying it locally
 -----------------
 
-``core/cmd/devtoken`` mints run tokens from Core's key file
-(development only):
+``core/cmd/devtoken`` mints run tokens from Core's key file, and
+``gateway/cmd/fake-anthropic`` serves a fake Messages API with usage
+(both development only). Point a project credential at the fake
+(``base_url`` ``http://127.0.0.1:9900``, key ``sk-fake``) to test without
+a real provider:
 
 .. code-block:: bash
 

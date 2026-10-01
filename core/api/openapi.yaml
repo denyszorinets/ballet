@@ -272,6 +272,19 @@ paths:
         "204": { description: Deleted }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/projects/{project}/usage:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: getProjectUsage
+      tags: [usage]
+      summary: LLM token usage of the project, grouped by ticket or model
+      parameters:
+        - { name: group_by, in: query, schema: { type: string, enum: [ticket, model], default: ticket } }
+        - { name: since, in: query, schema: { type: string, format: date-time } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/UsageReport" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -564,3 +577,23 @@ components:
       properties:
         api_key: { type: string, description: Write-only; never returned }
         base_url: { type: string }
+
+    UsageTotals:
+      type: object
+      additionalProperties: false
+      required: [requests, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens]
+      properties:
+        key: { type: string, description: Ticket key or model of the group }
+        requests: { type: integer, format: int64 }
+        input_tokens: { type: integer, format: int64 }
+        output_tokens: { type: integer, format: int64 }
+        cache_read_tokens: { type: integer, format: int64 }
+        cache_write_tokens: { type: integer, format: int64 }
+    UsageReport:
+      type: object
+      additionalProperties: false
+      required: [group_by, items, total]
+      properties:
+        group_by: { type: string, enum: [ticket, model] }
+        items: { type: array, items: { $ref: "#/components/schemas/UsageTotals" } }
+        total: { $ref: "#/components/schemas/UsageTotals" }

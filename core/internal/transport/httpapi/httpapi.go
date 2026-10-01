@@ -26,6 +26,7 @@ type Deps struct {
 	RoleBindings *app.RoleBindings
 	Tracker      *app.Tracker
 	Credentials  *app.Credentials
+	Usage        *app.Usage
 }
 
 // Register mounts the REST API on mux and returns the API routes it
@@ -46,6 +47,7 @@ func Register(mux *http.ServeMux, d Deps) []string {
 	registerTracker(r, d.Tracker)
 	registerDependencies(r, d.Tracker)
 	registerCredentials(r, d.Credentials)
+	registerUsage(r, d.Usage)
 	r.mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, fmt.Errorf("%w: no such endpoint", app.ErrNotFound))
 	})

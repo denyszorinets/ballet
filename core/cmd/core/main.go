@@ -184,6 +184,8 @@ func run() error {
 	authz := &app.RBAC{Store: st, Bootstrap: bootstrap}
 	credentials := &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID}
 	internalapi.RegisterCredentials(internalAPI, credentials)
+	usage := &app.Usage{Store: st, Tenancy: st, Authz: authz}
+	internalapi.RegisterUsage(internalAPI, usage)
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,
@@ -191,6 +193,7 @@ func run() error {
 		RBAC:         authz,
 		RoleBindings: &app.RoleBindings{RBAC: authz, Tenancy: st, Now: time.Now, NewID: store.NewID},
 		Credentials:  credentials,
+		Usage:        usage,
 		Tracker: &app.Tracker{
 			Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 		},

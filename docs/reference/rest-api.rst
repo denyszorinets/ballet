@@ -137,6 +137,22 @@ API, used for embeddings). ``project`` is absent for the customer default.
 
 ``DELETE`` on either path → ``204``; ``404`` when nothing is set there.
 
+LLM usage
+---------
+
+``GET /api/v1/projects/{project}/usage`` → ``200``
+   Token usage recorded by the LLM gateway. Query: ``group_by`` =
+   ``ticket`` (default) or ``model``; ``since`` (RFC 3339). Permission:
+   ``tracker.read``.
+
+   .. code-block:: json
+
+      {"group_by": "ticket",
+       "items": [{"key": "WEB-7", "requests": 2, "input_tokens": 24, "output_tokens": 10,
+                  "cache_read_tokens": 6, "cache_write_tokens": 0}],
+       "total": {"requests": 2, "input_tokens": 24, "output_tokens": 10,
+                 "cache_read_tokens": 6, "cache_write_tokens": 0}}
+
 Customers
 ---------
 
