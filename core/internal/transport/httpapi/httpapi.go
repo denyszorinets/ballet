@@ -7,16 +7,20 @@ import (
 
 	"github.com/denyszorinets/ballet/kit/auth"
 	"github.com/denyszorinets/ballet/kit/auth/oidc"
+	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 )
 
 // Deps are the collaborators the REST API needs.
 type Deps struct {
-	Verifier *oidc.Verifier
+	Verifier  *oidc.Verifier
+	TokenKeys *runtoken.KeyRing
 }
 
 // Register mounts the REST API on mux. Every /api/ route requires an
-// authenticated caller.
+// authenticated caller. The run token JWKS is public.
 func Register(mux *http.ServeMux, d Deps) {
+	mux.Handle("GET /.well-known/jwks.json", runtoken.JWKSHandler(d.TokenKeys))
+
 	api := http.NewServeMux()
 	api.HandleFunc("GET /api/v1/me", me)
 	mux.Handle("/api/", oidc.Middleware(d.Verifier)(api))
