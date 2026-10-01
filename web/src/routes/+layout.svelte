@@ -38,6 +38,12 @@
 	});
 
 	$effect(() => {
+		if (session && authenticated && !session.permissions.loaded) {
+			session.permissions.load(session.api).catch(() => {});
+		}
+	});
+
+	$effect(() => {
 		if (!session || !authenticated) return;
 		session.realtime.connect();
 		return session.realtime.onStatus((s) => (status = s));
@@ -77,9 +83,18 @@
 	<header>
 		<a class="brand" href={resolve('/')}>Ballet</a>
 		<nav aria-label="Main">
-			<a href={resolve('/')} aria-current={page.url.pathname === '/' ? 'page' : undefined}
-				>Customers</a
+			<a
+				href={resolve('/')}
+				aria-current={page.url.pathname === '/' || page.url.pathname.startsWith('/customers')
+					? 'page'
+					: undefined}>Customers</a
 			>
+			{#if session.permissions.managesAccess}
+				<a
+					href={resolve('/access')}
+					aria-current={page.url.pathname === '/access' ? 'page' : undefined}>Access</a
+				>
+			{/if}
 		</nav>
 		<div class="spacer"></div>
 		<span class="status" data-status={status} title="Realtime connection" role="status">
@@ -133,6 +148,10 @@
 		font-size: 1.1rem;
 		color: var(--text);
 		text-decoration: none;
+	}
+	nav {
+		display: flex;
+		gap: 1rem;
 	}
 	nav a {
 		color: var(--muted);

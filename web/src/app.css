@@ -90,3 +90,85 @@ button.primary {
 .error {
 	color: var(--danger);
 }
+
+h1 {
+	margin: 0 0 1rem;
+	font-size: 1.6rem;
+}
+
+h2 {
+	font-size: 1.15rem;
+	margin: 1.5rem 0 0.75rem;
+}
+
+.form {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	align-items: end;
+}
+
+.form label {
+	display: grid;
+	gap: 0.25rem;
+	font-size: 0.85rem;
+	color: var(--muted);
+}
+
+input,
+select,
+textarea {
+	font: inherit;
+	color: var(--text);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 0.4rem 0.6rem;
+	min-width: 0;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 1px;
+}
+
+table {
+	width: 100%;
+	border-collapse: collapse;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+}
+
+th,
+td {
+	text-align: left;
+	padding: 0.5rem 0.75rem;
+	border-bottom: 1px solid var(--border);
+}
+
+th {
+	font-size: 0.8rem;
+	color: var(--muted);
+	font-weight: 600;
+}
+
+.mono {
+	font-family: ui-monospace, monospace;
+}
+
+.badge {
+	font-size: 0.75rem;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	padding: 0.05rem 0.5rem;
+	color: var(--muted);
+}
+
+.table-wrap {
+	overflow-x: auto;
+}
