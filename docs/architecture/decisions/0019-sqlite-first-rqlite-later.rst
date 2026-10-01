@@ -100,7 +100,8 @@ Risks
 Follow-up
 ~~~~~~~~~
 
-- Choose a migration tool.
+- Migrations: a minimal embedded-SQL migrator in ``kit/sqlstore``
+  (:doc:`/development/persistence`); no external tool.
 - When adding rqlite: load the ``sqlite-vec`` extension
   (``-extensions-path``) and keep the Go functions in sync with it.
 
