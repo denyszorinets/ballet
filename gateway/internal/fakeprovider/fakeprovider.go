@@ -78,7 +78,7 @@ func (p *Provider) serve(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{
 		"id": "msg_1", "type": "message", "role": "assistant", "model": model,
 		"content": []map[string]any{{"type": "text", "text": "hello"}},
-		"usage": map[string]any{"input_tokens": InputTokens, "output_tokens": OutputTokens, "cache_read_input_tokens": CacheReadTokens},
+		"usage":   map[string]any{"input_tokens": InputTokens, "output_tokens": OutputTokens, "cache_read_input_tokens": CacheReadTokens},
 	})
 }
 
