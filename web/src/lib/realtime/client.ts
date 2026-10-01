@@ -113,6 +113,7 @@ export class RealtimeClient {
 	private attempt = 0;
 	private stopped = true;
 	private listeners = new Set<(s: Status) => void>();
+	private handlers = new Map<string, Set<(params: unknown) => void>>();
 	private _status: Status = 'idle';
 
 	constructor(options: RealtimeOptions) {
@@ -135,6 +136,19 @@ export class RealtimeClient {
 		this.listeners.add(fn);
 		fn(this._status);
 		return () => this.listeners.delete(fn);
+	}
+
+	/**
+	 * Handles notifications of a method (other than heartbeats and stream
+	 * events of subscriptions made with subscribe()); returns a function
+	 * removing the handler. "stream.closed" for subscriptions not made with
+	 * subscribe() (e.g. planner.watch) arrives here too.
+	 */
+	on(method: string, fn: (params: unknown) => void): () => void {
+		let set = this.handlers.get(method);
+		if (!set) this.handlers.set(method, (set = new Set()));
+		set.add(fn);
+		return () => set.delete(fn);
 	}
 
 	/** Starts connecting; the client keeps the connection up until close(). */
@@ -270,12 +284,19 @@ export class RealtimeClient {
 				if (sub) {
 					this.byServerId.delete(sub.serverId!);
 					void this.sendSubscribe(sub);
+					return;
 				}
+				this.notify(m.method, m.params);
 				return;
 			}
 			default:
-				this.opts.onNotification?.(m.method, m.params);
+				this.notify(m.method, m.params);
 		}
+	}
+
+	private notify(method: string, params: unknown): void {
+		this.opts.onNotification?.(method, params);
+		for (const fn of this.handlers.get(method) ?? []) fn(params);
 	}
 
 	private onStreamEvent(e: StreamEvent): void {
