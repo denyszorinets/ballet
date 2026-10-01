@@ -18,7 +18,9 @@ Ballet keeps a central skill registry
 (:doc:`/architecture/decisions/0010-central-skill-registry`):
 
 - **Scopes**: organization → customer → project. A lower scope may add
-  skills or override a higher-scope skill of the same name.
+  skills or override a higher-scope skill of the same name. A project's
+  effective set contains every *published* skill of its chain; drafts
+  that were never published are not used.
 - **Drafts and versions**: admins edit a skill's draft; publishing
   snapshots it as the next immutable version. Projects pin versions in
   their process profile, so a skill change never alters a running project

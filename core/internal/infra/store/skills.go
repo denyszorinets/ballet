@@ -157,3 +157,43 @@ func scanSkillVersion(r scanner) (skill.Version, error) {
 	v.PublishedAt, err = parseTime(published)
 	return v, err
 }
+
+// SetSkillPin inserts or replaces a project's pin and records e.
+func (s *Store) SetSkillPin(ctx context.Context, projectID string, p skill.Pin, e event.Event) error {
+	disabled := 0
+	if p.Disabled {
+		disabled = 1
+	}
+	return mapWriteErr("set skill pin", s.db.Batch(ctx,
+		sqlstore.Exec(`INSERT INTO skill_pins (project_id, name, version, disabled, updated_at) VALUES (?, ?, ?, ?, ?)
+			ON CONFLICT (project_id, name) DO UPDATE SET version = excluded.version, disabled = excluded.disabled,
+				updated_at = excluded.updated_at`, projectID, p.Name, p.Version, disabled, formatTime(e.OccurredAt)),
+		s.AppendEvent(e),
+	))
+}
+
+// DeleteSkillPin removes a pin and records e.
+func (s *Store) DeleteSkillPin(ctx context.Context, projectID, name string, e event.Event) error {
+	return mapWriteErr("delete skill pin", s.db.Batch(ctx,
+		sqlstore.ExecOne(`DELETE FROM skill_pins WHERE project_id = ? AND name = ?`, projectID, name),
+		s.AppendEvent(e),
+	))
+}
+
+// SkillPins returns a project's pins.
+func (s *Store) SkillPins(ctx context.Context, projectID string) ([]skill.Pin, error) {
+	rows, err := s.db.Query(ctx, `SELECT name, version, disabled FROM skill_pins WHERE project_id = ? ORDER BY name`, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("list skill pins: %w", err)
+	}
+	defer rows.Close()
+	var out []skill.Pin
+	for rows.Next() {
+		var p skill.Pin
+		if err := rows.Scan(&p.Name, &p.Version, &p.Disabled); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}

@@ -534,6 +534,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project}/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        /** The project's effective skills (organization → customer → project, pins applied) */
+        get: operations["resolveProjectSkills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project}/skills/{name}/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+                name: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["pinProjectSkill"];
+        post?: never;
+        delete: operations["unpinProjectSkill"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -897,6 +937,34 @@ export interface components {
         };
         SkillVersionList: {
             items: components["schemas"]["SkillVersion"][];
+        };
+        ResolvedSkill: {
+            name: string;
+            /** @description The most specific skill with this name */
+            skill_id?: string;
+            scope?: string;
+            /**
+             * Format: int64
+             * @description Version the project uses; 0 when unusable (see problem)
+             */
+            version: number;
+            /** Format: int64 */
+            latest_version: number;
+            pinned: boolean;
+            /** @description Why the skill cannot be used as configured */
+            problem?: string;
+        };
+        ResolvedSkillList: {
+            items: components["schemas"]["ResolvedSkill"][];
+        };
+        SkillPin: {
+            /**
+             * Format: int64
+             * @description 0: always the latest published version
+             */
+            version?: number;
+            /** @description Exclude the skill from the project */
+            disabled?: boolean;
         };
     };
     responses: {
@@ -1998,6 +2066,80 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SkillVersion"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    resolveProjectSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedSkillList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    pinProjectSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SkillPin"];
+            };
+        };
+        responses: {
+            /** @description Pinned */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    unpinProjectSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unpinned */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

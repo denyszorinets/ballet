@@ -421,6 +421,36 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/projects/{project}/skills:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: resolveProjectSkills
+      tags: [skills]
+      summary: The project's effective skills (organization → customer → project, pins applied)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ResolvedSkillList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{project}/skills/{name}/pin:
+    parameters:
+      - { $ref: "#/components/parameters/Project" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: pinProjectSkill
+      tags: [skills]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SkillPin" } } }
+      responses:
+        "204": { description: Pinned }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: unpinProjectSkill
+      tags: [skills]
+      responses:
+        "204": { description: Unpinned }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -870,3 +900,26 @@ components:
       additionalProperties: false
       required: [items]
       properties: { items: { type: array, items: { $ref: "#/components/schemas/SkillVersion" } } }
+    ResolvedSkill:
+      type: object
+      additionalProperties: false
+      required: [name, version, latest_version, pinned]
+      properties:
+        name: { type: string }
+        skill_id: { type: string, description: The most specific skill with this name }
+        scope: { type: string }
+        version: { type: integer, format: int64, description: "Version the project uses; 0 when unusable (see problem)" }
+        latest_version: { type: integer, format: int64 }
+        pinned: { type: boolean }
+        problem: { type: string, description: Why the skill cannot be used as configured }
+    ResolvedSkillList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/ResolvedSkill" } } }
+    SkillPin:
+      type: object
+      additionalProperties: false
+      properties:
+        version: { type: integer, format: int64, minimum: 0, description: "0: always the latest published version" }
+        disabled: { type: boolean, description: Exclude the skill from the project }
