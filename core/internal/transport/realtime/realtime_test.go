@@ -172,13 +172,13 @@ func TestRealtime_SubscribeErrors(t *testing.T) {
 
 	stranger := e.dial(t, "eve", nil, &inbox{})
 	err = stranger.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "s", Stream: "project:WEB"}, nil)
-	assert.True(t, rpc.IsCode(err, rpc.CodeForbidden))
+	assert.True(t, rpc.IsCode(err, rpc.CodeForbidden), "%v", err)
 
 	err = c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "x", Stream: "bogus"}, nil)
-	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidParams))
+	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidParams), "%v", err)
 	err = c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "project:WEB"}, nil)
-	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidParams), "subscription ID is required")
+	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidParams), "subscription ID is required: %v", err)
 	require.NoError(t, c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "dup", Stream: "project:WEB"}, nil))
 	err = c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "dup", Stream: "project:WEB"}, nil)
-	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidParams), "IDs are unique per connection")
+	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidParams), "IDs are unique per connection: %v", err)
 }
