@@ -1,2 +1,16 @@
-<h1>Welcome to SvelteKit</h1>
-<p>Visit <a href="https://svelte.dev/docs/kit">svelte.dev/docs/kit</a> to read the documentation</p>
+<script lang="ts">
+	import { fetchHealth, type Health } from '$lib/api/health';
+
+	let health = $state<Health | undefined>();
+
+	$effect(() => {
+		fetchHealth().then((h) => (health = h));
+	});
+</script>
+
+<main>
+	<h1>Ballet</h1>
+	<p data-testid="core-status">
+		Core: {health ? health.status : 'checking…'}
+	</p>
+</main>
