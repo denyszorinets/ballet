@@ -52,6 +52,7 @@ func Register(mux *http.ServeMux, d Deps) []string {
 	registerUsage(r, d.Usage)
 	registerKnowledge(r, d.Knowledge)
 	registerSkills(r, d.Skills)
+	registerSkillResolution(r, d.Skills)
 	r.mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, fmt.Errorf("%w: no such endpoint", app.ErrNotFound))
 	})

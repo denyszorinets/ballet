@@ -234,6 +234,27 @@ not ``SKILL.md``; at most 50 files, 1 MiB in total).
 ``GET /api/v1/skills/{skill}/versions`` → ``200`` (newest first) and
 ``GET /api/v1/skills/{skill}/versions/{number}`` → ``200``
 
+``GET /api/v1/projects/{project}/skills`` → ``200``
+   The project's **effective skills**: published skills of the
+   organization, the project's customer and the project, the most
+   specific scope winning per name, with the project's pins applied:
+
+   .. code-block:: json
+
+      {"items": [{"name": "code-review", "skill_id": "0199…", "scope": "project:WEB",
+                  "version": 1, "latest_version": 1, "pinned": false}]}
+
+   ``problem`` explains entries that cannot be used as configured (a pin
+   beyond the latest version, a pin to an unknown name); their
+   ``version`` is 0.
+
+``PUT /api/v1/projects/{project}/skills/{name}/pin`` — ``{"version"?, "disabled"?}`` → ``204``
+   ``version`` 0 (default) follows the latest published version; ``N``
+   fixes version N; ``disabled: true`` excludes the skill from the
+   project. Requires ``skill.write`` on the project.
+
+``DELETE /api/v1/projects/{project}/skills/{name}/pin`` → ``204``
+
 Customers
 ---------
 

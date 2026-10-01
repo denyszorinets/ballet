@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -99,4 +100,58 @@ func TestSkills_ScopesAndAuthorization(t *testing.T) {
 	assert.ErrorIs(t, err, app.ErrInvalid)
 	_, err = sk.CreateSkill(alice, "customer:nobody", "x-y", content("d", ""))
 	assert.ErrorIs(t, err, app.ErrNotFound)
+}
+
+func TestSkills_ResolveForProjectWithPins(t *testing.T) {
+	sk, _ := newSkills(t)
+	alice := user(t, "alice", "ballet-admins")
+	dave := user(t, "dave", "acme-admins")
+	bob := user(t, "bob", "acme-devs")
+	publish := func(ctx context.Context, scope, name, body string, times int) skill.Skill {
+		s, err := sk.CreateSkill(ctx, scope, name, content(name, body))
+		require.NoError(t, err)
+		for range times {
+			_, err := sk.Publish(ctx, s.ID, s.Version)
+			require.NoError(t, err)
+			s, _ = sk.GetSkill(ctx, s.ID)
+		}
+		return s
+	}
+	publish(alice, "organization", "code-review", "org review", 2)
+	webReview := publish(dave, "project:WEB", "code-review", "web review", 1)
+	publish(alice, "organization", "gitflow", "flow", 3)
+	publish(alice, "organization", "unpublished", "x", 0)
+	publish(dave, "project:APP", "app-only", "x", 1)
+
+	got, err := sk.Resolve(bob, "WEB")
+	require.NoError(t, err)
+	names := map[string]skill.Resolved{}
+	for _, r := range got {
+		names[r.Name] = r
+	}
+	assert.Len(t, names, 2, "unpublished and other projects' skills are not included")
+	assert.Equal(t, webReview.ID, names["code-review"].Skill.ID, "project override wins")
+	assert.Equal(t, int64(3), names["gitflow"].Version)
+
+	require.NoError(t, sk.SetPin(dave, "WEB", skill.Pin{Name: "gitflow", Version: 2}))
+	got, err = sk.Resolve(bob, "WEB")
+	require.NoError(t, err)
+	for _, r := range got {
+		if r.Name == "gitflow" {
+			assert.Equal(t, int64(2), r.Version)
+			assert.True(t, r.Pinned)
+		}
+	}
+	require.NoError(t, sk.SetPin(dave, "WEB", skill.Pin{Name: "gitflow", Disabled: true}))
+	got, _ = sk.Resolve(bob, "WEB")
+	assert.Len(t, got, 1, "disabled skills are excluded")
+	require.NoError(t, sk.DeletePin(dave, "WEB", "gitflow"))
+	got, _ = sk.Resolve(bob, "WEB")
+	assert.Len(t, got, 2)
+	assert.ErrorIs(t, sk.DeletePin(dave, "WEB", "gitflow"), app.ErrNotFound)
+
+	assert.ErrorIs(t, sk.SetPin(bob, "WEB", skill.Pin{Name: "gitflow", Version: 1}), app.ErrForbidden, "engineers do not pin")
+	assert.ErrorIs(t, sk.SetPin(dave, "WEB", skill.Pin{Name: "gitflow", Version: -1}), app.ErrInvalid)
+	_, err = sk.Resolve(user(t, "eve"), "WEB")
+	assert.ErrorIs(t, err, app.ErrForbidden)
 }

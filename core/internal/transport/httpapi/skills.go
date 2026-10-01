@@ -162,3 +162,58 @@ func registerSkills(mux *router, sk *app.Skills) {
 		writeJSON(w, http.StatusOK, toSkillVersionJSON(v))
 	})
 }
+
+type resolvedSkillJSON struct {
+	Name          string `json:"name"`
+	SkillID       string `json:"skill_id,omitempty"`
+	Scope         string `json:"scope,omitempty"`
+	Version       int64  `json:"version"`
+	LatestVersion int64  `json:"latest_version"`
+	Pinned        bool   `json:"pinned"`
+	Problem       string `json:"problem,omitempty"`
+}
+
+func registerSkillResolution(mux *router, sk *app.Skills) {
+	mux.handle("GET /api/v1/projects/{project}/skills", func(w http.ResponseWriter, r *http.Request) {
+		resolved, err := sk.Resolve(r.Context(), r.PathValue("project"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		out := listJSON[resolvedSkillJSON]{Items: make([]resolvedSkillJSON, 0, len(resolved))}
+		for _, rs := range resolved {
+			j := resolvedSkillJSON{Name: rs.Name, Version: rs.Version, Pinned: rs.Pinned, Problem: rs.Problem}
+			if rs.Skill.ID != "" {
+				j.SkillID, j.Scope, j.LatestVersion = rs.Skill.ID, rs.Skill.Scope.String(), rs.Skill.LatestVersion
+			}
+			out.Items = append(out.Items, j)
+		}
+		writeJSON(w, http.StatusOK, out)
+	})
+
+	mux.handle("PUT /api/v1/projects/{project}/skills/{name}/pin", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Version  int64 `json:"version"`
+			Disabled bool  `json:"disabled"`
+		}
+		if err := decode(r, &in); err != nil {
+			writeError(w, err)
+			return
+		}
+		if err := sk.SetPin(r.Context(), r.PathValue("project"), skill.Pin{
+			Name: r.PathValue("name"), Version: in.Version, Disabled: in.Disabled,
+		}); err != nil {
+			writeError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	mux.handle("DELETE /api/v1/projects/{project}/skills/{name}/pin", func(w http.ResponseWriter, r *http.Request) {
+		if err := sk.DeletePin(r.Context(), r.PathValue("project"), r.PathValue("name")); err != nil {
+			writeError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+}

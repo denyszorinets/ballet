@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"time"
@@ -20,6 +21,9 @@ type SkillStore interface {
 	SkillsInScopes(ctx context.Context, scopes []skill.Scope) ([]skill.Skill, error)
 	SkillVersions(ctx context.Context, skillID string) ([]skill.Version, error)
 	SkillVersion(ctx context.Context, skillID string, number int64) (skill.Version, error)
+	SetSkillPin(ctx context.Context, projectID string, p skill.Pin, e event.Event) error
+	DeleteSkillPin(ctx context.Context, projectID, name string, e event.Event) error
+	SkillPins(ctx context.Context, projectID string) ([]skill.Pin, error)
 }
 
 // Skills implements the skill registry (ADR-0010).
@@ -216,4 +220,86 @@ func (sk *Skills) Version(ctx context.Context, skillID string, number int64) (sk
 		return skill.Version{}, fmt.Errorf("%w: version numbers start at 1", ErrInvalid)
 	}
 	return sk.Store.SkillVersion(ctx, skillID, number)
+}
+
+// projectScope loads a project and its skill scope chain.
+func (sk *Skills) projectScope(ctx context.Context, projectKey string) (string, string, []skill.Scope, error) {
+	p, err := sk.Tenancy.ProjectByKey(ctx, projectKey)
+	if err != nil {
+		return "", "", nil, err
+	}
+	c, err := sk.Tenancy.CustomerByID(ctx, p.CustomerID)
+	if err != nil {
+		return "", "", nil, err
+	}
+	chain := []skill.Scope{
+		{Kind: skill.ScopeOrganization},
+		{Kind: skill.ScopeCustomer, Customer: c.Key},
+		{Kind: skill.ScopeProject, Customer: c.Key, Project: p.Key},
+	}
+	return p.ID, c.ID, chain, nil
+}
+
+// Resolve returns a project's effective skills (organization → customer →
+// project, pins applied). Requires skill.read on the project.
+func (sk *Skills) Resolve(ctx context.Context, projectKey string) ([]skill.Resolved, error) {
+	projectID, _, chain, err := sk.projectScope(ctx, projectKey)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := sk.authorize(ctx, ActSkillRead, chain[2]); err != nil {
+		return nil, err
+	}
+	all, err := sk.Store.SkillsInScopes(ctx, chain)
+	if err != nil {
+		return nil, err
+	}
+	pins, err := sk.Store.SkillPins(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	return skill.Resolve(all, pins), nil
+}
+
+// SetPin pins a skill name for a project (version 0 = latest) or excludes
+// it. Requires skill.write on the project.
+func (sk *Skills) SetPin(ctx context.Context, projectKey string, p skill.Pin) error {
+	projectID, customerID, chain, err := sk.projectScope(ctx, projectKey)
+	if err != nil {
+		return err
+	}
+	id, err := sk.authorize(ctx, ActSkillWrite, chain[2])
+	if err != nil {
+		return err
+	}
+	if err := skill.ValidateName(p.Name); err != nil {
+		return invalid(err)
+	}
+	if p.Version < 0 {
+		return fmt.Errorf("%w: version must be 0 (latest) or a published version", ErrInvalid)
+	}
+	e := event.Event{Customer: customerID, Project: projectID, EntityType: "project", EntityID: projectID,
+		Type: "project.skill_pinned", Actor: actorOf(id), OccurredAt: sk.Now(),
+		Payload: mustJSON(map[string]any{"name": p.Name, "version": p.Version, "disabled": p.Disabled})}
+	return sk.Store.SetSkillPin(ctx, projectID, p, e)
+}
+
+// DeletePin removes a project's pin for a skill name.
+func (sk *Skills) DeletePin(ctx context.Context, projectKey, name string) error {
+	projectID, customerID, chain, err := sk.projectScope(ctx, projectKey)
+	if err != nil {
+		return err
+	}
+	id, err := sk.authorize(ctx, ActSkillWrite, chain[2])
+	if err != nil {
+		return err
+	}
+	e := event.Event{Customer: customerID, Project: projectID, EntityType: "project", EntityID: projectID,
+		Type: "project.skill_unpinned", Actor: actorOf(id), OccurredAt: sk.Now(),
+		Payload: mustJSON(map[string]any{"name": name})}
+	err = sk.Store.DeleteSkillPin(ctx, projectID, name, e)
+	if errors.Is(err, ErrConflict) {
+		return fmt.Errorf("%w: no pin for %s", ErrNotFound, name)
+	}
+	return err
 }

@@ -407,3 +407,27 @@ func TestSkillAPI_Lifecycle(t *testing.T) {
 	code, _ = call(t, api, "GET", "/api/v1/skills/"+id+"/versions/9", "alice", "")
 	assert.Equal(t, http.StatusNotFound, code)
 }
+
+func TestSkillAPI_ResolutionAndPins(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	_, s := call(t, api, "POST", "/api/v1/skills", "alice", `{"scope":"organization","name":"gitflow","description":"d"}`)
+	call(t, api, "POST", "/api/v1/skills/"+s["id"].(string)+"/publish", "alice", `{"version":1}`)
+
+	code, list := call(t, api, "GET", "/api/v1/projects/WEB/skills", "alice", "")
+	require.Equal(t, http.StatusOK, code, list)
+	require.Len(t, list["items"], 1)
+	assert.Equal(t, "organization", list["items"].([]any)[0].(map[string]any)["scope"])
+
+	code, body := call(t, api, "PUT", "/api/v1/projects/WEB/skills/gitflow/pin", "alice", `{"version":5}`)
+	require.Equal(t, http.StatusNoContent, code, body)
+	_, list = call(t, api, "GET", "/api/v1/projects/WEB/skills", "alice", "")
+	assert.NotEmpty(t, list["items"].([]any)[0].(map[string]any)["problem"])
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/projects/WEB/skills/gitflow/pin", nil)
+	req.Header.Set("X-Test-User", "alice")
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+}
