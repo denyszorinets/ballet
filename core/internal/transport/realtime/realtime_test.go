@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/denyszorinets/ballet/core/internal/app"
+	"github.com/denyszorinets/ballet/core/internal/domain/planner"
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
 	"github.com/denyszorinets/ballet/core/internal/domain/tracker"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
@@ -28,6 +29,17 @@ type env struct {
 	url     string
 	iss     *oidctest.Issuer
 	tracker *app.Tracker
+	planner *app.Planner
+}
+
+// echoLLM answers every request with "You said: <last user text>".
+type echoLLM struct{}
+
+func (echoLLM) Stream(_ context.Context, req app.LLMRequest, onText func(string)) (app.LLMResponse, error) {
+	last := req.Messages[len(req.Messages)-1].Content
+	text := "You said: " + last[len(last)-1].Text
+	onText(text)
+	return app.LLMResponse{Content: []planner.Block{planner.Text(text)}, StopReason: "end_turn"}, nil
 }
 
 func setup(t *testing.T) env {
@@ -55,15 +67,18 @@ func setup(t *testing.T) env {
 	t.Cleanup(func() { cancel(); <-done })
 	time.Sleep(20 * time.Millisecond)
 
+	pl := &app.Planner{Store: st, Tenancy: st, Authz: authz, LLM: echoLLM{}, Model: "m", MaxTokens: 100,
+		Now: time.Now, NewID: store.NewID, Context: t.Context()}
 	mux := http.NewServeMux()
 	realtime.Register(mux, realtime.Deps{
 		Verifier: v, Now: time.Now,
 		Streams: &app.Streams{Feed: feed, Log: st, Items: st, Tenancy: st, Authz: authz, MaxReplay: 5},
+		Planner: pl,
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	tr := &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID}
-	return env{url: "ws" + strings.TrimPrefix(srv.URL, "http") + realtime.Path, iss: iss, tracker: tr}
+	return env{url: "ws" + strings.TrimPrefix(srv.URL, "http") + realtime.Path, iss: iss, tracker: tr, planner: pl}
 }
 
 func (e env) create(t *testing.T, title string) app.ItemView {
@@ -75,8 +90,9 @@ func (e env) create(t *testing.T, title string) app.ItemView {
 }
 
 type inbox struct {
-	mu     sync.Mutex
-	events []realtime.EventNotification
+	mu      sync.Mutex
+	events  []realtime.EventNotification
+	outputs []realtime.PlannerOutputNotification
 }
 
 func (b *inbox) handler(_ context.Context, req *rpc.Request) (any, error) {
@@ -87,6 +103,15 @@ func (b *inbox) handler(_ context.Context, req *rpc.Request) (any, error) {
 		}
 		b.mu.Lock()
 		b.events = append(b.events, n)
+		b.mu.Unlock()
+	}
+	if req.Method == "planner.output" {
+		var n realtime.PlannerOutputNotification
+		if err := req.Decode(&n); err != nil {
+			return nil, err
+		}
+		b.mu.Lock()
+		b.outputs = append(b.outputs, n)
 		b.mu.Unlock()
 	}
 	return nil, nil
@@ -181,4 +206,44 @@ func TestRealtime_SubscribeErrors(t *testing.T) {
 	require.NoError(t, c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "dup", Stream: "project:WEB"}, nil))
 	err = c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "dup", Stream: "project:WEB"}, nil)
 	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidParams), "IDs are unique per connection: %v", err)
+}
+
+func TestRealtime_PlannerChat(t *testing.T) {
+	e := setup(t)
+	admin := auth.WithIdentity(t.Context(), auth.Identity{Kind: auth.KindHuman, Subject: "alice", Claims: map[string]any{"groups": []any{"admins"}}})
+	session, err := e.planner.CreateSession(admin, "WEB", "Chat")
+	require.NoError(t, err)
+
+	var box inbox
+	c := e.dial(t, "alice", []string{"admins"}, &box)
+	var w realtime.PlannerWatchResult
+	require.NoError(t, c.Call(t.Context(), "planner.watch", realtime.PlannerWatchParams{Subscription: "w", Session: session.ID}, &w))
+	assert.False(t, w.Running)
+	var sent realtime.PlannerSendResult
+	require.NoError(t, c.Call(t.Context(), "planner.send", realtime.PlannerSendParams{Session: session.ID, Text: "hello"}, &sent))
+	assert.Equal(t, int64(1), sent.Seq)
+
+	require.Eventually(t, func() bool {
+		box.mu.Lock()
+		defer box.mu.Unlock()
+		return len(box.outputs) > 0 && box.outputs[len(box.outputs)-1].Type == app.OutputDone
+	}, 5*time.Second, 5*time.Millisecond)
+	box.mu.Lock()
+	var kinds []string
+	for _, o := range box.outputs {
+		kinds = append(kinds, o.Type)
+		assert.Equal(t, "w", o.Subscription)
+	}
+	assert.Equal(t, "You said: hello", box.outputs[1].Text)
+	box.mu.Unlock()
+	assert.Equal(t, []string{"message", "text", "message", "done"}, kinds)
+
+	require.NoError(t, c.Call(t.Context(), "planner.cancel", realtime.PlannerSessionParams{Session: session.ID}, nil))
+	require.NoError(t, c.Call(t.Context(), "stream.unsubscribe", realtime.UnsubscribeParams{Subscription: "w"}, nil))
+
+	stranger := e.dial(t, "eve", nil, &inbox{})
+	err = stranger.Call(t.Context(), "planner.send", realtime.PlannerSendParams{Session: session.ID, Text: "hi"}, nil)
+	assert.True(t, rpc.IsCode(err, rpc.CodeForbidden), "%v", err)
+	err = stranger.Call(t.Context(), "planner.watch", realtime.PlannerWatchParams{Subscription: "x", Session: session.ID}, nil)
+	assert.True(t, rpc.IsCode(err, rpc.CodeForbidden), "%v", err)
 }

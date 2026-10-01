@@ -104,6 +104,12 @@ Methods
    * - ``stream.closed``
      - server → client
      - The server ended a subscription
+   * - ``planner.send``, ``planner.cancel``, ``planner.watch``
+     - client → server
+     - Planner chat, see below
+   * - ``planner.output``
+     - server → client
+     - Live output of a planner turn
 
 Change streams
 --------------
@@ -162,6 +168,61 @@ received ``seq``.
    ``-32010``, start again at step 1.
 
 Events reach subscribers within about 200 ms of being recorded.
+
+.. _reference-realtime-planner:
+
+Planner chat
+------------
+
+Planner sessions are created and read over REST
+(``/api/v1/projects/{project}/planner/sessions``,
+``/api/v1/planner/sessions/{session}`` with the full transcript); the
+conversation itself runs here
+(:doc:`/architecture/decisions/0020-planner-runs-in-process-in-core`).
+
+``planner.send`` — ``{"session", "text"}`` → ``{"seq"}``
+   Stores the human's message (``seq`` is its position in the
+   transcript) and starts the planner's **turn** in the background: the
+   model answers, possibly calling tools, until it stops. Needs
+   ``tracker.write`` on the project and a human caller. One turn runs per
+   session at a time: ``-32009`` (conflict) while the planner is still
+   answering.
+
+``planner.cancel`` — ``{"session"}`` → ``{}``
+   Stops the running turn, if any. Text streamed but not yet stored is
+   discarded; stored messages stay.
+
+``planner.watch`` — ``{"subscription", "session"}`` → ``{"subscription", "running"}``
+   Delivers the session's live output as ``planner.output``
+   notifications until ``stream.unsubscribe``. ``running`` tells whether
+   a turn is in progress now. Needs ``tracker.read``.
+
+``planner.output`` notifications carry ``subscription``, ``session``
+and ``type``:
+
+.. list-table::
+   :header-rows: 1
+
+   * - ``type``
+     - Meaning
+   * - ``text``
+     - A piece of the assistant's answer (``text``), as it is generated
+   * - ``tool_call``
+     - The planner called ``tool`` (``tool_use_id``, ``input``)
+   * - ``tool_result``
+     - The tool returned ``text`` (``is_error`` on failure)
+   * - ``message``
+     - Message ``seq`` was stored in the transcript
+   * - ``error``
+     - The turn failed or hit ``planner.max_rounds`` (``text`` explains)
+   * - ``done``
+     - The turn ended; ``text`` is the reason (``end_turn``,
+       ``cancelled``, ``error``, ``max_rounds``, …)
+
+Live output is not replayed. A client that reconnects (or receives
+``stream.closed`` with ``lagging``) watches again and reloads the
+transcript over REST. Every stored message also records a
+``planner.message`` event on the project stream.
 
 Error codes
 -----------

@@ -249,6 +249,43 @@ Base URL of the Knowledge service, to which Core forwards authorized
 :Default: ``"http://localhost:8081"``
 :Environment: ``BALLET_CORE_KNOWLEDGE_URL``
 
+``[gateway]`` (core)
+--------------------
+
+``url``
+   Base URL of the LLM gateway. The planner sends its model calls there
+   with a short-lived planner token (``kind: planner``,
+   ``llm.invoke``), so the project's credential is used and usage is
+   metered to the project.
+
+   :Type: string (URL)
+   :Default: ``"http://localhost:8082"``
+   :Environment: ``BALLET_CORE_GATEWAY_URL``
+
+``[planner]`` (core)
+--------------------
+
+The planner agent (:doc:`/architecture/decisions/0020-planner-runs-in-process-in-core`).
+Read at start-up; changes need a restart.
+
+``model``
+   Anthropic model of every planner session. Default
+   ``"claude-sonnet-5-5"``; ``BALLET_CORE_PLANNER_MODEL``.
+
+``max_tokens``
+   Maximum tokens of one model response. Default ``8192``;
+   ``BALLET_CORE_PLANNER_MAX_TOKENS``.
+
+``max_rounds``
+   Tool rounds per turn: after this many rounds of tool calls the turn
+   stops and the human is told to send a message to continue. Default
+   ``20``; ``BALLET_CORE_PLANNER_MAX_ROUNDS``.
+
+``skill``
+   Name of the project skill whose resolved version is appended to the
+   planner's built-in instructions (if the project has one). Default
+   ``"planner"``; ``BALLET_CORE_PLANNER_SKILL``.
+
 ``[core]`` and ``[storage]`` (knowledge)
 ----------------------------------------
 

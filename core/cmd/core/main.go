@@ -15,6 +15,7 @@ import (
 
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
+	"github.com/denyszorinets/ballet/core/internal/infra/anthropic"
 	"github.com/denyszorinets/ballet/core/internal/infra/secrets"
 	"github.com/denyszorinets/ballet/core/internal/infra/servicetokens"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
@@ -47,6 +48,21 @@ type serviceConfig struct {
 	Services  servicesConfig  `toml:"services"`
 	Secrets   secretsConfig   `toml:"secrets"`
 	Knowledge knowledgeConfig `toml:"knowledge"`
+	Gateway   gatewayConfig   `toml:"gateway"`
+	Planner   plannerConfig   `toml:"planner"`
+}
+
+// gatewayConfig locates the LLM gateway (ADR-0011), used by the planner.
+type gatewayConfig struct {
+	URL string `toml:"url"`
+}
+
+// plannerConfig configures the planner agent (ADR-0020).
+type plannerConfig struct {
+	Model     string `toml:"model"`
+	MaxTokens int    `toml:"max_tokens"` // per model response
+	MaxRounds int    `toml:"max_rounds"` // tool rounds per turn
+	Skill     string `toml:"skill"`      // project skill appended to the instructions
 }
 
 // knowledgeConfig locates the Knowledge service (ADR-0022).
@@ -110,6 +126,8 @@ func defaultConfig() serviceConfig {
 		Services:  servicesConfig{TokensDir: "data/service-tokens", TokenTTL: 30 * 24 * time.Hour},
 		Secrets:   secretsConfig{KeyFile: "data/secrets.key"},
 		Knowledge: knowledgeConfig{URL: "http://localhost:8081"},
+		Gateway:   gatewayConfig{URL: "http://localhost:8082"},
+		Planner:   plannerConfig{Model: "claude-sonnet-5-5", MaxTokens: 8192, MaxRounds: 20, Skill: "planner"},
 	}
 }
 
@@ -123,6 +141,12 @@ func (c serviceConfig) Validate() error {
 	}
 	if c.Storage.Path == "" {
 		errs = append(errs, errors.New("storage.path must not be empty"))
+	}
+	if c.Planner.Model == "" || c.Planner.MaxTokens < 1 || c.Planner.MaxRounds < 1 {
+		errs = append(errs, errors.New("planner.model must be set; planner.max_tokens and planner.max_rounds at least 1"))
+	}
+	if u, err := url.Parse(c.Gateway.URL); err != nil || u.Host == "" {
+		errs = append(errs, fmt.Errorf("gateway.url: invalid URL %q", c.Gateway.URL))
 	}
 	if _, err := c.RBAC.bindings(); err != nil {
 		errs = append(errs, err)
@@ -202,6 +226,16 @@ func run() error {
 	tracker := &app.Tracker{
 		Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 	}
+	skills := &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID}
+	plannerSvc := &app.Planner{
+		Store: st, Tenancy: st, Authz: authz,
+		LLM: &anthropic.Client{GatewayURL: cfg.Gateway.URL, Tokens: tokenIssuer},
+		Instructions: func(ctx context.Context, projectKey string) (string, error) {
+			return skills.ProjectSkillBody(ctx, projectKey, cfg.Planner.Skill)
+		},
+		Model: cfg.Planner.Model, MaxTokens: cfg.Planner.MaxTokens, MaxRounds: cfg.Planner.MaxRounds,
+		Now: time.Now, NewID: store.NewID, Logger: svc.Logger, Context: ctx,
+	}
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,
@@ -210,13 +244,14 @@ func run() error {
 		RoleBindings: &app.RoleBindings{RBAC: authz, Tenancy: st, Now: time.Now, NewID: store.NewID},
 		Credentials:  credentials,
 		Usage:        usage,
-		Skills:       &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Skills:       skills,
 		Search:       &app.Search{Store: st, Tenancy: st, Authz: authz, Embedder: embed.Hash{}},
 		Knowledge: &httpapi.KnowledgeProxy{
 			URL: knowledgeURL, Access: &app.KnowledgeAccess{Tenancy: st, Authz: authz}, Tokens: tokenIssuer,
 		},
 		Tracker:    tracker,
 		Changesets: &app.Changesets{Store: st, Tracker: tracker},
+		Planner:    plannerSvc,
 	})
 
 	searchIndexer := &app.SearchIndexer{
@@ -233,6 +268,7 @@ func run() error {
 	realtime.Register(svc.Mux, realtime.Deps{
 		Verifier: verifier,
 		Streams:  &app.Streams{Feed: feed, Log: st, Items: st, Tenancy: st, Authz: authz},
+		Planner:  plannerSvc,
 		Now:      time.Now,
 		Options:  rpc.Options{Logger: svc.Logger},
 	})
