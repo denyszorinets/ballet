@@ -58,8 +58,23 @@ Pages
      - Item: edit (title, description, type, criteria, policy, epic,
        milestone), state transitions, dependencies, history; live through
        the ``item:<KEY>`` stream
+   * - ``/customers/{customer}/knowledge``
+     - Knowledge space: entries filtered by kind and project, hybrid
+       search (:doc:`/concepts/knowledge`)
+   * - ``/customers/{customer}/knowledge/new``
+     - New entry; ``?item=WEB-12`` pre-links a tracker item and its project
+       (the item page's *Add knowledge* link)
+   * - ``/customers/{customer}/knowledge/{entry}``
+     - Entry: rendered Markdown, links to projects and items, edit
+       (Markdown with preview), version history
    * - ``/access``
      - Role bindings (users who manage access)
+
+The item page also lists the knowledge entries linked to the item.
+Markdown written by humans and agents is untrusted: it is rendered with
+``marked`` and sanitized with DOMPurify (``src/lib/markdown.ts``) before
+it reaches the page, so scripts, event handlers and ``javascript:`` URLs
+are removed.
 
 Pages subscribe to their stream *before* loading the snapshot over REST,
 refetch the changed item on each event, and reload on resync. Controls

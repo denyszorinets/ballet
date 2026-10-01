@@ -16,6 +16,8 @@
 	let containers = $state<Item[]>([]);
 	let deps = $state<Dependency[]>([]);
 	let history = $state<Event[]>([]);
+	let knowledge = $state<Schemas['KnowledgeEntry'][]>([]);
+	const itemQuery = $derived(`?item=${encodeURIComponent(key)}`);
 	let error = $state<string>();
 	let actionError = $state<string>();
 
@@ -58,6 +60,12 @@
 			]);
 			customer = p.data?.customer;
 			containers = (list.data?.items ?? []).filter((i) => i.kind !== 'ticket');
+		}
+		if (customer && s.permissions.can('knowledge.read', { customer })) {
+			const kn = await s.api.GET('/api/v1/customers/{customer}/knowledge/entries', {
+				params: { path: { customer }, query: { item: k } }
+			});
+			knowledge = kn.data?.items ?? [];
 		}
 	}
 
@@ -312,6 +320,31 @@
 			<label>Item key <input bind:value={depForm.item} required placeholder="WEB-1" /></label>
 			<button type="submit">Add dependency</button>
 		</form>
+	{/if}
+
+	{#if customer && session?.permissions.can('knowledge.read', { customer })}
+		<h2>Knowledge</h2>
+		{#if knowledge.length === 0}
+			<p class="muted">No linked knowledge.</p>
+		{:else}
+			<ul aria-label="Linked knowledge">
+				{#each knowledge as e (e.id)}
+					<li>
+						<a href={resolve('/customers/[customer]/knowledge/[entry]', { customer, entry: e.id })}
+							>{e.title}</a
+						>
+						<span class="badge">{e.kind}</span>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+		{#if session.permissions.can('knowledge.write', { customer })}
+			<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved path plus a query -->
+			<a href={resolve('/customers/[customer]/knowledge/new', { customer }) + itemQuery}
+				>Add knowledge</a
+			>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
+		{/if}
 	{/if}
 
 	<h2>History</h2>

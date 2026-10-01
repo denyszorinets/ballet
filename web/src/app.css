@@ -60,7 +60,8 @@ a {
 	color: var(--accent);
 }
 
-button {
+button,
+a.button {
 	font: inherit;
 	cursor: pointer;
 	border-radius: var(--radius);
@@ -70,7 +71,13 @@ button {
 	padding: 0.4rem 0.9rem;
 }
 
-button.primary {
+a.button {
+	display: inline-block;
+	text-decoration: none;
+}
+
+button.primary,
+a.button.primary {
 	background: var(--accent);
 	border-color: var(--accent);
 	color: var(--accent-text);
@@ -171,4 +178,38 @@ th {
 
 .table-wrap {
 	overflow-x: auto;
+}
+
+/* Rendered Markdown (knowledge entries, skills). */
+.markdown {
+	overflow-wrap: anywhere;
+}
+.markdown :is(h1, h2, h3) {
+	margin: 1rem 0 0.5rem;
+}
+.markdown :first-child {
+	margin-top: 0;
+}
+.markdown pre {
+	overflow-x: auto;
+	padding: 0.75rem;
+	background: var(--bg);
+	border-radius: var(--radius);
+}
+.markdown code {
+	font-family: ui-monospace, monospace;
+	font-size: 0.9em;
+}
+.markdown table {
+	border-collapse: collapse;
+}
+.markdown :is(th, td) {
+	border: 1px solid var(--border);
+	padding: 0.25rem 0.5rem;
+}
+.markdown blockquote {
+	margin: 0;
+	padding-left: 1rem;
+	border-left: 3px solid var(--border);
+	color: var(--muted);
 }
