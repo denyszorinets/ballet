@@ -5,8 +5,17 @@ The dependency graph drives execution
 -------------------------------------
 
 Milestones, epics and tickets are nodes; ``blocks`` dependencies are
-edges. A ticket is **ready** when every entity that blocks it is done
-(and, if its policy requires, a human released it).
+edges, at any level (a ticket can block a milestone, a milestone can block
+a ticket). A ticket is **runnable** when it is in state ``ready`` and
+every item that blocks it is resolved — ``done``, or ``cancelled`` so that
+abandoned work never stalls its dependents.
+
+Ballet rejects any ``blocks`` edge that would create a cycle. Each
+dependency change also bumps the project's graph version, so two
+concurrent additions cannot jointly create a cycle: the second one is
+re-validated against the updated graph.
+
+Dependencies are limited to items of the same project for now.
 
 The scheduler keeps a ready queue and starts runs up to the configured
 concurrency limits (globally, per customer, per project). Anything ready

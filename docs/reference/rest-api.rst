@@ -224,4 +224,38 @@ update and transition (:doc:`/architecture/security`).
    The item's events, oldest first:
    ``{"seq", "type", "occurred_at", "actor", "payload"}``.
 
+Dependencies
+------------
+
+Edges between two items of the same project
+(:doc:`/concepts/scheduling`). ``blocks`` edges must form an acyclic
+graph; ``relates`` is undirected and informational. Seen from an item,
+an edge has a direction:
+
+.. list-table::
+   :header-rows: 1
+
+   * - ``type``
+     - Meaning (from ``{item}``'s point of view)
+   * - ``blocks``
+     - ``{item}`` must be resolved before ``item`` can start
+   * - ``blocked_by``
+     - ``item`` must be resolved before ``{item}`` can start
+   * - ``relates``
+     - Related, no ordering
+
+Representation: ``{"id", "type", "item": {"key", "kind", "title", "state"}}``.
+
+``POST /api/v1/items/{item}/dependencies`` — ``{"type", "item"}`` → ``201``
+   ``400`` if the edge would create a cycle, connects an item to itself or
+   crosses projects; ``409`` if it already exists.
+
+``GET /api/v1/items/{item}/dependencies`` → ``200`` list
+
+``DELETE /api/v1/dependencies/{id}`` → ``204``
+
+``GET /api/v1/projects/{project}/runnable`` → ``200`` list of items
+   Tickets in state ``ready`` whose blockers are all resolved (``done``
+   or ``cancelled``) — what the scheduler may start.
+
 Every create and update records one event (:doc:`/architecture/data`).

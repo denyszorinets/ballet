@@ -36,6 +36,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	registerTenancy(api, d.Tenancy)
 	registerRBAC(api, d.RoleBindings)
 	registerTracker(api, d.Tracker)
+	registerDependencies(api, d.Tracker)
 	api.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, fmt.Errorf("%w: no such endpoint", app.ErrNotFound))
 	})
