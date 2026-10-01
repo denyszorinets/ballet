@@ -18,7 +18,10 @@ The system of record for everything except knowledge.
 - Identity and authorization: OIDC token validation, claim → role
   mapping, run-token issuance (:doc:`security`).
 - Skill registry (database only) and devcontainer templates.
-- Hybrid search over skills, tickets, reports and answers.
+- Hybrid search over items and skills (stage reports and answers when
+  they exist): an indexer tails the event log from a persisted cursor
+  and keeps documents and embeddings current; results are filtered by
+  RBAC.
 - Usage records per run (fed by the LLM gateway).
 - **Forge adapters** (GitHub, Forgejo/Gitea, GitLab, Bitbucket): open
   pull requests, receive webhooks or poll for review/CI/merge state,

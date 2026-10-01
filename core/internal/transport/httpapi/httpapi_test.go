@@ -67,6 +67,7 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 		RoleBindings: &app.RoleBindings{RBAC: r, Tenancy: st, Now: time.Now, NewID: store.NewID},
 		Usage:        &app.Usage{Store: st, Tenancy: st, Authz: authz},
 		Skills:       &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Search:       &app.Search{Store: st, Tenancy: st, Authz: authz},
 		Credentials:  &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID},
 		Tracker:      &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 	})
@@ -430,4 +431,14 @@ func TestSkillAPI_ResolutionAndPins(t *testing.T) {
 	rec := httptest.NewRecorder()
 	api.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNoContent, rec.Code)
+}
+
+func TestSearchAPI_Shape(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+
+	code, out := call(t, api, "GET", "/api/v1/search?q=anything", "alice", "")
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Empty(t, out["items"])
+	code, _ = call(t, api, "GET", "/api/v1/search?q=x&kind=user", "alice", "")
+	assert.Equal(t, http.StatusBadRequest, code)
 }

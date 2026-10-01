@@ -25,6 +25,7 @@ import (
 	"github.com/denyszorinets/ballet/kit/auth/oidc"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 	"github.com/denyszorinets/ballet/kit/config"
+	"github.com/denyszorinets/ballet/kit/embed"
 	"github.com/denyszorinets/ballet/kit/health"
 	"github.com/denyszorinets/ballet/kit/rpc"
 	"github.com/denyszorinets/ballet/kit/service"
@@ -207,6 +208,7 @@ func run() error {
 		Credentials:  credentials,
 		Usage:        usage,
 		Skills:       &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Search:       &app.Search{Store: st, Tenancy: st, Authz: authz, Embedder: embed.Hash{}},
 		Knowledge: &httpapi.KnowledgeProxy{
 			URL: knowledgeURL, Access: &app.KnowledgeAccess{Tenancy: st, Authz: authz}, Tokens: tokenIssuer,
 		},
@@ -214,6 +216,11 @@ func run() error {
 			Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 		},
 	})
+
+	searchIndexer := &app.SearchIndexer{
+		Store: st, Log: st, Items: st, Skills: st, Tenancy: st, Embedder: embed.Hash{}, Logger: svc.Logger,
+	}
+	go searchIndexer.Run(ctx)
 
 	feed := &app.Feed{Log: st, Logger: svc.Logger}
 	go func() {

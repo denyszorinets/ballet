@@ -255,6 +255,28 @@ not ``SKILL.md``; at most 50 files, 1 MiB in total).
 
 ``DELETE /api/v1/projects/{project}/skills/{name}/pin`` → ``204``
 
+Search
+------
+
+``GET /api/v1/search?q=…`` → ``200``
+   Hybrid full-text and semantic search over milestones, epics, tickets
+   (title, description, acceptance criteria) and skills (name,
+   description, body). Results are filtered by permission: items need
+   ``tracker.read`` on their project, skills ``skill.read`` on their
+   scope. Filters: ``kind`` (``item`` or ``skill``), ``project`` (its
+   items plus the skills of its organization → customer → project
+   chain), ``limit`` (default 20, max 50).
+
+   .. code-block:: json
+
+      {"items": [{"kind": "item", "ref": "WEB-1", "title": "Rate limit the public API",
+                  "snippet": "429 after 100 requests per minute", "customer": "acme",
+                  "project": "WEB", "score": 0.0328}]}
+
+   The index follows Core's event log and is updated within a few seconds
+   of a change. Core currently embeds with the built-in ``hash-256``
+   model; gateway embeddings for Core content are a follow-up.
+
 Customers
 ---------
 
