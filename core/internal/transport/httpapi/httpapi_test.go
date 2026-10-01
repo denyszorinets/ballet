@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
+	"github.com/denyszorinets/ballet/core/internal/infra/secrets"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
 	"github.com/denyszorinets/ballet/core/internal/transport/httpapi"
 	"github.com/denyszorinets/ballet/kit/auth"
@@ -51,6 +53,8 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "core.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
+	box, err := secrets.LoadKey(filepath.Join(t.TempDir(), "secrets.key"))
+	require.NoError(t, err)
 	admin, err := rbac.ParseBootstrap("sub:alice")
 	require.NoError(t, err)
 	r := &app.RBAC{Store: st, Bootstrap: []rbac.Binding{admin}}
@@ -61,6 +65,7 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 		Tenancy:      &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		RBAC:         r,
 		RoleBindings: &app.RoleBindings{RBAC: r, Tenancy: st, Now: time.Now, NewID: store.NewID},
+		Credentials:  &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID},
 		Tracker:      &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 	})
 	return contract(t, mux)
@@ -324,4 +329,35 @@ func TestDependencyAPI(t *testing.T) {
 
 	_, run = call(t, api, "GET", "/api/v1/projects/WEB/runnable", "alice", "")
 	assert.Len(t, run["items"], 2)
+}
+
+func TestCredentialAPI_SetListDeleteWithoutExposingSecrets(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+
+	code, c := call(t, api, "PUT", "/api/v1/customers/acme/credentials/anthropic", "alice", `{"api_key":"sk-ant-secret-1234"}`)
+	require.Equal(t, http.StatusOK, code, c)
+	assert.NotContains(t, fmt.Sprint(c), "secret")
+	assert.Contains(t, c["fingerprint"], "1234")
+
+	code, c = call(t, api, "PUT", "/api/v1/projects/WEB/credentials/anthropic", "alice", `{"api_key":"sk-web","base_url":"https://llm.example"}`)
+	require.Equal(t, http.StatusOK, code, c)
+	assert.Equal(t, "WEB", c["project"])
+
+	code, list := call(t, api, "GET", "/api/v1/customers/acme/credentials", "alice", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, list["items"], 2)
+	assert.NotContains(t, fmt.Sprint(list), "sk-")
+
+	code, body := call(t, api, "PUT", "/api/v1/customers/acme/credentials/gemini", "alice", `{"api_key":"x"}`)
+	assert.Equal(t, http.StatusBadRequest, code, body)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/projects/WEB/credentials/anthropic", nil)
+	req.Header.Set("X-Test-User", "alice")
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	_, list = call(t, api, "GET", "/api/v1/customers/acme/credentials", "alice", "")
+	assert.Len(t, list["items"], 1)
 }

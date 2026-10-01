@@ -34,7 +34,7 @@ var expected = map[rbac.Role][]rbac.Action{
 	rbac.RoleCustomerAdmin: {
 		rbac.ActCustomerRead, rbac.ActCustomerUpdate, rbac.ActProjectCreate, rbac.ActProjectRead,
 		rbac.ActProjectUpdate, rbac.ActRoleBindingManage, rbac.ActRoleBindingRead,
-		rbac.ActTrackerRead, rbac.ActTrackerWrite,
+		rbac.ActTrackerRead, rbac.ActTrackerWrite, rbac.ActCredentialManage,
 	},
 	rbac.RoleEngineer: {rbac.ActCustomerRead, rbac.ActProjectRead, rbac.ActTrackerRead, rbac.ActTrackerWrite},
 	rbac.RoleApprover: {rbac.ActCustomerRead, rbac.ActProjectRead, rbac.ActTrackerRead},

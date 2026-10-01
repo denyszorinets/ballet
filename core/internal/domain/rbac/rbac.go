@@ -24,8 +24,9 @@ const (
 	ActProjectUpdate     Action = "project.update"
 	ActRoleBindingManage Action = "role_binding.manage"
 	ActRoleBindingRead   Action = "role_binding.read"
-	ActTrackerRead       Action = "tracker.read"  // milestones, epics, tickets, dependencies, history
-	ActTrackerWrite      Action = "tracker.write" // create, edit and transition them
+	ActTrackerRead       Action = "tracker.read"      // milestones, epics, tickets, dependencies, history
+	ActTrackerWrite      Action = "tracker.write"     // create, edit and transition them
+	ActCredentialManage  Action = "credential.manage" // LLM provider credentials (never readable)
 )
 
 // AllActions lists every action, for documentation and exhaustive tests.
@@ -34,6 +35,7 @@ var AllActions = []Action{
 	ActProjectCreate, ActProjectRead, ActProjectUpdate,
 	ActRoleBindingManage, ActRoleBindingRead,
 	ActTrackerRead, ActTrackerWrite,
+	ActCredentialManage,
 }
 
 // Role is a named set of actions.
@@ -57,7 +59,7 @@ var grants = map[Role][]Action{
 	RoleOrgAdmin: AllActions,
 	RoleCustomerAdmin: {
 		ActCustomerRead, ActCustomerUpdate, ActProjectCreate, ActProjectRead, ActProjectUpdate,
-		ActRoleBindingManage, ActRoleBindingRead, ActTrackerRead, ActTrackerWrite,
+		ActRoleBindingManage, ActRoleBindingRead, ActTrackerRead, ActTrackerWrite, ActCredentialManage,
 	},
 	RoleEngineer: append(slices.Clone(readActions), ActTrackerWrite),
 	RoleApprover: readActions,

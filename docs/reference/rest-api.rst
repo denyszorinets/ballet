@@ -109,6 +109,34 @@ Binding representation:
 ``DELETE /api/v1/role-bindings/{id}`` → ``204``
    Bootstrap bindings are not stored and return ``404``.
 
+LLM credentials
+---------------
+
+Provider API keys used by the LLM gateway
+(:doc:`/architecture/decisions/0011-llm-gateway-for-credentials-and-metering`).
+A customer has a default per provider; a project may override it.
+Permission: ``credential.manage`` (customer admins, org admins).
+
+Representation — the key itself is **never returned**:
+
+.. code-block:: json
+
+   {"provider": "anthropic", "project": "WEB", "base_url": "",
+    "fingerprint": "9f86d081…1234", "updated_at": "…"}
+
+``provider`` is ``anthropic`` (messages) or ``openai`` (OpenAI-compatible
+API, used for embeddings). ``project`` is absent for the customer default.
+
+``GET /api/v1/customers/{customer}/credentials`` → ``200`` list
+
+``PUT /api/v1/customers/{customer}/credentials/{provider}`` — ``{"api_key", "base_url"?}`` → ``200``
+   Sets or replaces the customer default.
+
+``PUT /api/v1/projects/{project}/credentials/{provider}`` — ``{"api_key", "base_url"?}`` → ``200``
+   Sets or replaces the project override.
+
+``DELETE`` on either path → ``204``; ``404`` when nothing is set there.
+
 Customers
 ---------
 

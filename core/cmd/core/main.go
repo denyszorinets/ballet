@@ -14,6 +14,7 @@ import (
 
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
+	"github.com/denyszorinets/ballet/core/internal/infra/secrets"
 	"github.com/denyszorinets/ballet/core/internal/infra/servicetokens"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
 	"github.com/denyszorinets/ballet/core/internal/transport/httpapi"
@@ -42,6 +43,12 @@ type serviceConfig struct {
 	RBAC     rbacConfig     `toml:"rbac"`
 	Web      webConfig      `toml:"web"`
 	Services servicesConfig `toml:"services"`
+	Secrets  secretsConfig  `toml:"secrets"`
+}
+
+// secretsConfig locates the key that encrypts secrets at rest.
+type secretsConfig struct {
+	KeyFile string `toml:"key_file"`
 }
 
 // servicesConfig configures the identities of Ballet's own services.
@@ -93,6 +100,7 @@ func defaultConfig() serviceConfig {
 		Storage:  storageConfig{Path: "data/core.db"},
 		Web:      webConfig{ClientID: "ballet-web"},
 		Services: servicesConfig{TokensDir: "data/service-tokens", TokenTTL: 30 * 24 * time.Hour},
+		Secrets:  secretsConfig{KeyFile: "data/secrets.key"},
 	}
 }
 
@@ -163,19 +171,26 @@ func run() error {
 		return err
 	}
 	go svcTokens.Run(ctx)
-	internalapi.Register(svc.Mux, runtoken.NewRingVerifier(tokenKeys, time.Now))
+	internalAPI := internalapi.Register(svc.Mux, runtoken.NewRingVerifier(tokenKeys, time.Now))
+	box, err := secrets.LoadKey(cfg.Secrets.KeyFile)
+	if err != nil {
+		return err
+	}
 
 	bootstrap, _ := cfg.RBAC.bindings() // validated with the configuration
 	if len(bootstrap) == 0 {
 		svc.Logger.WarnContext(ctx, "no rbac.bootstrap_org_admins configured; only stored role bindings grant access")
 	}
 	authz := &app.RBAC{Store: st, Bootstrap: bootstrap}
+	credentials := &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID}
+	internalapi.RegisterCredentials(internalAPI, credentials)
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,
 		Tenancy:      &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		RBAC:         authz,
 		RoleBindings: &app.RoleBindings{RBAC: authz, Tenancy: st, Now: time.Now, NewID: store.NewID},
+		Credentials:  credentials,
 		Tracker: &app.Tracker{
 			Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 		},

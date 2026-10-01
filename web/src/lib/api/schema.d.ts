@@ -277,6 +277,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customers/{customer}/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+            };
+            cookie?: never;
+        };
+        /** Customer defaults and project overrides, without secrets */
+        get: operations["listCredentials"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customers/{customer}/credentials/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+                provider: components["parameters"]["Provider"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setCustomerCredential"];
+        post?: never;
+        delete: operations["deleteCustomerCredential"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project}/credentials/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+                provider: components["parameters"]["Provider"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setProjectCredential"];
+        post?: never;
+        delete: operations["deleteProjectCredential"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -481,6 +541,25 @@ export interface components {
             /** @description Key of the other item */
             item: string;
         };
+        Credential: {
+            /** @enum {string} */
+            provider: "anthropic" | "openai";
+            /** @description Project key of an override; absent for the customer default */
+            project?: string;
+            base_url: string;
+            /** @description Identifies the key without revealing it */
+            fingerprint: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CredentialList: {
+            items: components["schemas"]["Credential"][];
+        };
+        SetCredential: {
+            /** @description Write-only; never returned */
+            api_key: string;
+            base_url?: string;
+        };
     };
     responses: {
         /** @description Error */
@@ -498,6 +577,7 @@ export interface components {
         Customer: string;
         /** @description Project key */
         Project: string;
+        Provider: "anthropic" | "openai";
         /** @description Item key, e.g. WEB-42 */
         Item: string;
     };
@@ -1069,6 +1149,134 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CredentialList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setCustomerCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+                provider: components["parameters"]["Provider"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetCredential"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Credential"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteCustomerCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+                provider: components["parameters"]["Provider"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setProjectCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+                provider: components["parameters"]["Provider"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetCredential"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Credential"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteProjectCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+                provider: components["parameters"]["Provider"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
             204: {
                 headers: {
                     [name: string]: unknown;

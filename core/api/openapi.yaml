@@ -226,6 +226,52 @@ paths:
         "204": { description: Removed }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/customers/{customer}/credentials:
+    parameters: [{ $ref: "#/components/parameters/Customer" }]
+    get:
+      operationId: listCredentials
+      tags: [credentials]
+      summary: Customer defaults and project overrides, without secrets
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CredentialList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/customers/{customer}/credentials/{provider}:
+    parameters: [{ $ref: "#/components/parameters/Customer" }, { $ref: "#/components/parameters/Provider" }]
+    put:
+      operationId: setCustomerCredential
+      tags: [credentials]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetCredential" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Credential" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteCustomerCredential
+      tags: [credentials]
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{project}/credentials/{provider}:
+    parameters: [{ $ref: "#/components/parameters/Project" }, { $ref: "#/components/parameters/Provider" }]
+    put:
+      operationId: setProjectCredential
+      tags: [credentials]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetCredential" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Credential" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: deleteProjectCredential
+      tags: [credentials]
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -233,6 +279,7 @@ components:
   parameters:
     Customer: { name: customer, in: path, required: true, schema: { type: string }, description: Customer key }
     Project: { name: project, in: path, required: true, schema: { type: string }, description: Project key }
+    Provider: { name: provider, in: path, required: true, schema: { type: string, enum: [anthropic, openai] } }
     Item: { name: item, in: path, required: true, schema: { type: string }, description: "Item key, e.g. WEB-42" }
 
   responses:
@@ -494,3 +541,26 @@ components:
       properties:
         type: { $ref: "#/components/schemas/DependencyType" }
         item: { type: string, description: Key of the other item }
+
+    Credential:
+      type: object
+      additionalProperties: false
+      required: [provider, base_url, fingerprint, updated_at]
+      properties:
+        provider: { type: string, enum: [anthropic, openai] }
+        project: { type: string, description: Project key of an override; absent for the customer default }
+        base_url: { type: string }
+        fingerprint: { type: string, description: Identifies the key without revealing it }
+        updated_at: { type: string, format: date-time }
+    CredentialList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Credential" } } }
+    SetCredential:
+      type: object
+      additionalProperties: false
+      required: [api_key]
+      properties:
+        api_key: { type: string, description: Write-only; never returned }
+        base_url: { type: string }
