@@ -23,6 +23,20 @@ export interface FakeCore {
 	me: { role: string; scope: string }[];
 	items: FakeItem[];
 	deps: { id: string; from: string; to: string; type: 'blocks' | 'relates' }[];
+	knowledge: FakeEntry[];
+}
+
+export interface FakeEntry {
+	id: string;
+	customer: string;
+	kind: 'document' | 'decision' | 'note' | 'debt';
+	title: string;
+	body: string;
+	projects: string[];
+	items: string[];
+	version: number;
+	/** Earlier versions, oldest first; filled in by updates. */
+	history?: { version: number; title: string; body: string }[];
 }
 
 export interface FakeItem {
@@ -51,7 +65,9 @@ const ROLES = [
 			'project.create',
 			'project.read',
 			'role_binding.manage',
-			'role_binding.read'
+			'role_binding.read',
+			'knowledge.read',
+			'knowledge.write'
 		]
 	},
 	{
@@ -65,9 +81,22 @@ const ROLES = [
 			'role_binding.read'
 		]
 	},
-	{ role: 'engineer', actions: ['customer.read', 'project.read', 'tracker.read', 'tracker.write'] },
-	{ role: 'approver', actions: ['customer.read', 'project.read', 'tracker.read'] },
-	{ role: 'viewer', actions: ['customer.read', 'project.read', 'tracker.read'] }
+	{
+		role: 'engineer',
+		actions: [
+			'customer.read',
+			'project.read',
+			'tracker.read',
+			'tracker.write',
+			'knowledge.read',
+			'knowledge.write'
+		]
+	},
+	{
+		role: 'approver',
+		actions: ['customer.read', 'project.read', 'tracker.read', 'knowledge.read']
+	},
+	{ role: 'viewer', actions: ['customer.read', 'project.read', 'tracker.read', 'knowledge.read'] }
 ];
 
 const now = '2026-10-01T00:00:00Z';
@@ -90,12 +119,26 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		me: [],
 		items: [],
 		deps: [],
+		knowledge: [],
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
 	const resolved = (key: string) =>
 		['done', 'cancelled'].includes(core.items.find((i) => i.key === key)?.state ?? '');
 	const withTimes = <T extends object>(o: T) => ({ ...o, created_at: now, updated_at: now });
+	const entryJSON = (e: FakeEntry) => ({
+		id: e.id,
+		kind: e.kind,
+		title: e.title,
+		body: e.body,
+		projects: e.projects,
+		items: e.items,
+		version: e.version,
+		created_by: 'user-alice',
+		updated_by: 'user-alice',
+		created_at: now,
+		updated_at: now
+	});
 
 	await page.route('**/api/v1/**', async (r) => {
 		const url = new URL(r.request().url());
@@ -262,6 +305,57 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		if ((m = path.match(/^\/dependencies\/(.+)$/)) && method === 'DELETE') {
 			core.deps = core.deps.filter((d) => d.id !== m![1]);
 			return r.fulfill({ status: 204 });
+		}
+		if ((m = path.match(/^\/customers\/([^/]+)\/knowledge\/(entries|search)$/))) {
+			const c = m[1];
+			const q = url.searchParams;
+			if (m[2] === 'entries' && method === 'POST') {
+				const e: FakeEntry = {
+					id: id(),
+					customer: c,
+					kind: body.kind,
+					title: body.title,
+					body: body.body ?? '',
+					projects: body.projects ?? [],
+					items: body.items ?? [],
+					version: 1
+				};
+				core.knowledge.push(e);
+				return r.fulfill({ status: 201, json: entryJSON(e) });
+			}
+			const words = (q.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+			const found = core.knowledge.filter(
+				(e) =>
+					e.customer === c &&
+					(!q.get('kind') || e.kind === q.get('kind')) &&
+					(!q.get('project') || e.projects.includes(q.get('project')!)) &&
+					(!q.get('item') || e.items.includes(q.get('item')!)) &&
+					words.every((w) => `${e.title} ${e.body}`.toLowerCase().includes(w))
+			);
+			const items =
+				m[2] === 'search'
+					? found.map((e) => ({ entry: entryJSON(e), score: 1 }))
+					: found.map(entryJSON);
+			return r.fulfill({ json: { items } });
+		}
+		if ((m = path.match(/^\/customers\/([^/]+)\/knowledge\/entries\/([^/]+)(\/versions)?$/))) {
+			const e = core.knowledge.find((x) => x.customer === m![1] && x.id === m![2]);
+			if (!e) return err(r, 404, 'not_found', 'entry not found');
+			if (m[3]) {
+				const all = [...(e.history ?? []), { version: e.version, title: e.title, body: e.body }];
+				return r.fulfill({
+					json: { items: all.map((v) => ({ ...v, author: 'user-alice', created_at: now })) }
+				});
+			}
+			if (method === 'PATCH') {
+				if (body.version !== e.version) return err(r, 409, 'conflict', 'stale version');
+				e.history = [...(e.history ?? []), { version: e.version, title: e.title, body: e.body }];
+				const changes = { ...body };
+				delete changes.version;
+				Object.assign(e, changes);
+				e.version++;
+			}
+			return r.fulfill({ json: entryJSON(e) });
 		}
 		if (path === '/role-bindings' && method === 'GET')
 			return r.fulfill({ json: { items: core.bindings } });

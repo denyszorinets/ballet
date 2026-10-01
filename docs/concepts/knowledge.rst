@@ -63,6 +63,18 @@ entries in the customer's space
   dropped, so unrelated entries do not surface.
 - If embedding a query fails, search degrades to full-text only.
 
+In the UI
+---------
+
+The customer page links to the customer's knowledge space
+(``/customers/{customer}/knowledge``). Anyone with ``knowledge.read`` on
+the customer can list, filter (kind, project) and search entries and read
+an entry with its version history; ``knowledge.write`` adds creating and
+editing entries in a Markdown editor with preview. Each tracker item page
+lists the entries linked to it and offers *Add knowledge*, which creates
+an entry pre-linked to the item. The UI reaches Knowledge through Core
+(:doc:`/architecture/decisions/0022-humans-reach-knowledge-through-core`).
+
 Write-back
 ----------
 

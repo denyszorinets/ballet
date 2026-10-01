@@ -103,6 +103,10 @@
 		{/if}
 	</div>
 
+	{#if session?.permissions.can('knowledge.read', { customer: key })}
+		<p><a href={resolve('/customers/[customer]/knowledge', { customer: key })}>Knowledge</a></p>
+	{/if}
+
 	<h2>Projects</h2>
 	{#if projects.length === 0}
 		<p class="muted">No projects yet.</p>
