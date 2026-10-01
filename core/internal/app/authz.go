@@ -28,6 +28,7 @@ const (
 	ActKnowledgeWrite    = rbac.ActKnowledgeWrite
 	ActSkillRead         = rbac.ActSkillRead
 	ActSkillWrite        = rbac.ActSkillWrite
+	ActRunManage         = rbac.ActRunManage
 )
 
 // Scope is where an action applies: customer and project keys; empty

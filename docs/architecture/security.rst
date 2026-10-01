@@ -55,7 +55,7 @@ arrive):
      - Read and update the customer; create, read, update its projects;
        manage and read role bindings within the customer; read and write
        its tracker and knowledge; manage its LLM credentials; edit and
-       publish its skills
+       publish its skills; queue and cancel runs by hand (``run.manage``)
      - customer
    * - ``engineer``
      - Read customer and projects; read and write the tracker
