@@ -206,6 +206,7 @@ func run() error {
 		RoleBindings: &app.RoleBindings{RBAC: authz, Tenancy: st, Now: time.Now, NewID: store.NewID},
 		Credentials:  credentials,
 		Usage:        usage,
+		Skills:       &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		Knowledge: &httpapi.KnowledgeProxy{
 			URL: knowledgeURL, Access: &app.KnowledgeAccess{Tenancy: st, Authz: authz}, Tokens: tokenIssuer,
 		},

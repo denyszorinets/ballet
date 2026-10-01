@@ -194,6 +194,46 @@ LLM usage
        "total": {"requests": 2, "input_tokens": 24, "output_tokens": 10,
                  "cache_read_tokens": 6, "cache_write_tokens": 0}}
 
+Skills
+------
+
+Agent skills (:doc:`/concepts/skills`,
+:doc:`/architecture/decisions/0010-central-skill-registry`). A skill is
+identified by its scope and name and has an editable **draft** and
+immutable **published versions**. Permissions: ``skill.read`` (all
+roles), ``skill.write`` (org admins anywhere; customer admins within
+their customer and its projects).
+
+Skill representation (the draft):
+
+.. code-block:: json
+
+   {"id": "0199…", "scope": "project:WEB", "name": "code-review",
+    "description": "Review checklist for WEB", "body": "# Review\n…",
+    "files": {"scripts/check.sh": "…"}, "latest_version": 2,
+    "created_at": "…", "updated_at": "…", "version": 5}
+
+``scope`` is ``organization``, ``customer:<key>`` or ``project:<key>``;
+names are 2–64 lowercase letters, digits and single hyphens and unique
+per scope; ``files`` are supporting text files (clean relative paths,
+not ``SKILL.md``; at most 50 files, 1 MiB in total).
+
+``GET /api/v1/skills?scope=…`` → ``200`` list of the skills defined at exactly that scope
+
+``POST /api/v1/skills`` — ``{"scope", "name", "description", "body"?, "files"?}`` → ``201``
+
+``GET /api/v1/skills/{skill}`` → ``200``
+
+``PATCH /api/v1/skills/{skill}`` — ``{"version", "description"?, "body"?, "files"?}`` → ``200``
+   Edits the draft only.
+
+``POST /api/v1/skills/{skill}/publish`` — ``{"version"}`` → ``201``
+   Snapshots the draft as version ``latest_version + 1``:
+   ``{"number", "description", "body", "files", "published_by", "published_at"}``.
+
+``GET /api/v1/skills/{skill}/versions`` → ``200`` (newest first) and
+``GET /api/v1/skills/{skill}/versions/{number}`` → ``200``
+
 Customers
 ---------
 

@@ -19,9 +19,10 @@ Ballet keeps a central skill registry
 
 - **Scopes**: organization → customer → project. A lower scope may add
   skills or override a higher-scope skill of the same name.
-- **Versions**: skills are immutable once published; projects pin
-  versions in their process profile, so a skill change never alters a
-  running project unexpectedly.
+- **Drafts and versions**: admins edit a skill's draft; publishing
+  snapshots it as the next immutable version. Projects pin versions in
+  their process profile, so a skill change never alters a running project
+  unexpectedly.
 - **Storage**: skills live only in the Ballet database, authored and
   versioned in the UI; they are searchable like all other content.
 - **Delivery**: when a run starts, Ballet resolves the project's skill
