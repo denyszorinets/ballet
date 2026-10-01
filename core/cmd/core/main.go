@@ -14,8 +14,10 @@ import (
 
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
+	"github.com/denyszorinets/ballet/core/internal/infra/servicetokens"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
 	"github.com/denyszorinets/ballet/core/internal/transport/httpapi"
+	"github.com/denyszorinets/ballet/core/internal/transport/internalapi"
 	"github.com/denyszorinets/ballet/core/internal/transport/realtime"
 	"github.com/denyszorinets/ballet/core/internal/transport/webui"
 	"github.com/denyszorinets/ballet/kit/auth/oidc"
@@ -34,11 +36,18 @@ const (
 // serviceConfig is the complete core configuration.
 type serviceConfig struct {
 	service.Config
-	OIDC    oidc.Config   `toml:"oidc"`
-	Tokens  tokensConfig  `toml:"tokens"`
-	Storage storageConfig `toml:"storage"`
-	RBAC    rbacConfig    `toml:"rbac"`
-	Web     webConfig     `toml:"web"`
+	OIDC     oidc.Config    `toml:"oidc"`
+	Tokens   tokensConfig   `toml:"tokens"`
+	Storage  storageConfig  `toml:"storage"`
+	RBAC     rbacConfig     `toml:"rbac"`
+	Web      webConfig      `toml:"web"`
+	Services servicesConfig `toml:"services"`
+}
+
+// servicesConfig configures the identities of Ballet's own services.
+type servicesConfig struct {
+	TokensDir string        `toml:"tokens_dir"` // where <service>.token files are written
+	TokenTTL  time.Duration `toml:"token_ttl"`
 }
 
 // webConfig configures the web UI.
@@ -78,11 +87,12 @@ type tokensConfig struct {
 
 func defaultConfig() serviceConfig {
 	return serviceConfig{
-		Config:  service.DefaultConfig(":8080"),
-		OIDC:    oidc.Config{Audience: "ballet"},
-		Tokens:  tokensConfig{KeyFile: "data/token-keys.json"},
-		Storage: storageConfig{Path: "data/core.db"},
-		Web:     webConfig{ClientID: "ballet-web"},
+		Config:   service.DefaultConfig(":8080"),
+		OIDC:     oidc.Config{Audience: "ballet"},
+		Tokens:   tokensConfig{KeyFile: "data/token-keys.json"},
+		Storage:  storageConfig{Path: "data/core.db"},
+		Web:      webConfig{ClientID: "ballet-web"},
+		Services: servicesConfig{TokensDir: "data/service-tokens", TokenTTL: 30 * 24 * time.Hour},
 	}
 }
 
@@ -90,6 +100,9 @@ func (c serviceConfig) Validate() error {
 	var errs []error
 	if c.Tokens.KeyFile == "" {
 		errs = append(errs, errors.New("tokens.key_file must not be empty"))
+	}
+	if c.Services.TokensDir == "" || c.Services.TokenTTL < time.Hour {
+		errs = append(errs, errors.New("services.tokens_dir must be set and services.token_ttl at least 1h"))
 	}
 	if c.Storage.Path == "" {
 		errs = append(errs, errors.New("storage.path must not be empty"))
@@ -142,6 +155,16 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	tokenIssuer := runtoken.NewIssuer(tokenKeys, time.Now)
+	svcTokens := &servicetokens.Issuer{
+		Tokens: tokenIssuer, Dir: cfg.Services.TokensDir, TTL: cfg.Services.TokenTTL, Logger: svc.Logger,
+	}
+	if err := svcTokens.IssueAll(); err != nil {
+		return err
+	}
+	go svcTokens.Run(ctx)
+	internalapi.Register(svc.Mux, runtoken.NewRingVerifier(tokenKeys, time.Now))
+
 	bootstrap, _ := cfg.RBAC.bindings() // validated with the configuration
 	if len(bootstrap) == 0 {
 		svc.Logger.WarnContext(ctx, "no rbac.bootstrap_org_admins configured; only stored role bindings grant access")

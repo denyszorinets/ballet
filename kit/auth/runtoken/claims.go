@@ -34,10 +34,16 @@ const (
 	CapKnowledgeWrite = "knowledge.write" // create and update knowledge entries
 	CapLLMInvoke      = "llm.invoke"      // call the LLM gateway
 	CapRunnerConnect  = "runner.connect"  // connect a Runner to Core
+
+	// Service capabilities (KindService tokens of Ballet's own services).
+	CapCredentialsRead = "credentials.read" // gateway: read LLM credentials from Core
+	CapUsageWrite      = "usage.write"      // gateway: report LLM usage to Core
+	CapLLMEmbed        = "llm.embed"        // compute embeddings through the gateway
 )
 
 var knownCapabilities = []string{
 	CapTrackerRead, CapTrackerReport, CapKnowledgeRead, CapKnowledgeWrite, CapLLMInvoke, CapRunnerConnect,
+	CapCredentialsRead, CapUsageWrite, CapLLMEmbed,
 }
 
 // Claims are the contents of a run token.

@@ -58,10 +58,54 @@ Capabilities
      - Call the LLM gateway
    * - ``runner.connect``
      - Connect a Runner to Core
+   * - ``credentials.read``
+     - (gateway) Read LLM credentials from Core
+   * - ``usage.write``
+     - (gateway) Report LLM usage to Core
+   * - ``llm.embed``
+     - Compute embeddings through the gateway
 
 A service accepts a token only if its own name is in ``aud``, and checks
 both the scope (``cust``/``proj``/``tkt``) and the capability for every
 operation.
+
+.. _reference-run-tokens-services:
+
+Service tokens
+--------------
+
+Ballet's own services authenticate to each other with ``kind: service``
+tokens that Core issues at startup and re-issues every quarter of their
+lifetime (``[services] token_ttl``, default 30 days). Core writes one file
+per service into ``[services] tokens_dir`` (mode ``0600``):
+
+.. list-table::
+   :header-rows: 1
+
+   * - File
+     - Subject
+     - Audience
+     - Capabilities
+   * - ``gateway.token``
+     - ``service:gateway``
+     - ``core``
+     - ``credentials.read``, ``usage.write``
+   * - ``knowledge.token``
+     - ``service:knowledge``
+     - ``core``, ``gateway``
+     - ``llm.embed``
+   * - ``runner.token``
+     - ``service:runner``
+     - ``core``
+     - ``runner.connect``
+
+Services read their file with ``runtoken.FileSource`` (re-read when it
+changes). In a single-host installation the directory is shared with the
+services; elsewhere it must be distributed as a secret.
+
+Core's **internal API** (``/internal/v1/``) accepts only service tokens
+and checks a capability per endpoint; ``GET /internal/v1/whoami``
+returns the caller's subject and capabilities.
 
 Keys and verification
 ---------------------
