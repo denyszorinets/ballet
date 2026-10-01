@@ -28,3 +28,4 @@ Rejected, Deprecated, Superseded.
    0019-sqlite-first-rqlite-later
    0020-planner-runs-in-process-in-core
    0021-hybrid-vector-search-over-all-content
+   0022-humans-reach-knowledge-through-core

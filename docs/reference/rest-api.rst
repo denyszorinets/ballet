@@ -137,6 +137,41 @@ API, used for embeddings). ``project`` is absent for the customer default.
 
 ``DELETE`` on either path → ``204``; ``404`` when nothing is set there.
 
+Knowledge
+---------
+
+The customer's knowledge space, stored by the Knowledge service and
+reached through Core
+(:doc:`/architecture/decisions/0022-humans-reach-knowledge-through-core`).
+Permissions: ``knowledge.read`` (all roles), ``knowledge.write``
+(engineers, customer admins, org admins), at the customer.
+
+Representation:
+
+.. code-block:: json
+
+   {"id": "0199…", "kind": "decision", "title": "Use SQLite first",
+    "body": "Easy development.", "projects": ["WEB"], "items": ["WEB-3"],
+    "version": 2, "created_by": "8751…", "updated_by": "8751…",
+    "created_at": "…", "updated_at": "…"}
+
+``kind`` is ``document``, ``decision``, ``note`` or ``debt``; ``body`` is
+Markdown; ``items`` link tracker items. ``created_by``/``updated_by`` are
+the subjects of the humans (or agents) who wrote it.
+
+``GET /api/v1/customers/{customer}/knowledge/entries`` → ``200`` list
+   Filters: ``kind``, ``project``, ``item``. Most recently updated first.
+
+``POST /api/v1/customers/{customer}/knowledge/entries`` — ``{"kind", "title", "body"?, "projects"?, "items"?}`` → ``201``
+
+``GET /api/v1/customers/{customer}/knowledge/entries/{entry}`` → ``200``
+
+``PATCH /api/v1/customers/{customer}/knowledge/entries/{entry}`` — ``{"version", …changed fields}`` → ``200``
+   Every update creates a new immutable version.
+
+``GET /api/v1/customers/{customer}/knowledge/entries/{entry}/versions`` → ``200``
+   All versions, newest first.
+
 LLM usage
 ---------
 

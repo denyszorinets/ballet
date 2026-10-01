@@ -357,6 +357,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customers/{customer}/knowledge/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+            };
+            cookie?: never;
+        };
+        /** Entries of the customer's knowledge space (served by Knowledge through Core) */
+        get: operations["listKnowledgeEntries"];
+        put?: never;
+        post: operations["createKnowledgeEntry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/customers/{customer}/knowledge/entries/{entry}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+                /** @description Knowledge entry ID */
+                entry: components["parameters"]["Entry"];
+            };
+            cookie?: never;
+        };
+        get: operations["getKnowledgeEntry"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateKnowledgeEntry"];
+        trace?: never;
+    };
+    "/api/v1/customers/{customer}/knowledge/entries/{entry}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+                /** @description Knowledge entry ID */
+                entry: components["parameters"]["Entry"];
+            };
+            cookie?: never;
+        };
+        get: operations["listKnowledgeVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -600,6 +662,57 @@ export interface components {
             items: components["schemas"]["UsageTotals"][];
             total: components["schemas"]["UsageTotals"];
         };
+        /** @enum {string} */
+        KnowledgeKind: "document" | "decision" | "note" | "debt";
+        KnowledgeEntry: {
+            id: string;
+            kind: components["schemas"]["KnowledgeKind"];
+            title: string;
+            /** @description Markdown */
+            body: string;
+            projects: string[];
+            /** @description Linked tracker item keys */
+            items: string[];
+            /** Format: int64 */
+            version: number;
+            created_by: string;
+            updated_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        KnowledgeEntryList: {
+            items: components["schemas"]["KnowledgeEntry"][];
+        };
+        CreateKnowledgeEntry: {
+            kind: components["schemas"]["KnowledgeKind"];
+            title: string;
+            body?: string;
+            projects?: string[];
+            items?: string[];
+        };
+        UpdateKnowledgeEntry: {
+            /** Format: int64 */
+            version: number;
+            kind?: components["schemas"]["KnowledgeKind"];
+            title?: string;
+            body?: string;
+            projects?: string[];
+            items?: string[];
+        };
+        KnowledgeVersion: {
+            /** Format: int64 */
+            version: number;
+            title: string;
+            body: string;
+            author: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        KnowledgeVersionList: {
+            items: components["schemas"]["KnowledgeVersion"][];
+        };
     };
     responses: {
         /** @description Error */
@@ -617,6 +730,8 @@ export interface components {
         Customer: string;
         /** @description Project key */
         Project: string;
+        /** @description Knowledge entry ID */
+        Entry: string;
         Provider: "anthropic" | "openai";
         /** @description Item key, e.g. WEB-42 */
         Item: string;
@@ -1348,6 +1463,146 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageReport"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listKnowledgeEntries: {
+        parameters: {
+            query?: {
+                kind?: components["schemas"]["KnowledgeKind"];
+                /** @description Project key */
+                project?: string;
+                /** @description Linked tracker item key */
+                item?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeEntryList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createKnowledgeEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateKnowledgeEntry"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeEntry"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getKnowledgeEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+                /** @description Knowledge entry ID */
+                entry: components["parameters"]["Entry"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeEntry"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateKnowledgeEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+                /** @description Knowledge entry ID */
+                entry: components["parameters"]["Entry"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateKnowledgeEntry"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeEntry"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listKnowledgeVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+                /** @description Knowledge entry ID */
+                entry: components["parameters"]["Entry"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeVersionList"];
                 };
             };
             default: components["responses"]["Error"];

@@ -19,8 +19,9 @@ each other's databases.
      - Tenancy, tracker, pipelines, runs, questions, skills, usage,
        events
    * - Knowledge
-     - (planned) own file
-     - Knowledge spaces and entries, embeddings
+     - ``[storage] path`` (default ``data/knowledge.db``)
+     - Entries per customer space with all versions (search index and
+       embeddings follow)
 
 Writes follow the batch and optimistic-concurrency rules in
 :doc:`/development/persistence`.
