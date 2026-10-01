@@ -44,6 +44,8 @@ MessagePack):
 - Notifications have no ``id`` and get no response.
 - The connection is symmetric: the server also sends requests and
   notifications to the client.
+- Notifications are sent and must be processed **in order** (stream
+  events depend on it); requests may be processed concurrently.
 
 Authentication
 --------------
