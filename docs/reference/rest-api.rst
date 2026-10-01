@@ -248,6 +248,12 @@ not ``SKILL.md``; at most 50 files, 1 MiB in total).
    beyond the latest version, a pin to an unknown name); their
    ``version`` is 0.
 
+``GET /api/v1/projects/{project}/skill-pins`` → ``200``
+   The project's pins, ``{"items": [{"name": "gitflow", "version": 0,
+   "disabled": true}]}``. Unlike the effective skills, this includes
+   disabled skills, so a client can show and re-enable them. Requires
+   ``skill.read`` on the project.
+
 ``PUT /api/v1/projects/{project}/skills/{name}/pin`` — ``{"version"?, "disabled"?}`` → ``204``
    ``version`` 0 (default) follows the latest published version; ``N``
    fixes version N; ``disabled: true`` excludes the skill from the

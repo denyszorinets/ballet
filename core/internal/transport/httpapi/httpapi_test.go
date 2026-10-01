@@ -425,6 +425,9 @@ func TestSkillAPI_ResolutionAndPins(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, code, body)
 	_, list = call(t, api, "GET", "/api/v1/projects/WEB/skills", "alice", "")
 	assert.NotEmpty(t, list["items"].([]any)[0].(map[string]any)["problem"])
+	code, pins := call(t, api, "GET", "/api/v1/projects/WEB/skill-pins", "alice", "")
+	require.Equal(t, http.StatusOK, code, pins)
+	assert.Equal(t, []any{map[string]any{"name": "gitflow", "version": 5.0, "disabled": false}}, pins["items"])
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/projects/WEB/skills/gitflow/pin", nil)
 	req.Header.Set("X-Test-User", "alice")

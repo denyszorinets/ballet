@@ -35,6 +35,22 @@ Ballet keeps a central skill registry
 Skills are shared across customers only at organization scope; a
 customer-scoped skill is as private as that customer's knowledge.
 
+In the UI
+~~~~~~~~~
+
+*Skills* in the header lists the skills of one scope (the organization,
+or for users without organization-wide access, their first customer or
+project). Users with ``skill.write`` on the scope create skills and
+edit the draft: description, ``SKILL.md`` (Markdown with preview) and
+supporting files. *Publish* snapshots the saved draft as the next
+version; *Save and publish* does both. The page shows the unpublished
+changes as a line diff against the latest version, and each version as a
+diff against the one before it.
+
+A project's *Skills* page (linked from the board) shows its effective
+skills. With ``skill.write`` on the project, each skill can follow the
+latest version, be pinned to a version, or be disabled for the project.
+
 Process profile
 ---------------
 

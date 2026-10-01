@@ -431,6 +431,16 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ResolvedSkillList" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/projects/{project}/skill-pins:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: listProjectSkillPins
+      tags: [skills]
+      summary: The project's pins, including disabled skills (which resolution leaves out)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectSkillPinList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/projects/{project}/skills/{name}/pin:
     parameters:
       - { $ref: "#/components/parameters/Project" }
@@ -937,6 +947,19 @@ components:
       properties:
         version: { type: integer, format: int64, minimum: 0, description: "0: always the latest published version" }
         disabled: { type: boolean, description: Exclude the skill from the project }
+    ProjectSkillPin:
+      type: object
+      additionalProperties: false
+      required: [name, version, disabled]
+      properties:
+        name: { type: string }
+        version: { type: integer, format: int64, description: "0: the latest published version" }
+        disabled: { type: boolean }
+    ProjectSkillPinList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/ProjectSkillPin" } } }
     SearchHit:
       type: object
       additionalProperties: false

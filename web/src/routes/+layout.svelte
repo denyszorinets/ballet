@@ -89,6 +89,10 @@
 					? 'page'
 					: undefined}>Customers</a
 			>
+			<a
+				href={resolve('/skills')}
+				aria-current={page.url.pathname.startsWith('/skills') ? 'page' : undefined}>Skills</a
+			>
 			{#if session.permissions.managesAccess}
 				<a
 					href={resolve('/access')}

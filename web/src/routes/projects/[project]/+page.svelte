@@ -106,6 +106,7 @@
 		<span class="mono muted">{project.key}</span>
 		<a href={resolve('/customers/[customer]', { customer: project.customer })}>{project.customer}</a
 		>
+		<a href={resolve('/projects/[project]/skills', { project: project.key })}>Skills</a>
 	</div>
 
 	{#if canWrite}

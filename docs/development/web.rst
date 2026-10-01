@@ -67,6 +67,14 @@ Pages
    * - ``/customers/{customer}/knowledge/{entry}``
      - Entry: rendered Markdown, links to projects and items, edit
        (Markdown with preview), version history
+   * - ``/skills?scope=…``
+     - Skills of one scope (``organization``, ``customer:<key>``,
+       ``project:<key>``); new skill
+   * - ``/skills/{skill}``
+     - Skill: draft editor (description, ``SKILL.md``, files), publish,
+       unpublished changes and per-version diffs (``src/lib/diff.ts``)
+   * - ``/projects/{project}/skills``
+     - Effective skills of a project; pin a version, disable, re-enable
    * - ``/access``
      - Role bindings (users who manage access)
 

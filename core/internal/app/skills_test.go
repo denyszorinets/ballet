@@ -145,6 +145,9 @@ func TestSkills_ResolveForProjectWithPins(t *testing.T) {
 	require.NoError(t, sk.SetPin(dave, "WEB", skill.Pin{Name: "gitflow", Disabled: true}))
 	got, _ = sk.Resolve(bob, "WEB")
 	assert.Len(t, got, 1, "disabled skills are excluded")
+	pins, err := sk.Pins(bob, "WEB")
+	require.NoError(t, err)
+	assert.Equal(t, []skill.Pin{{Name: "gitflow", Disabled: true}}, pins, "pins show what resolution hides")
 	require.NoError(t, sk.DeletePin(dave, "WEB", "gitflow"))
 	got, _ = sk.Resolve(bob, "WEB")
 	assert.Len(t, got, 2)
@@ -153,5 +156,7 @@ func TestSkills_ResolveForProjectWithPins(t *testing.T) {
 	assert.ErrorIs(t, sk.SetPin(bob, "WEB", skill.Pin{Name: "gitflow", Version: 1}), app.ErrForbidden, "engineers do not pin")
 	assert.ErrorIs(t, sk.SetPin(dave, "WEB", skill.Pin{Name: "gitflow", Version: -1}), app.ErrInvalid)
 	_, err = sk.Resolve(user(t, "eve"), "WEB")
+	assert.ErrorIs(t, err, app.ErrForbidden)
+	_, err = sk.Pins(user(t, "eve"), "WEB")
 	assert.ErrorIs(t, err, app.ErrForbidden)
 }
