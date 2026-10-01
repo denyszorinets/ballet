@@ -122,3 +122,8 @@ func nullable(s string) any {
 	}
 	return s
 }
+
+// EntityHistory returns all events of one entity in seq order.
+func (s *Store) EntityHistory(ctx context.Context, entityType, entityID string) ([]event.Event, error) {
+	return s.ListEvents(ctx, EventFilter{EntityType: entityType, EntityID: entityID})
+}

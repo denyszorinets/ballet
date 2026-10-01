@@ -23,6 +23,7 @@ type Deps struct {
 	Tenancy      *app.Tenancy
 	RBAC         *app.RBAC
 	RoleBindings *app.RoleBindings
+	Tracker      *app.Tracker
 }
 
 // Register mounts the REST API on mux. Every /api/ route requires an
@@ -34,6 +35,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	api.HandleFunc("GET /api/v1/me", me(d.RBAC))
 	registerTenancy(api, d.Tenancy)
 	registerRBAC(api, d.RoleBindings)
+	registerTracker(api, d.Tracker)
 	api.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, fmt.Errorf("%w: no such endpoint", app.ErrNotFound))
 	})

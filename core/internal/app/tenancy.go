@@ -22,6 +22,7 @@ type TenancyStore interface {
 	CreateProject(ctx context.Context, p tenancy.Project, e event.Event) error
 	UpdateProject(ctx context.Context, p tenancy.Project, expectedVersion int64, e event.Event) error
 	ProjectByKey(ctx context.Context, key string) (tenancy.Project, error)
+	ProjectByID(ctx context.Context, id string) (tenancy.Project, error)
 	ListProjects(ctx context.Context, customerID string) ([]tenancy.Project, error)
 }
 

@@ -43,6 +43,9 @@ Planning entities
    A body of work with an objective, scope and high-level acceptance
    criteria. Groups tickets.
 
+All three planning entities share one per-project key sequence
+(``ACME-1``, ``ACME-2``, …).
+
 **Ticket**
    The unit of agent work: small enough for one run, independently
    understandable, testable. Types: ``feature``, ``bug``, ``tech-debt``,

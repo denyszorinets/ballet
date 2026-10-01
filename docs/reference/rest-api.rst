@@ -144,4 +144,84 @@ Representation:
 
 ``PATCH /api/v1/projects/{project}`` — ``{"name", "description", "version"}`` → ``200``
 
+Milestones, epics and tickets
+-----------------------------
+
+All three are **items** sharing one per-project key sequence
+(``WEB-1``, ``WEB-2``, …). Representation:
+
+.. code-block:: json
+
+   {"id": "0199…", "key": "WEB-2", "project": "WEB", "kind": "ticket",
+    "title": "Export invoices", "description": "", "state": "backlog",
+    "type": "feature", "acceptance_criteria": ["CSV has one row per invoice"],
+    "policy": {"review_mode": "agent", "merge_mode": "auto"},
+    "epic": "WEB-1", "milestone": "WEB-3",
+    "created_at": "…", "updated_at": "…", "version": 1}
+
+``stage`` appears while a ticket is ``in_progress``. ``type``,
+``acceptance_criteria`` and ``policy`` exist only on tickets; ``epic``
+only on tickets; ``milestone`` on tickets and epics.
+
+.. list-table:: Field values
+   :header-rows: 1
+
+   * - Field
+     - Values
+   * - ``kind``
+     - ``milestone``, ``epic``, ``ticket``
+   * - ``type``
+     - ``feature`` (default), ``bug``, ``tech_debt``, ``docs``, ``spike``
+   * - ``policy.review_mode``
+     - ``agent`` (default), ``agent+human``
+   * - ``policy.merge_mode``
+     - ``auto`` (default), ``manual``
+
+Permissions: ``tracker.read`` to read, ``tracker.write`` to create,
+update and transition (:doc:`/architecture/security`).
+
+``POST /api/v1/projects/{project}/items`` → ``201``
+   Body: ``kind``, ``title`` (required), ``description``, and for tickets
+   ``type``, ``acceptance_criteria``, ``policy``, ``epic``; ``milestone``
+   for tickets and epics. Related epic/milestone must be of that kind in
+   the same project.
+
+``GET /api/v1/projects/{project}/items`` → ``200`` list
+   Query filters: ``kind``, ``state``, ``epic``, ``milestone``. Ordered by
+   key number.
+
+``GET /api/v1/items/{item}`` → ``200``
+
+``PATCH /api/v1/items/{item}`` → ``200``
+   Body: ``version`` plus any of ``title``, ``description``, ``type``,
+   ``acceptance_criteria``, ``policy``, ``epic``, ``milestone``. An empty
+   string for ``epic``/``milestone`` removes the relation.
+
+``POST /api/v1/items/{item}/transition`` — ``{"state", "version"}`` → ``200``
+   Moves the item on behalf of a human. Allowed transitions:
+
+   .. list-table::
+      :header-rows: 1
+
+      * - From (ticket)
+        - To
+      * - ``backlog``
+        - ``ready``, ``cancelled``, ``done``
+      * - ``ready``
+        - ``backlog``, ``paused``, ``cancelled``, ``done``
+      * - ``in_progress``, ``waiting_for_answer``
+        - ``paused``, ``cancelled``
+      * - ``paused``
+        - ``ready``, ``backlog``, ``cancelled``, ``done``
+      * - ``done``, ``cancelled``
+        - ``backlog``
+
+   Milestones and epics: ``open`` ↔ ``done`` / ``cancelled``.
+   ``in_progress`` and ``waiting_for_answer`` are set only by the
+   orchestrator. Other transitions return ``400``.
+
+``GET /api/v1/items/{item}/history`` → ``200`` list
+   The item's events, oldest first:
+   ``{"seq", "type", "occurred_at", "actor", "payload"}``.
+
 Every create and update records one event (:doc:`/architecture/data`).

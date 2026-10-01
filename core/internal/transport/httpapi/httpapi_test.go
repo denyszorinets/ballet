@@ -59,6 +59,7 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 		Tenancy:      &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		RBAC:         r,
 		RoleBindings: &app.RoleBindings{RBAC: r, Tenancy: st, Now: time.Now, NewID: store.NewID},
+		Tracker:      &app.Tracker{Items: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 	})
 	return mux
 }
@@ -237,4 +238,46 @@ func TestRBACAPI_RolesAndBindings(t *testing.T) {
 	code, body := call(t, api, "POST", "/api/v1/role-bindings", "alice",
 		`{"claim":"groups","value":"g1","role":"viewer","scope":"customer:nobody"}`)
 	assert.Equal(t, http.StatusNotFound, code, body)
+}
+
+func TestTrackerAPI_ItemLifecycle(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+
+	code, epic := call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"epic","title":"Billing"}`)
+	require.Equal(t, http.StatusCreated, code, epic)
+	assert.Equal(t, "WEB-1", epic["key"])
+	assert.NotContains(t, epic, "policy", "only tickets have a policy")
+
+	code, tk := call(t, api, "POST", "/api/v1/projects/WEB/items", "alice",
+		`{"kind":"ticket","title":"Export","type":"feature","acceptance_criteria":["CSV"],"epic":"WEB-1"}`)
+	require.Equal(t, http.StatusCreated, code, tk)
+	assert.Equal(t, "WEB-2", tk["key"])
+	assert.Equal(t, "backlog", tk["state"])
+	assert.Equal(t, "WEB-1", tk["epic"])
+	assert.Equal(t, map[string]any{"review_mode": "agent", "merge_mode": "auto"}, tk["policy"])
+
+	code, tk = call(t, api, "PATCH", "/api/v1/items/WEB-2", "alice",
+		`{"version":1,"policy":{"review_mode":"agent+human","merge_mode":"manual"},"epic":""}`)
+	require.Equal(t, http.StatusOK, code, tk)
+	assert.NotContains(t, tk, "epic", "epic removed")
+
+	code, tk = call(t, api, "POST", "/api/v1/items/WEB-2/transition", "alice", `{"state":"ready","version":2}`)
+	require.Equal(t, http.StatusOK, code, tk)
+	assert.Equal(t, "ready", tk["state"])
+
+	code, body := call(t, api, "POST", "/api/v1/items/WEB-2/transition", "alice", `{"state":"done","version":2}`)
+	assert.Equal(t, http.StatusConflict, code, body)
+
+	code, list := call(t, api, "GET", "/api/v1/projects/WEB/items?kind=ticket", "alice", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, list["items"], 1)
+
+	code, hist := call(t, api, "GET", "/api/v1/items/WEB-2/history", "alice", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, hist["items"], 3)
+
+	code, _ = call(t, api, "GET", "/api/v1/items/WEB-99", "alice", "")
+	assert.Equal(t, http.StatusNotFound, code)
 }

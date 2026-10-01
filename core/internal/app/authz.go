@@ -21,6 +21,8 @@ const (
 	ActProjectUpdate     = rbac.ActProjectUpdate
 	ActRoleBindingManage = rbac.ActRoleBindingManage
 	ActRoleBindingRead   = rbac.ActRoleBindingRead
+	ActTrackerRead       = rbac.ActTrackerRead
+	ActTrackerWrite      = rbac.ActTrackerWrite
 )
 
 // Scope is where an action applies: customer and project keys; empty
@@ -38,6 +40,9 @@ type DenyAll struct{}
 
 // Authorize always returns ErrForbidden.
 func (DenyAll) Authorize(context.Context, auth.Identity, Action, Scope) error { return ErrForbidden }
+
+// identity is the authenticated caller of a use case.
+type identity = auth.Identity
 
 // caller returns the authenticated identity or ErrUnauthorized.
 func caller(ctx context.Context) (auth.Identity, error) {

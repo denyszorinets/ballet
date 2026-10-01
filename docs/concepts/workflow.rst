@@ -103,9 +103,17 @@ Ticket states
 
 .. code-block:: text
 
-   Backlog → Ready → Implementing → Reviewing → Verifying → Integrating → Done
-                          ↑             │            │            │
-                          └──────── returned with report ─────────┘
+   backlog → ready → in_progress (stage: implement → review → … per pipeline) → done
+                          │  ↑
+                          ↓  │  answer
+                  waiting_for_answer
 
-   any active state → Waiting for answer → (same stage, new session)
-   any state        → Paused | Blocked | Cancelled
+   active states → paused → ready      any → cancelled      done/cancelled → backlog
+
+Because pipelines are configured per project (:doc:`pipeline`), the
+ticket state does not name stages; a ticket ``in_progress`` records its
+current pipeline **stage** separately. Humans move tickets between
+``backlog``, ``ready``, ``paused``, ``done`` and ``cancelled``; the
+orchestrator sets ``in_progress`` and ``waiting_for_answer``. Whether a
+ready ticket can actually start depends on its dependencies
+(:doc:`scheduling`).
