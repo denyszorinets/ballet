@@ -29,29 +29,53 @@ scope.
    claim groups contains "ballet-ops" →  org-admin       @ organization
    claim email = "pm@acme.example"    →  approver        @ project:ACME
 
-Proposed roles:
+A binding matches when the token claim equals the value, or — for list
+claims such as ``groups`` — contains it.
+
+Roles and the actions they grant (more actions are added as features
+arrive):
 
 .. list-table::
    :header-rows: 1
 
    * - Role
-     - Can
+     - Grants
+     - Bindable at
    * - ``org-admin``
-     - Manage customers, org skills, templates, runtimes, role bindings.
+     - Every action, including creating customers
+     - organization only
    * - ``customer-admin``
-     - Manage a customer's projects, credentials, customer skills.
+     - Read and update the customer; create, read, update its projects;
+       manage and read role bindings within the customer
+     - customer
    * - ``engineer``
-     - Chat with the planner, approve changesets, set execution policy,
-       review and merge.
+     - Read customer and projects (tracker work as it is added)
+     - customer, project
    * - ``approver``
-     - Approve changesets and milestones; review. Intended for customer
-       staff.
+     - Read customer and projects (approvals as they are added)
+     - customer, project
    * - ``viewer``
-     - Read the tracker, Gantt, runs and knowledge in scope.
+     - Read customer and projects
+     - customer, project
 
-Bindings at a broader scope apply to everything inside it. Authorization
-is deny-by-default and evaluated in the application layer of Core and
-Knowledge; the UI only reflects it.
+Scope semantics:
+
+- An organization binding applies everywhere.
+- A customer binding applies to the customer and all its projects.
+- A project binding applies to that project, and lets the holder *see*
+  (read) the project's customer — nothing else of it.
+- Organization-level actions (creating customers, organization-scope
+  bindings) require an organization binding, so a customer admin cannot
+  escalate.
+
+Evaluation is deny-by-default in Core's application layer; list
+endpoints return only what the caller may read. Workload identities (run
+tokens) are never authorized through role bindings.
+
+**Bootstrap.** ``[rbac] bootstrap_org_admins`` grants ``org-admin`` to
+claim matchers from configuration (e.g. ``groups:ballet-admins``), so a
+fresh installation has an administrator. Bootstrap bindings are listed
+but cannot be deleted through the API.
 
 Agent identity: scoped run tokens
 ---------------------------------

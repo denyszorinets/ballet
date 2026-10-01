@@ -25,6 +25,8 @@ service refuses to start, with an error naming the problem, when:
 - a value is invalid (empty address, unknown log level).
 
 Durations are strings such as ``"500ms"``, ``"10s"``, ``"1m30s"``.
+Lists are TOML arrays in the file and comma-separated in environment
+variables.
 
 .. code-block:: toml
 
@@ -124,6 +126,25 @@ migrations are applied at startup. Back it up together with
 :Type: string (path)
 :Default: ``"data/core.db"``
 :Environment: ``BALLET_CORE_STORAGE_PATH``
+
+.. _reference-config-rbac:
+
+``[rbac]`` (core)
+-----------------
+
+``bootstrap_org_admins``
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Claim matchers granted ``org-admin`` at organization scope, independent
+of stored role bindings (:doc:`/architecture/security`). Each entry is
+``claim:value``; the claim must equal the value or, for list claims,
+contain it. Without any entry, only stored bindings grant access — a
+fresh installation is then unusable, so Core logs a warning.
+
+:Type: list of strings
+:Default: ``[]``
+:Example: ``["groups:ballet-admins"]``
+:Environment: ``BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS`` (comma-separated)
 
 .. _reference-config-tokens:
 

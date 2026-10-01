@@ -52,6 +52,27 @@ returns the caller as Ballet sees it:
    {"subject": "8751…", "email": "bob@acme.test", "name": "Bob Developer",
     "groups": ["acme-devs"]}
 
+Grant the first administrator
+-----------------------------
+
+Authentication alone grants nothing; access comes from role bindings
+(:doc:`/architecture/security`). Give the initial administrators
+``org-admin`` through configuration:
+
+.. code-block:: toml
+
+   [rbac]
+   bootstrap_org_admins = ["groups:ballet-admins"]
+
+They can then create customers and role bindings through the API, e.g.
+make the ``acme-devs`` group engineers of customer ``acme``:
+
+.. code-block:: bash
+
+   curl -X POST localhost:8080/api/v1/role-bindings \
+     -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+     -d '{"claim":"groups","value":"acme-devs","role":"engineer","scope":"customer:acme"}'
+
 Development identity provider
 -----------------------------
 
@@ -60,7 +81,9 @@ The repository contains a ready Keycloak setup:
 .. code-block:: bash
 
    make dev-keycloak    # Keycloak on http://localhost:8180, realm "ballet"
-   BALLET_CORE_OIDC_ISSUER_URL=http://localhost:8180/realms/ballet go run ./core/cmd/core
+   BALLET_CORE_OIDC_ISSUER_URL=http://localhost:8180/realms/ballet \
+   BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS=groups:ballet-admins \
+     go run ./core/cmd/core
    curl -H "Authorization: Bearer $(scripts/dev-token.sh bob)" localhost:8080/api/v1/me
 
 ``make dev-keycloak`` runs Keycloak's Java distribution (Java 21+);

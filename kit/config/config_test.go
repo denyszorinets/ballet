@@ -145,3 +145,18 @@ func TestLoad_PromotesEmbeddedStructFields(t *testing.T) {
 	assert.Equal(t, 2*time.Second, cfg.Server.ShutdownTimeout)
 	assert.Equal(t, []string{"TEST_SERVER_ADDR", "TEST_SERVER_SHUTDOWN_TIMEOUT", "TEST_NAME"}, config.EnvNames("TEST", cfg))
 }
+
+type listConfig struct {
+	Admins []string `toml:"admins"`
+}
+
+func TestLoad_StringListsFromFileAndEnv(t *testing.T) {
+	path := writeFile(t, "admins = [\"groups:a\", \"email:b@x\"]\n")
+	cfg := &listConfig{}
+	require.NoError(t, config.Load(path, "TEST", cfg))
+	assert.Equal(t, []string{"groups:a", "email:b@x"}, cfg.Admins)
+
+	t.Setenv("TEST_ADMINS", "groups:ops, sub:123 ,")
+	require.NoError(t, config.Load(path, "TEST", cfg))
+	assert.Equal(t, []string{"groups:ops", "sub:123"}, cfg.Admins)
+}

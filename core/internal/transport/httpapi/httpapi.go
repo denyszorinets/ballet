@@ -21,6 +21,8 @@ type Deps struct {
 	Authenticate func(http.Handler) http.Handler
 	TokenKeys    *runtoken.KeyRing
 	Tenancy      *app.Tenancy
+	RBAC         *app.RBAC
+	RoleBindings *app.RoleBindings
 }
 
 // Register mounts the REST API on mux. Every /api/ route requires an
@@ -29,8 +31,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /.well-known/jwks.json", runtoken.JWKSHandler(d.TokenKeys))
 
 	api := http.NewServeMux()
-	api.HandleFunc("GET /api/v1/me", me)
+	api.HandleFunc("GET /api/v1/me", me(d.RBAC))
 	registerTenancy(api, d.Tenancy)
+	registerRBAC(api, d.RoleBindings)
 	api.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, fmt.Errorf("%w: no such endpoint", app.ErrNotFound))
 	})
@@ -38,20 +41,31 @@ func Register(mux *http.ServeMux, d Deps) {
 }
 
 type meResponse struct {
-	Subject string   `json:"subject"`
-	Email   string   `json:"email"`
-	Name    string   `json:"name"`
-	Groups  []string `json:"groups"`
+	Subject  string        `json:"subject"`
+	Email    string        `json:"email"`
+	Name     string        `json:"name"`
+	Groups   []string      `json:"groups"`
+	Bindings []bindingJSON `json:"bindings"`
 }
 
-func me(w http.ResponseWriter, r *http.Request) {
-	id, _ := auth.FromContext(r.Context()) // guaranteed by the middleware
-	writeJSON(w, http.StatusOK, meResponse{
-		Subject: id.Subject,
-		Email:   id.Email,
-		Name:    id.Name,
-		Groups:  stringSlice(id.Claims["groups"]),
-	})
+// me returns the caller and the role bindings that apply to them.
+func me(r *app.RBAC) http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		id, _ := auth.FromContext(req.Context()) // guaranteed by the middleware
+		bindings, err := r.Effective(req.Context(), id)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		out := meResponse{
+			Subject: id.Subject, Email: id.Email, Name: id.Name,
+			Groups: stringSlice(id.Claims["groups"]), Bindings: []bindingJSON{},
+		}
+		for _, b := range bindings {
+			out.Bindings = append(out.Bindings, toBindingJSON(b))
+		}
+		writeJSON(w, http.StatusOK, out)
+	}
 }
 
 // stringSlice converts a JSON array claim into strings, skipping non-strings.

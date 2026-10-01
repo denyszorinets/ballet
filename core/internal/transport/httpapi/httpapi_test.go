@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/denyszorinets/ballet/core/internal/app"
+	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
 	"github.com/denyszorinets/ballet/core/internal/transport/httpapi"
 	"github.com/denyszorinets/ballet/kit/auth"
@@ -36,7 +37,7 @@ func testUser(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		id := auth.Identity{Kind: auth.KindHuman, Subject: sub, Claims: map[string]any{"groups": []any{"g1"}}}
+		id := auth.Identity{Kind: auth.KindHuman, Subject: sub, Claims: map[string]any{"sub": sub, "groups": []any{"g1"}}}
 		next.ServeHTTP(w, r.WithContext(auth.WithIdentity(r.Context(), id)))
 	})
 }
@@ -48,11 +49,16 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "core.db"))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = st.Close() })
+	admin, err := rbac.ParseBootstrap("sub:alice")
+	require.NoError(t, err)
+	r := &app.RBAC{Store: st, Bootstrap: []rbac.Binding{admin}}
 	mux := http.NewServeMux()
 	httpapi.Register(mux, httpapi.Deps{
 		Authenticate: authn,
 		TokenKeys:    ring,
 		Tenancy:      &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		RBAC:         r,
+		RoleBindings: &app.RoleBindings{RBAC: r, Tenancy: st, Now: time.Now, NewID: store.NewID},
 	})
 	return mux
 }
@@ -94,7 +100,7 @@ func TestMe_WithRealOIDCVerifier(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, map[string]any{
 		"subject": "user-1", "email": "alice@example.com", "name": "Alice",
-		"groups": []any{"ballet-admins"},
+		"groups": []any{"ballet-admins"}, "bindings": []any{},
 	}, body)
 
 	rec = httptest.NewRecorder()
@@ -198,4 +204,37 @@ func TestTenancyAPI_RequiresAuthentication(t *testing.T) {
 	code, _ := call(t, api, "GET", "/api/v1/customers", "", "")
 
 	assert.Equal(t, http.StatusUnauthorized, code)
+}
+
+func TestRBACAPI_RolesAndBindings(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+
+	code, roles := call(t, api, "GET", "/api/v1/roles", "alice", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, roles["items"], 5)
+
+	code, b := call(t, api, "POST", "/api/v1/role-bindings", "alice",
+		`{"claim":"groups","value":"g1","role":"viewer","scope":"customer:acme"}`)
+	require.Equal(t, http.StatusCreated, code, b)
+	assert.Equal(t, "customer:acme", b["scope"])
+
+	// /me shows the binding: the test user's groups claim contains g1.
+	code, me := call(t, api, "GET", "/api/v1/me", "bob", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, me["bindings"], 1)
+
+	code, list := call(t, api, "GET", "/api/v1/role-bindings", "alice", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, list["items"], 2, "bootstrap + stored")
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/role-bindings/"+b["id"].(string), nil)
+	req.Header.Set("X-Test-User", "alice")
+	rec := httptest.NewRecorder()
+	api.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+
+	code, body := call(t, api, "POST", "/api/v1/role-bindings", "alice",
+		`{"claim":"groups","value":"g1","role":"viewer","scope":"customer:nobody"}`)
+	assert.Equal(t, http.StatusNotFound, code, body)
 }
