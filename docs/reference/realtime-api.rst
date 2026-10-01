@@ -90,9 +90,72 @@ Methods
    * - ``system.ping``
      - client → server
      - Returns ``{"time", "subject"}``; checks the connection end to end
+   * - ``stream.subscribe``
+     - client → server
+     - Subscribe to a change stream, see below
+   * - ``stream.unsubscribe``
+     - client → server
+     - ``{"subscription"}``
+   * - ``stream.event``
+     - server → client
+     - One event on a subscription
+   * - ``stream.closed``
+     - server → client
+     - The server ended a subscription
 
-Subscriptions to change streams are added by the realtime subscription
-layer.
+Change streams
+--------------
+
+Streams carry the events of Core's event log (:doc:`/architecture/data`)
+as they are recorded:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Stream
+     - Events
+     - Permission
+   * - ``project:<KEY>``
+     - Everything in the project: items, dependencies, …
+     - ``tracker.read`` on the project
+   * - ``item:<KEY>``
+     - Changes of one item
+     - ``tracker.read`` on its project
+
+``stream.subscribe`` — ``{"stream", "from_seq"?}`` → ``{"subscription", "seq"}``
+   ``seq`` is the event log position at subscription time. Without
+   ``from_seq``, only events after ``seq`` are delivered. With
+   ``from_seq``, the server first replays the stream's events after
+   ``from_seq``, then continues live — no gaps, no duplicates. If more
+   than 1000 events would have to be replayed, it answers error
+   ``-32010`` (*resync required*).
+
+``stream.event`` notification:
+
+.. code-block:: json
+
+   {"subscription": "s1", "seq": 1042, "type": "item.state_changed",
+    "entity_type": "item", "entity_id": "0199…", "entity_key": "WEB-42",
+    "occurred_at": 1790830000000,
+    "actor": {"kind": "human", "subject": "8751…"},
+    "payload": {"from": "backlog", "to": "ready"}}
+
+``stream.closed`` — ``{"subscription", "reason"}``: reason ``lagging``
+means the client did not keep up; resubscribe with ``from_seq`` = last
+received ``seq``.
+
+**Client recipe** (what the web UI does):
+
+#. ``stream.subscribe`` without ``from_seq``; remember the returned
+   ``seq``.
+#. Load the snapshot over REST.
+#. Apply ``stream.event`` notifications, remembering the last ``seq``
+   (events may already be in the snapshot; apply idempotently, e.g. by
+   refetching the entity or comparing ``version``).
+#. After a reconnect, resubscribe with ``from_seq`` = last ``seq``; on
+   ``-32010``, start again at step 1.
+
+Events reach subscribers within about 200 ms of being recorded.
 
 Error codes
 -----------
@@ -118,6 +181,8 @@ Error codes
      - Not found
    * - ``-32009``
      - Conflict
+   * - ``-32010``
+     - Resync required (``from_seq`` too old)
 
 Close codes
 -----------

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
 	"github.com/denyszorinets/ballet/kit/sqlstore"
 )
@@ -37,6 +38,7 @@ type EventFilter struct {
 	EntityType string
 	EntityID   string
 	AfterSeq   int64 // only events with a greater seq
+	UpToSeq    int64 // only events with a smaller or equal seq (0: no bound)
 	Limit      int   // default and maximum 1000
 }
 
@@ -64,6 +66,9 @@ func (s *Store) ListEvents(ctx context.Context, f EventFilter) ([]event.Event, e
 	}
 	if f.AfterSeq > 0 {
 		add("seq > ?", f.AfterSeq)
+	}
+	if f.UpToSeq > 0 {
+		add("seq <= ?", f.UpToSeq)
 	}
 	limit := f.Limit
 	if limit <= 0 || limit > maxEvents {
@@ -126,4 +131,12 @@ func nullable(s string) any {
 // EntityHistory returns all events of one entity in seq order.
 func (s *Store) EntityHistory(ctx context.Context, entityType, entityID string) ([]event.Event, error) {
 	return s.ListEvents(ctx, EventFilter{EntityType: entityType, EntityID: entityID})
+}
+
+// QueryEvents implements app.EventLog.
+func (s *Store) QueryEvents(ctx context.Context, q app.EventQuery) ([]event.Event, error) {
+	return s.ListEvents(ctx, EventFilter{
+		Project: q.Project, EntityType: q.EntityType, EntityID: q.EntityID,
+		AfterSeq: q.AfterSeq, UpToSeq: q.UpToSeq, Limit: q.Limit,
+	})
 }

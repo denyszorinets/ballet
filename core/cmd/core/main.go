@@ -149,8 +149,17 @@ func run() error {
 		},
 	})
 
+	feed := &app.Feed{Log: st, Logger: svc.Logger}
+	go func() {
+		if err := feed.Run(ctx); err != nil {
+			svc.Logger.ErrorContext(ctx, "event feed stopped", "error", err)
+		}
+	}()
 	realtime.Register(svc.Mux, realtime.Deps{
-		Verifier: verifier, Now: time.Now, Options: rpc.Options{Logger: svc.Logger},
+		Verifier: verifier,
+		Streams:  &app.Streams{Feed: feed, Log: st, Items: st, Tenancy: st, Authz: authz},
+		Now:      time.Now,
+		Options:  rpc.Options{Logger: svc.Logger},
 	})
 
 	return svc.ListenAndServe(ctx)

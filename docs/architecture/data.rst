@@ -58,8 +58,13 @@ the reverse) cannot be committed.
    * - ``payload``
      - JSON with the change's details
 
-Events are append-only. They are the source for entity history, the
-realtime API's change streams
+Events are append-only. Because every write is serialized, ``seq``
+order equals commit order: a reader that has seen ``seq`` N has seen
+every event up to N. Core's event feed tails the log (every ~200 ms) and
+fans new events out to realtime subscriptions, independent of which
+component or Core instance wrote them.
+
+They are the source for entity history, the realtime API's change streams
 (:doc:`decisions/0018-rest-for-stateless-websocket-json-rpc-msgpack-for-stateful`),
 timelines and the digest.
 
