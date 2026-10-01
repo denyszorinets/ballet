@@ -439,6 +439,27 @@ Representation: ``{"id", "type", "item": {"key", "kind", "title", "state"}}``.
    Tickets in state ``ready`` whose blockers are all resolved (``done``
    or ``cancelled``) — what the scheduler may start.
 
+Planner sessions
+----------------
+
+Chats with the planner agent; messages are sent and streamed over the
+realtime API (:ref:`reference-realtime-planner`).
+
+``POST /api/v1/projects/{project}/planner/sessions`` — ``{"title"}`` → ``201``
+   Needs ``tracker.write``. Returns ``{"id", "project", "title",
+   "created_by", "created_at", "updated_at", "running"}``.
+
+``GET /api/v1/projects/{project}/planner/sessions`` → ``200`` list, most recently active first
+
+``GET /api/v1/planner/sessions/{session}`` → ``200``
+   The session with its transcript, ``"messages": [{"seq", "role",
+   "content", "author"?, "stop_reason"?, "usage", "created_at"}]``.
+   ``content`` is a list of blocks: ``{"type": "text", "text"}``,
+   ``{"type": "tool_use", "tool_use_id", "name", "input"}`` (assistant)
+   and ``{"type": "tool_result", "tool_use_id", "text", "is_error"?}``
+   (role ``user``, written by the planner). ``usage`` holds the token
+   counts of assistant messages.
+
 .. _reference-rest-changesets:
 
 Plan changesets

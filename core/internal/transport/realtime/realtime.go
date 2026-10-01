@@ -25,6 +25,7 @@ const Path = "/rpc"
 type Deps struct {
 	Verifier *oidc.Verifier
 	Streams  *app.Streams
+	Planner  *app.Planner // nil: planner methods not served
 	Options  rpc.Options
 	Now      func() time.Time
 }
@@ -107,9 +108,12 @@ type ClosedNotification struct {
 // CodeResyncRequired answers stream.subscribe when from_seq is too old.
 const CodeResyncRequired = -32010
 
+// subscription is a stream subscription or a planner watch.
+type subscription interface{ Close() }
+
 type connState struct {
 	mu   sync.Mutex
-	subs map[string]*app.Subscription
+	subs map[string]subscription // nil value: ID reserved while subscribing
 }
 
 type handlers struct {
@@ -118,7 +122,7 @@ type handlers struct {
 }
 
 func (h *handlers) onConnect(c *rpc.Conn) {
-	st := &connState{subs: map[string]*app.Subscription{}}
+	st := &connState{subs: map[string]subscription{}}
 	h.conns.Store(c, st)
 	go func() {
 		<-c.Done()
@@ -166,25 +170,138 @@ func (h *handlers) handle(ctx context.Context, req *rpc.Request) (any, error) {
 		s.Close()
 		return struct{}{}, nil
 	}
+	if h.deps.Planner != nil {
+		switch req.Method {
+		case "planner.send":
+			var p PlannerSendParams
+			if err := req.Decode(&p); err != nil {
+				return nil, err
+			}
+			m, err := h.deps.Planner.Send(ctx, p.Session, p.Text)
+			if err != nil {
+				return nil, rpcError(err)
+			}
+			return PlannerSendResult{Seq: m.Seq}, nil
+		case "planner.cancel":
+			var p PlannerSessionParams
+			if err := req.Decode(&p); err != nil {
+				return nil, err
+			}
+			if err := h.deps.Planner.Cancel(ctx, p.Session); err != nil {
+				return nil, rpcError(err)
+			}
+			return struct{}{}, nil
+		case "planner.watch":
+			var p PlannerWatchParams
+			if err := req.Decode(&p); err != nil {
+				return nil, err
+			}
+			return h.watch(ctx, req.Conn, p)
+		}
+	}
 	return nil, rpc.Errorf(rpc.CodeMethodNotFound, "method %s not found", req.Method)
 }
 
-func (h *handlers) subscribe(ctx context.Context, c *rpc.Conn, p SubscribeParams) (any, error) {
+// PlannerSendParams are the params of planner.send.
+type PlannerSendParams struct {
+	Session string `json:"session"`
+	Text    string `json:"text"`
+}
+
+// PlannerSendResult is the result of planner.send: the stored message.
+type PlannerSendResult struct {
+	Seq int64 `json:"seq"`
+}
+
+// PlannerSessionParams are the params of planner.cancel.
+type PlannerSessionParams struct {
+	Session string `json:"session"`
+}
+
+// PlannerWatchParams are the params of planner.watch.
+type PlannerWatchParams struct {
+	Subscription string `json:"subscription"` // client-chosen; ends with stream.unsubscribe
+	Session      string `json:"session"`
+}
+
+// PlannerWatchResult is the result of planner.watch.
+type PlannerWatchResult struct {
+	Subscription string `json:"subscription"`
+	Running      bool   `json:"running"` // a turn is in progress
+}
+
+// PlannerOutputNotification is sent as planner.output.
+type PlannerOutputNotification struct {
+	Subscription string          `json:"subscription"`
+	Session      string          `json:"session"`
+	Type         string          `json:"type"` // text, tool_call, tool_result, message, done, error
+	Text         string          `json:"text,omitempty"`
+	Tool         string          `json:"tool,omitempty"`
+	ToolUseID    string          `json:"tool_use_id,omitempty"`
+	Input        json.RawMessage `json:"input,omitempty"`
+	IsError      bool            `json:"is_error,omitempty"`
+	Seq          int64           `json:"seq,omitempty"`
+}
+
+// reserve claims a client-chosen subscription ID on the connection.
+func (h *handlers) reserve(c *rpc.Conn, subID string) (*connState, error) {
 	st := h.state(c)
 	if st == nil {
 		return nil, rpc.Errorf(rpc.CodeInternal, "connection not registered")
 	}
-	subID := p.Subscription
 	if subID == "" || len(subID) > 64 {
 		return nil, rpc.Errorf(rpc.CodeInvalidParams, "subscription must be a client-chosen ID of 1-64 characters")
 	}
 	st.mu.Lock()
+	defer st.mu.Unlock()
 	if _, taken := st.subs[subID]; taken {
-		st.mu.Unlock()
 		return nil, rpc.Errorf(rpc.CodeInvalidParams, "subscription %s already exists on this connection", subID)
 	}
-	st.subs[subID] = nil // reserve the ID while subscribing
+	st.subs[subID] = nil
+	return st, nil
+}
+
+func (h *handlers) watch(ctx context.Context, c *rpc.Conn, p PlannerWatchParams) (any, error) {
+	st, err := h.reserve(c, p.Subscription)
+	if err != nil {
+		return nil, err
+	}
+	subID := p.Subscription
+	w, running, err := h.deps.Planner.Watch(ctx, p.Session, func(o app.PlannerOutput) {
+		_ = c.Notify(context.Background(), "planner.output", PlannerOutputNotification{
+			Subscription: subID, Session: o.Session, Type: o.Type, Text: o.Text, Tool: o.Tool,
+			ToolUseID: o.ToolUseID, Input: o.Input, IsError: o.IsError, Seq: o.Seq,
+		})
+	})
+	if err != nil {
+		st.mu.Lock()
+		delete(st.subs, subID)
+		st.mu.Unlock()
+		return nil, rpcError(err)
+	}
+	st.mu.Lock()
+	st.subs[subID] = w
 	st.mu.Unlock()
+	go func() {
+		<-w.Done()
+		if w.Lagging() {
+			_ = c.Notify(context.Background(), "stream.closed", ClosedNotification{Subscription: subID, Reason: "lagging"})
+		}
+		st.mu.Lock()
+		if st.subs[subID] == w {
+			delete(st.subs, subID)
+		}
+		st.mu.Unlock()
+	}()
+	return PlannerWatchResult{Subscription: subID, Running: running}, nil
+}
+
+func (h *handlers) subscribe(ctx context.Context, c *rpc.Conn, p SubscribeParams) (any, error) {
+	st, err := h.reserve(c, p.Subscription)
+	if err != nil {
+		return nil, err
+	}
+	subID := p.Subscription
 
 	deliver := func(e app.StreamEvent) error {
 		return c.Notify(context.Background(), "stream.event", EventNotification{
@@ -207,7 +324,9 @@ func (h *handlers) subscribe(ctx context.Context, c *rpc.Conn, p SubscribeParams
 			_ = c.Notify(context.Background(), "stream.closed", ClosedNotification{Subscription: subID, Reason: reason})
 		}
 		st.mu.Lock()
-		delete(st.subs, subID)
+		if st.subs[subID] == subscription(sub) {
+			delete(st.subs, subID)
+		}
 		st.mu.Unlock()
 	}()
 	return SubscribeResult{Subscription: subID, Seq: sub.Seq}, nil
@@ -226,6 +345,8 @@ func rpcError(err error) error {
 		return rpc.Errorf(rpc.CodeNotFound, "%v", err)
 	case errors.Is(err, app.ErrUnauthorized):
 		return rpc.Errorf(rpc.CodeUnauthenticated, "unauthenticated")
+	case errors.Is(err, app.ErrConflict):
+		return rpc.Errorf(rpc.CodeConflict, "%v", err)
 	}
 	return err
 }

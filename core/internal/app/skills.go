@@ -316,3 +316,27 @@ func (sk *Skills) DeletePin(ctx context.Context, projectKey, name string) error 
 	}
 	return err
 }
+
+// ProjectSkillBody returns the SKILL.md body of the version of skill name
+// that a project uses, or "" when the project has no usable skill of that
+// name. Requires skill.read on the project (not on the scope the skill
+// is defined in).
+func (sk *Skills) ProjectSkillBody(ctx context.Context, projectKey, name string) (string, error) {
+	resolved, err := sk.Resolve(ctx, projectKey)
+	if err != nil {
+		return "", err
+	}
+	for _, r := range resolved {
+		if r.Name != name || r.Version == 0 {
+			continue
+		}
+		// Resolve authorized the caller for the project's skills, including
+		// those of the organization and customer it inherits.
+		v, err := sk.Store.SkillVersion(ctx, r.Skill.ID, r.Version)
+		if err != nil {
+			return "", err
+		}
+		return v.Content.Body, nil
+	}
+	return "", nil
+}

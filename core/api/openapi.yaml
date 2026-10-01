@@ -214,6 +214,36 @@ paths:
         "200": { description: Rejected, content: { application/json: { schema: { $ref: "#/components/schemas/Changeset" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/projects/{project}/planner/sessions:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: listPlannerSessions
+      tags: [planner]
+      summary: The project's planner sessions, most recently active first
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PlannerSessionList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createPlannerSession
+      tags: [planner]
+      summary: Start a planner chat (send messages over the realtime API)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreatePlannerSession" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/PlannerSession" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/planner/sessions/{session}:
+    parameters: [{ $ref: "#/components/parameters/PlannerSession" }]
+    get:
+      operationId: getPlannerSession
+      tags: [planner]
+      summary: A planner session with its full transcript
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PlannerTranscript" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/items/{item}:
     parameters: [{ $ref: "#/components/parameters/Item" }]
     get:
@@ -537,6 +567,7 @@ components:
     Customer: { name: customer, in: path, required: true, schema: { type: string }, description: Customer key }
     Project: { name: project, in: path, required: true, schema: { type: string }, description: Project key }
     Skill: { name: skill, in: path, required: true, schema: { type: string }, description: Skill ID }
+    PlannerSession: { name: session, in: path, required: true, schema: { type: string }, description: Planner session ID }
     Changeset: { name: changeset, in: path, required: true, schema: { type: string }, description: Changeset ID }
     Entry: { name: entry, in: path, required: true, schema: { type: string }, description: Knowledge entry ID }
     Provider: { name: provider, in: path, required: true, schema: { type: string, enum: [anthropic, openai] } }
@@ -802,6 +833,73 @@ components:
         type: { $ref: "#/components/schemas/DependencyType" }
         item: { type: string, description: Key of the other item }
 
+    PlannerSession:
+      type: object
+      additionalProperties: false
+      required: [id, project, title, created_by, created_at, updated_at, running]
+      properties:
+        id: { type: string }
+        project: { type: string }
+        title: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        running: { type: boolean, description: The planner is answering }
+    PlannerSessionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/PlannerSession" } } }
+    CreatePlannerSession:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties: { title: { type: string } }
+    PlannerBlock:
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type: { type: string, enum: [text, tool_use, tool_result] }
+        text: { type: string, description: "text; tool_result output" }
+        tool_use_id: { type: string }
+        name: { type: string, description: Tool name (tool_use) }
+        input: { type: object, additionalProperties: true, description: Tool input (tool_use) }
+        is_error: { type: boolean }
+    PlannerUsage:
+      type: object
+      additionalProperties: false
+      required: [input_tokens, output_tokens, cache_read_tokens, cache_write_tokens]
+      properties:
+        input_tokens: { type: integer, format: int64 }
+        output_tokens: { type: integer, format: int64 }
+        cache_read_tokens: { type: integer, format: int64 }
+        cache_write_tokens: { type: integer, format: int64 }
+    PlannerMessage:
+      type: object
+      additionalProperties: false
+      required: [seq, role, content, usage, created_at]
+      properties:
+        seq: { type: integer, format: int64 }
+        role: { type: string, enum: [user, assistant], description: Tool results are user messages }
+        content: { type: array, items: { $ref: "#/components/schemas/PlannerBlock" } }
+        author: { type: string, description: Human who wrote a user text message }
+        stop_reason: { type: string }
+        usage: { $ref: "#/components/schemas/PlannerUsage" }
+        created_at: { type: string, format: date-time }
+    PlannerTranscript:
+      type: object
+      additionalProperties: false
+      required: [id, project, title, created_by, created_at, updated_at, running, messages]
+      properties:
+        id: { type: string }
+        project: { type: string }
+        title: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        running: { type: boolean }
+        messages: { type: array, items: { $ref: "#/components/schemas/PlannerMessage" } }
     ChangesetStatus: { type: string, enum: [proposed, applied, rejected] }
     ItemReference:
       type: string

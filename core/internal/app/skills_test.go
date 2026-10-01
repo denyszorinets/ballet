@@ -160,3 +160,32 @@ func TestSkills_ResolveForProjectWithPins(t *testing.T) {
 	_, err = sk.Pins(user(t, "eve"), "WEB")
 	assert.ErrorIs(t, err, app.ErrForbidden)
 }
+
+func TestSkills_ProjectSkillBodyFollowsPins(t *testing.T) {
+	sk, _ := newSkills(t)
+	alice := user(t, "alice", "ballet-admins")
+	dave := user(t, "dave", "acme-admins")
+	bob := user(t, "bob", "acme-devs")
+
+	body, err := sk.ProjectSkillBody(bob, "WEB", "planner")
+	require.NoError(t, err)
+	assert.Empty(t, body, "no planner skill")
+
+	s, err := sk.CreateSkill(alice, "organization", "planner", content("Planning", "v1 rules"))
+	require.NoError(t, err)
+	_, err = sk.Publish(alice, s.ID, s.Version)
+	require.NoError(t, err)
+	s, _ = sk.GetSkill(alice, s.ID)
+	_, err = sk.UpdateDraft(alice, s.ID, app.UpdateDraftInput{Version: s.Version, Body: ptr("v2 rules")})
+	require.NoError(t, err)
+	s, _ = sk.GetSkill(alice, s.ID)
+	_, err = sk.Publish(alice, s.ID, s.Version)
+	require.NoError(t, err)
+
+	body, err = sk.ProjectSkillBody(bob, "WEB", "planner")
+	require.NoError(t, err)
+	assert.Equal(t, "v2 rules", body)
+	require.NoError(t, sk.SetPin(dave, "WEB", skill.Pin{Name: "planner", Version: 1}))
+	body, _ = sk.ProjectSkillBody(bob, "WEB", "planner")
+	assert.Equal(t, "v1 rules", body)
+}

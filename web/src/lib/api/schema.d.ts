@@ -263,6 +263,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project}/planner/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        /** The project's planner sessions, most recently active first */
+        get: operations["listPlannerSessions"];
+        put?: never;
+        /** Start a planner chat (send messages over the realtime API) */
+        post: operations["createPlannerSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/planner/sessions/{session}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Planner session ID */
+                session: components["parameters"]["PlannerSession"];
+            };
+            cookie?: never;
+        };
+        /** A planner session with its full transcript */
+        get: operations["getPlannerSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{item}": {
         parameters: {
             query?: never;
@@ -895,6 +936,76 @@ export interface components {
             /** @description Key of the other item */
             item: string;
         };
+        PlannerSession: {
+            id: string;
+            project: string;
+            title: string;
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** @description The planner is answering */
+            running: boolean;
+        };
+        PlannerSessionList: {
+            items: components["schemas"]["PlannerSession"][];
+        };
+        CreatePlannerSession: {
+            title: string;
+        };
+        PlannerBlock: {
+            /** @enum {string} */
+            type: "text" | "tool_use" | "tool_result";
+            /** @description text; tool_result output */
+            text?: string;
+            tool_use_id?: string;
+            /** @description Tool name (tool_use) */
+            name?: string;
+            /** @description Tool input (tool_use) */
+            input?: {
+                [key: string]: unknown;
+            };
+            is_error?: boolean;
+        };
+        PlannerUsage: {
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            /** Format: int64 */
+            cache_read_tokens: number;
+            /** Format: int64 */
+            cache_write_tokens: number;
+        };
+        PlannerMessage: {
+            /** Format: int64 */
+            seq: number;
+            /**
+             * @description Tool results are user messages
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            content: components["schemas"]["PlannerBlock"][];
+            /** @description Human who wrote a user text message */
+            author?: string;
+            stop_reason?: string;
+            usage: components["schemas"]["PlannerUsage"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        PlannerTranscript: {
+            id: string;
+            project: string;
+            title: string;
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            running: boolean;
+            messages: components["schemas"]["PlannerMessage"][];
+        };
         /** @enum {string} */
         ChangesetStatus: "proposed" | "applied" | "rejected";
         /** @description Key of an existing item of the project ("WEB-12"), or "$" + the ref of an earlier create_item operation ("$login") */
@@ -1215,6 +1326,8 @@ export interface components {
         Project: string;
         /** @description Skill ID */
         Skill: string;
+        /** @description Planner session ID */
+        PlannerSession: string;
         /** @description Changeset ID */
         Changeset: string;
         /** @description Knowledge entry ID */
@@ -1748,6 +1861,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Changeset"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listPlannerSessions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlannerSessionList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createPlannerSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePlannerSession"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlannerSession"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPlannerSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Planner session ID */
+                session: components["parameters"]["PlannerSession"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlannerTranscript"];
                 };
             };
             default: components["responses"]["Error"];

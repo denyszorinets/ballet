@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/denyszorinets/ballet/core/internal/app"
+	"github.com/denyszorinets/ballet/core/internal/domain/planner"
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
 	"github.com/denyszorinets/ballet/core/internal/infra/secrets"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
@@ -48,6 +49,26 @@ func testUser(next http.Handler) http.Handler {
 
 func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Authorizer) http.Handler {
 	t.Helper()
+	h, _ := newAPIWithPlanner(t, authn, authz)
+	return h
+}
+
+// toolLLM calls the "echo" tool once, then answers with text.
+type toolLLM struct{}
+
+func (toolLLM) Stream(_ context.Context, req app.LLMRequest, onText func(string)) (app.LLMResponse, error) {
+	if len(req.Messages) == 1 {
+		return app.LLMResponse{StopReason: "tool_use", Content: []planner.Block{
+			{Type: planner.BlockToolUse, ToolUseID: "t1", Name: "echo", Input: json.RawMessage(`{"q":1}`)},
+		}}, nil
+	}
+	onText("done")
+	return app.LLMResponse{StopReason: "end_turn", Content: []planner.Block{planner.Text("done")},
+		Usage: planner.Usage{InputTokens: 3, OutputTokens: 1}}, nil
+}
+
+func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, authz app.Authorizer) (http.Handler, *app.Planner) {
+	t.Helper()
 	ring, err := runtoken.LoadKeyRing(filepath.Join(t.TempDir(), "keys.json"), time.Now)
 	require.NoError(t, err)
 	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "core.db"))
@@ -59,6 +80,8 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 	require.NoError(t, err)
 	r := &app.RBAC{Store: st, Bootstrap: []rbac.Binding{admin}}
 	tracker := &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID}
+	pl := &app.Planner{Store: st, Tenancy: st, Authz: authz, LLM: toolLLM{}, Model: "m", MaxTokens: 10,
+		Now: time.Now, NewID: store.NewID, Context: t.Context()}
 	mux := http.NewServeMux()
 	httpapi.Register(mux, httpapi.Deps{
 		Authenticate: authn,
@@ -72,8 +95,9 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 		Credentials:  &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID},
 		Tracker:      tracker,
 		Changesets:   &app.Changesets{Store: st, Tracker: tracker},
+		Planner:      pl,
 	})
-	return contract(t, mux)
+	return contract(t, mux), pl
 }
 
 func call(t *testing.T, h http.Handler, method, path, user, body string) (int, map[string]any) {
@@ -496,4 +520,39 @@ func TestChangesetAPI_ProposeApplyReject(t *testing.T) {
 	code, rejected := call(t, api, "POST", "/api/v1/changesets/"+second["id"].(string)+"/reject", "alice", "")
 	require.Equal(t, http.StatusOK, code, rejected)
 	assert.Equal(t, "rejected", rejected["status"])
+}
+
+func TestPlannerAPI_SessionsAndTranscript(t *testing.T) {
+	api, pl := newAPIWithPlanner(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+
+	code, s := call(t, api, "POST", "/api/v1/projects/WEB/planner/sessions", "alice", `{"title":"Auth"}`)
+	require.Equal(t, http.StatusCreated, code, s)
+	id := s["id"].(string)
+	assert.Equal(t, "alice", s["created_by"])
+	code, _ = call(t, api, "POST", "/api/v1/projects/WEB/planner/sessions", "alice", `{"title":""}`)
+	assert.Equal(t, http.StatusBadRequest, code)
+
+	alice := auth.WithIdentity(t.Context(), auth.Identity{Kind: auth.KindHuman, Subject: "alice"})
+	_, err := pl.Send(alice, id, "plan it")
+	require.NoError(t, err)
+	var tr map[string]any
+	require.Eventually(t, func() bool {
+		code, tr = call(t, api, "GET", "/api/v1/planner/sessions/"+id, "alice", "")
+		return code == http.StatusOK && len(tr["messages"].([]any)) == 4 && tr["running"] == false
+	}, 5*time.Second, 10*time.Millisecond)
+	msgs := tr["messages"].([]any)
+	toolCall := msgs[1].(map[string]any)["content"].([]any)[0].(map[string]any)
+	assert.Equal(t, "tool_use", toolCall["type"])
+	assert.Equal(t, map[string]any{"q": 1.0}, toolCall["input"])
+	result := msgs[2].(map[string]any)["content"].([]any)[0].(map[string]any)
+	assert.Equal(t, true, result["is_error"], "no echo tool is registered")
+	assert.Equal(t, 3.0, msgs[3].(map[string]any)["usage"].(map[string]any)["input_tokens"])
+
+	code, list := call(t, api, "GET", "/api/v1/projects/WEB/planner/sessions", "alice", "")
+	require.Equal(t, http.StatusOK, code, list)
+	assert.Len(t, list["items"], 1)
+	code, _ = call(t, api, "GET", "/api/v1/planner/sessions/nope", "alice", "")
+	assert.Equal(t, http.StatusNotFound, code)
 }
