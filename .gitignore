@@ -1,52 +1,37 @@
-# Binaries for programs and plugins
-*.exe
-*.exe~
-*.dll
-*.so
-*.so.*
-*.dylib
-mcp-gateway
-/cmd/gateway/gateway
-/cmd/webui/webui
-webui-server
-
-# Build artifacts
-dist/
-build/
-
-# Test binaries
+# Go build output
+/bin/*
+!/bin/graph
 *.test
+*.out
+coverage.*
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Web
+node_modules/
+web/build/
+web/.svelte-kit/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Local configuration
-config.local.toml
+# Local data and configuration
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
 .env
 .env.local
+*.local.toml
 
-# Logs
-*.log
+# Documentation site (docs/ is a uv project, ADR-0001)
+docs/_build/
+docs/.venv/
 
-# SQLite databases
-*.db
-*.sqlite
-
-# Python (deploy/demo/mcp-servers/)
+# Tooling scratch output
+.playwright-mcp/
 __pycache__/
 *.pyc
 
-# Playwright MCP scratch output (page snapshots, screenshots)
-.playwright-mcp/
-
-# Documentation site (docs/ is a uv project, ADR-0022)
-docs/_build/
-docs/.venv/
+# IDE and OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
