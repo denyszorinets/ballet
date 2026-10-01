@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/denyszorinets/ballet/gateway/internal/core"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
@@ -21,6 +22,9 @@ import (
 
 // Audience of run tokens accepted by the gateway.
 const Audience = "gateway"
+
+// upstreamTimeout bounds one provider request, including streaming.
+const upstreamTimeout = 10 * time.Minute
 
 // CredentialResolver resolves provider credentials (Core).
 type CredentialResolver interface {
@@ -84,21 +88,21 @@ func (a *Anthropic) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadGateway, "api_error", "invalid provider URL")
 		return
 	}
-	// The upstream request is detached from the incoming request's context
-	// once the response has started: a healthy stream must not be cut by a
-	// cancellation of the incoming context (seen in CI as "use of closed
-	// network connection" mid-stream). A client that really disconnects is
+	// The upstream request is detached from the incoming request's
+	// context. In CI, healthy streams were cut ("use of closed network
+	// connection") by a cancellation of the incoming context that never
+	// reproduced locally; a client that really disconnects is still
 	// detected when writing to it fails, which ends this handler and
-	// cancels upstream. Before the response starts, a client disconnect
-	// still cancels upstream so no tokens are spent for nobody.
-	upstream, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
+	// cancels upstream. upstreamTimeout bounds every upstream request.
+	upstream, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), upstreamTimeout)
 	defer cancel()
 	var started atomic.Bool
 	go func() {
 		select {
 		case <-r.Context().Done():
 			if !started.Load() {
-				cancel()
+				a.logger().WarnContext(r.Context(), "client context ended before the provider responded; upstream continues",
+					"error", r.Context().Err(), "cause", context.Cause(r.Context()))
 			}
 		case <-upstream.Done():
 		}

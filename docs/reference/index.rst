@@ -10,4 +10,5 @@ Exact, exhaustive descriptions of configuration and interfaces.
    rest-api
    realtime-api
    llm-gateway
+   knowledge-mcp
    run-tokens

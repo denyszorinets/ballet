@@ -23,6 +23,7 @@ import (
 	"github.com/denyszorinets/ballet/knowledge/internal/app"
 	"github.com/denyszorinets/ballet/knowledge/internal/store"
 	"github.com/denyszorinets/ballet/knowledge/internal/transport/httpapi"
+	"github.com/denyszorinets/ballet/knowledge/internal/transport/mcpapi"
 )
 
 const (
@@ -143,5 +144,6 @@ func run() error {
 		Now: time.Now, NewID: func() string { return uuid.Must(uuid.NewV7()).String() },
 	}
 	httpapi.Register(svc.Mux, verifier, knowledge)
+	mcpapi.Register(svc.Mux, verifier, knowledge, "v1")
 	return svc.ListenAndServe(ctx)
 }
