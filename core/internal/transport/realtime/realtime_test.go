@@ -4,40 +4,176 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/denyszorinets/ballet/core/internal/app"
+	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
+	"github.com/denyszorinets/ballet/core/internal/domain/tracker"
+	"github.com/denyszorinets/ballet/core/internal/infra/store"
 	"github.com/denyszorinets/ballet/core/internal/transport/realtime"
+	"github.com/denyszorinets/ballet/kit/auth"
 	"github.com/denyszorinets/ballet/kit/auth/oidc"
 	"github.com/denyszorinets/ballet/kit/auth/oidctest"
 	"github.com/denyszorinets/ballet/kit/rpc"
 )
 
-func TestRealtime_AuthenticatesWithOIDCAndAnswersPing(t *testing.T) {
+type env struct {
+	url     string
+	iss     *oidctest.Issuer
+	tracker *app.Tracker
+}
+
+func setup(t *testing.T) env {
+	t.Helper()
 	iss := oidctest.NewIssuer(t)
 	v, err := oidc.NewVerifier(t.Context(), oidc.Config{IssuerURL: iss.URL, Audience: "ballet"})
 	require.NoError(t, err)
+	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "core.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = st.Close() })
+	boot, err := rbac.ParseBootstrap("groups:admins")
+	require.NoError(t, err)
+	authz := &app.RBAC{Store: st, Bootstrap: []rbac.Binding{boot}}
+	ten := &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID}
+	admin := auth.WithIdentity(t.Context(), auth.Identity{Kind: auth.KindHuman, Subject: "alice", Claims: map[string]any{"groups": []any{"admins"}}})
+	_, err = ten.CreateCustomer(admin, app.CreateCustomerInput{Key: "acme", Name: "Acme"})
+	require.NoError(t, err)
+	_, err = ten.CreateProject(admin, app.CreateProjectInput{CustomerKey: "acme", Key: "WEB", Name: "Web"})
+	require.NoError(t, err)
+
+	feed := &app.Feed{Log: st, Interval: 5 * time.Millisecond}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { _ = feed.Run(ctx); close(done) }()
+	t.Cleanup(func() { cancel(); <-done })
+	time.Sleep(20 * time.Millisecond)
+
 	mux := http.NewServeMux()
-	realtime.Register(mux, realtime.Deps{Verifier: v, Now: time.Now})
+	realtime.Register(mux, realtime.Deps{
+		Verifier: v, Now: time.Now,
+		Streams: &app.Streams{Feed: feed, Log: st, Items: st, Tenancy: st, Authz: authz, MaxReplay: 5},
+	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	url := "ws" + strings.TrimPrefix(srv.URL, "http") + realtime.Path
+	tr := &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID}
+	return env{url: "ws" + strings.TrimPrefix(srv.URL, "http") + realtime.Path, iss: iss, tracker: tr}
+}
 
-	tok := iss.Token(t, "user-1", "ballet", nil)
-	conn, res, err := rpc.Dial(t.Context(), url, rpc.DialOptions{Token: func(context.Context) (string, error) { return tok, nil }})
+func (e env) create(t *testing.T, title string) app.ItemView {
+	t.Helper()
+	admin := auth.WithIdentity(t.Context(), auth.Identity{Kind: auth.KindHuman, Subject: "alice", Claims: map[string]any{"groups": []any{"admins"}}})
+	it, err := e.tracker.CreateItem(admin, app.CreateItemInput{ProjectKey: "WEB", Kind: tracker.KindTicket, Title: title})
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	assert.Equal(t, "user-1", res.Subject)
-	assert.Positive(t, res.ExpiresAt, "OIDC exp is reported so the client refreshes in time")
+	return it
+}
+
+type inbox struct {
+	mu     sync.Mutex
+	events []realtime.EventNotification
+}
+
+func (b *inbox) handler(_ context.Context, req *rpc.Request) (any, error) {
+	if req.Method == "stream.event" {
+		var n realtime.EventNotification
+		if err := req.Decode(&n); err != nil {
+			return nil, err
+		}
+		b.mu.Lock()
+		b.events = append(b.events, n)
+		b.mu.Unlock()
+	}
+	return nil, nil
+}
+
+func (b *inbox) keys(t *testing.T, n int) []string {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		return len(b.events) >= n
+	}, 5*time.Second, 5*time.Millisecond)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var keys []string
+	for _, e := range b.events {
+		keys = append(keys, e.EntityKey)
+	}
+	return keys
+}
+
+func (e env) dial(t *testing.T, subject string, groups []string, b *inbox) *rpc.Conn {
+	t.Helper()
+	tok := e.iss.Token(t, subject, "ballet", map[string]any{"groups": groups})
+	c, _, err := rpc.Dial(t.Context(), e.url, rpc.DialOptions{
+		Token:   func(context.Context) (string, error) { return tok, nil },
+		Options: rpc.Options{Handler: b.handler},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = c.Close() })
+	return c
+}
+
+func TestRealtime_PingAndAuth(t *testing.T) {
+	e := setup(t)
+	c := e.dial(t, "user-1", nil, &inbox{})
 
 	var pong realtime.PingResult
-	require.NoError(t, conn.Call(t.Context(), "system.ping", nil, &pong))
+	require.NoError(t, c.Call(t.Context(), "system.ping", nil, &pong))
 	assert.Equal(t, "user-1", pong.Subject)
 
-	_, _, err = rpc.Dial(t.Context(), url, rpc.DialOptions{Token: func(context.Context) (string, error) { return "forged", nil }})
+	_, _, err := rpc.Dial(t.Context(), e.url, rpc.DialOptions{Token: func(context.Context) (string, error) { return "forged", nil }})
 	assert.True(t, rpc.IsCode(err, rpc.CodeUnauthenticated))
+}
+
+func TestRealtime_SubscribeReceiveAndResume(t *testing.T) {
+	e := setup(t)
+	var first inbox
+	c := e.dial(t, "alice", []string{"admins"}, &first)
+
+	var sub realtime.SubscribeResult
+	require.NoError(t, c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "project:WEB"}, &sub))
+	a := e.create(t, "a")
+	assert.Equal(t, []string{a.Key}, first.keys(t, 1))
+	lastSeq := first.events[0].Seq
+
+	// Disconnect, miss two events, reconnect and resume.
+	require.NoError(t, c.Close())
+	b := e.create(t, "b")
+	cc := e.create(t, "c")
+
+	var second inbox
+	c2 := e.dial(t, "alice", []string{"admins"}, &second)
+	require.NoError(t, c2.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "project:WEB", FromSeq: &lastSeq}, &sub))
+	d := e.create(t, "d")
+	assert.Equal(t, []string{b.Key, cc.Key, d.Key}, second.keys(t, 3))
+
+	require.NoError(t, c2.Call(t.Context(), "stream.unsubscribe", realtime.UnsubscribeParams{Subscription: sub.Subscription}, nil))
+	err := c2.Call(t.Context(), "stream.unsubscribe", realtime.UnsubscribeParams{Subscription: sub.Subscription}, nil)
+	assert.True(t, rpc.IsCode(err, rpc.CodeNotFound))
+}
+
+func TestRealtime_SubscribeErrors(t *testing.T) {
+	e := setup(t)
+	for range 6 {
+		e.create(t, "x")
+	}
+	c := e.dial(t, "alice", []string{"admins"}, &inbox{})
+	zero := int64(0)
+
+	err := c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "project:WEB", FromSeq: &zero}, nil)
+	assert.True(t, rpc.IsCode(err, realtime.CodeResyncRequired), "%v", err)
+
+	stranger := e.dial(t, "eve", nil, &inbox{})
+	err = stranger.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "project:WEB"}, nil)
+	assert.True(t, rpc.IsCode(err, rpc.CodeForbidden))
+
+	err = c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "bogus"}, nil)
+	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidParams))
 }

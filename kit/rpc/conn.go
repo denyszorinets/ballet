@@ -26,6 +26,10 @@ var ErrClosed = errors.New("rpc: connection closed")
 // Handler handles a request or notification from the peer. For requests,
 // the returned value becomes the result; an *Error is sent as is, other
 // errors as CodeInternal. Return values of notifications are ignored.
+//
+// Requests are handled concurrently. Notifications are handled one at a
+// time, in arrival order (stream events depend on it); a slow notification
+// handler applies backpressure to the connection.
 type Handler func(ctx context.Context, req *Request) (any, error)
 
 // Request is an incoming request or notification.
@@ -100,10 +104,16 @@ type Conn struct {
 	// the user handler. It reports whether it handled the message.
 	intercept func(m message) bool
 
+	notifications chan message // processed in order by notifyLoop
+
 	closeOnce sync.Once
 	done      chan struct{}
 	closeErr  error
 }
+
+// notificationQueue is how many notifications may wait for the handler
+// before reading from the connection pauses.
+const notificationQueue = 1024
 
 func newConn(ws *websocket.Conn, c codec, opts Options) *Conn {
 	opts.setDefaults()
@@ -112,6 +122,7 @@ func newConn(ws *websocket.Conn, c codec, opts Options) *Conn {
 	conn := &Conn{
 		ws: ws, codec: c, opts: opts, ctx: ctx, cancel: cancel,
 		pending: map[int64]chan message{}, done: make(chan struct{}),
+		notifications: make(chan message, notificationQueue),
 	}
 	conn.lastSeen.Store(time.Now().UnixNano())
 	return conn
@@ -121,6 +132,7 @@ func newConn(ws *websocket.Conn, c codec, opts Options) *Conn {
 func (c *Conn) start() {
 	go c.readLoop()
 	go c.heartbeatLoop()
+	go c.notifyLoop()
 }
 
 // Subprotocol returns the negotiated subprotocol.
@@ -292,8 +304,24 @@ func (c *Conn) dispatch(m message) {
 	case m.Method == MethodHeartbeat:
 		// Liveness is tracked for every inbound frame.
 	case c.intercept != nil && c.intercept(m):
-	case m.isRequest() || m.isNotification():
+	case m.isRequest():
 		go c.handle(m)
+	case m.isNotification():
+		select {
+		case c.notifications <- m:
+		case <-c.done:
+		}
+	}
+}
+
+func (c *Conn) notifyLoop() {
+	for {
+		select {
+		case <-c.done:
+			return
+		case m := <-c.notifications:
+			c.handle(m)
+		}
 	}
 }
 

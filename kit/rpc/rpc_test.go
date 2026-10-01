@@ -299,3 +299,36 @@ func TestRPC_CallsFailAfterClose(t *testing.T) {
 }
 
 var _ http.Handler = (*rpc.Server)(nil)
+
+func TestRPC_NotificationsAreHandledInArrivalOrder(t *testing.T) {
+	url, conns := newServer(t, rpc.ServerOptions{})
+	var mu sync.Mutex
+	var got []int
+	done := make(chan struct{})
+	const n = 300
+	dial(t, url, rpc.DialOptions{Options: rpc.Options{Handler: func(_ context.Context, req *rpc.Request) (any, error) {
+		var i int
+		_ = req.Decode(&i)
+		mu.Lock()
+		got = append(got, i)
+		if len(got) == n {
+			close(done)
+		}
+		mu.Unlock()
+		return nil, nil
+	}}})
+	server := <-conns
+
+	for i := range n {
+		require.NoError(t, server.Notify(t.Context(), "seq", i))
+	}
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("notifications not received")
+	}
+	for i, v := range got {
+		require.Equal(t, i, v, "notification %d arrived out of order", i)
+	}
+}
