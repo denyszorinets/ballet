@@ -35,11 +35,12 @@ var expected = map[rbac.Role][]rbac.Action{
 		rbac.ActCustomerRead, rbac.ActCustomerUpdate, rbac.ActProjectCreate, rbac.ActProjectRead,
 		rbac.ActProjectUpdate, rbac.ActRoleBindingManage, rbac.ActRoleBindingRead,
 		rbac.ActTrackerRead, rbac.ActTrackerWrite, rbac.ActCredentialManage, rbac.ActKnowledgeRead, rbac.ActKnowledgeWrite,
+		rbac.ActSkillRead, rbac.ActSkillWrite,
 	},
 	rbac.RoleEngineer: {rbac.ActCustomerRead, rbac.ActProjectRead, rbac.ActTrackerRead, rbac.ActKnowledgeRead,
-		rbac.ActTrackerWrite, rbac.ActKnowledgeWrite},
-	rbac.RoleApprover: {rbac.ActCustomerRead, rbac.ActProjectRead, rbac.ActTrackerRead, rbac.ActKnowledgeRead},
-	rbac.RoleViewer:   {rbac.ActCustomerRead, rbac.ActProjectRead, rbac.ActTrackerRead, rbac.ActKnowledgeRead},
+		rbac.ActSkillRead, rbac.ActTrackerWrite, rbac.ActKnowledgeWrite},
+	rbac.RoleApprover: {rbac.ActCustomerRead, rbac.ActProjectRead, rbac.ActTrackerRead, rbac.ActKnowledgeRead, rbac.ActSkillRead},
+	rbac.RoleViewer:   {rbac.ActCustomerRead, rbac.ActProjectRead, rbac.ActTrackerRead, rbac.ActKnowledgeRead, rbac.ActSkillRead},
 }
 
 func TestRoles_GrantExactlyTheirActions(t *testing.T) {

@@ -54,7 +54,8 @@ arrive):
    * - ``customer-admin``
      - Read and update the customer; create, read, update its projects;
        manage and read role bindings within the customer; read and write
-       its tracker; manage its LLM credentials
+       its tracker and knowledge; manage its LLM credentials; edit and
+       publish its skills
      - customer
    * - ``engineer``
      - Read customer and projects; read and write the tracker

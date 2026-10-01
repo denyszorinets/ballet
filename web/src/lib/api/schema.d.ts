@@ -439,6 +439,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Skills defined at exactly one scope */
+        get: operations["listSkills"];
+        put?: never;
+        post: operations["createSkill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{skill}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Skill ID */
+                skill: components["parameters"]["Skill"];
+            };
+            cookie?: never;
+        };
+        get: operations["getSkill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateSkillDraft"];
+        trace?: never;
+    };
+    "/api/v1/skills/{skill}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Skill ID */
+                skill: components["parameters"]["Skill"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Snapshot the draft as the next immutable version */
+        post: operations["publishSkill"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{skill}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Skill ID */
+                skill: components["parameters"]["Skill"];
+            };
+            cookie?: never;
+        };
+        get: operations["listSkillVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/skills/{skill}/versions/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Skill ID */
+                skill: components["parameters"]["Skill"];
+                number: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getSkillVersion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -741,6 +836,68 @@ export interface components {
         KnowledgeSearchResult: {
             items: components["schemas"]["KnowledgeSearchHit"][];
         };
+        /** @description Supporting text files by relative path */
+        SkillFiles: {
+            [key: string]: string;
+        };
+        Skill: {
+            id: string;
+            scope: string;
+            name: string;
+            /** @description Draft description */
+            description: string;
+            /** @description Draft SKILL.md body */
+            body: string;
+            files: components["schemas"]["SkillFiles"];
+            /**
+             * Format: int64
+             * @description 0: never published
+             */
+            latest_version: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /**
+             * Format: int64
+             * @description Optimistic concurrency of the draft
+             */
+            version: number;
+        };
+        SkillList: {
+            items: components["schemas"]["Skill"][];
+        };
+        CreateSkill: {
+            scope: string;
+            name: string;
+            description: string;
+            body?: string;
+            files?: components["schemas"]["SkillFiles"];
+        };
+        UpdateSkillDraft: {
+            /** Format: int64 */
+            version: number;
+            description?: string;
+            body?: string;
+            files?: components["schemas"]["SkillFiles"];
+        };
+        PublishSkill: {
+            /** Format: int64 */
+            version: number;
+        };
+        SkillVersion: {
+            /** Format: int64 */
+            number: number;
+            description: string;
+            body: string;
+            files: components["schemas"]["SkillFiles"];
+            published_by: string;
+            /** Format: date-time */
+            published_at: string;
+        };
+        SkillVersionList: {
+            items: components["schemas"]["SkillVersion"][];
+        };
     };
     responses: {
         /** @description Error */
@@ -758,6 +915,8 @@ export interface components {
         Customer: string;
         /** @description Project key */
         Project: string;
+        /** @description Skill ID */
+        Skill: string;
         /** @description Knowledge entry ID */
         Entry: string;
         Provider: "anthropic" | "openai";
@@ -1660,6 +1819,184 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeVersionList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSkills: {
+        parameters: {
+            query: {
+                /** @description organization, customer:<key> or project:<key> */
+                scope: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSkill"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skill"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Skill ID */
+                skill: components["parameters"]["Skill"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skill"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSkillDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Skill ID */
+                skill: components["parameters"]["Skill"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSkillDraft"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Skill"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    publishSkill: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Skill ID */
+                skill: components["parameters"]["Skill"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishSkill"];
+            };
+        };
+        responses: {
+            /** @description Published */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillVersion"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSkillVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Skill ID */
+                skill: components["parameters"]["Skill"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillVersionList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSkillVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Skill ID */
+                skill: components["parameters"]["Skill"];
+                number: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillVersion"];
                 };
             };
             default: components["responses"]["Error"];

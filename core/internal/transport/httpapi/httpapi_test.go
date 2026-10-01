@@ -66,6 +66,7 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 		RBAC:         r,
 		RoleBindings: &app.RoleBindings{RBAC: r, Tenancy: st, Now: time.Now, NewID: store.NewID},
 		Usage:        &app.Usage{Store: st, Tenancy: st, Authz: authz},
+		Skills:       &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		Credentials:  &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID},
 		Tracker:      &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 	})
@@ -375,4 +376,34 @@ func TestUsageAPI_ReportShape(t *testing.T) {
 
 	code, _ = call(t, api, "GET", "/api/v1/projects/WEB/usage?since=yesterday", "alice", "")
 	assert.Equal(t, http.StatusBadRequest, code)
+}
+
+func TestSkillAPI_Lifecycle(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+
+	code, s := call(t, api, "POST", "/api/v1/skills", "alice",
+		`{"scope":"organization","name":"gitflow","description":"Branching rules","body":"# v1","files":{"scripts/x.sh":"echo"}}`)
+	require.Equal(t, http.StatusCreated, code, s)
+	id := s["id"].(string)
+	assert.EqualValues(t, 0, s["latest_version"])
+
+	code, v := call(t, api, "POST", "/api/v1/skills/"+id+"/publish", "alice", `{"version":1}`)
+	require.Equal(t, http.StatusCreated, code, v)
+	assert.EqualValues(t, 1, v["number"])
+
+	code, s = call(t, api, "PATCH", "/api/v1/skills/"+id, "alice", `{"version":2,"body":"# v2"}`)
+	require.Equal(t, http.StatusOK, code, s)
+	code, v = call(t, api, "GET", "/api/v1/skills/"+id+"/versions/1", "alice", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, "# v1", v["body"])
+
+	code, list := call(t, api, "GET", "/api/v1/skills?scope=organization", "alice", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, list["items"], 1)
+	code, _ = call(t, api, "GET", "/api/v1/skills", "alice", "")
+	assert.Equal(t, http.StatusBadRequest, code)
+	code, _ = call(t, api, "GET", "/api/v1/skills/"+id+"/versions/x", "alice", "")
+	assert.Equal(t, http.StatusBadRequest, code)
+	code, _ = call(t, api, "GET", "/api/v1/skills/"+id+"/versions/9", "alice", "")
+	assert.Equal(t, http.StatusNotFound, code)
 }

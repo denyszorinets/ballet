@@ -350,6 +350,77 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeVersionList" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/skills:
+    get:
+      operationId: listSkills
+      tags: [skills]
+      summary: Skills defined at exactly one scope
+      parameters:
+        - { name: scope, in: query, required: true, schema: { type: string }, description: "organization, customer:<key> or project:<key>" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SkillList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createSkill
+      tags: [skills]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateSkill" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/skills/{skill}:
+    parameters: [{ $ref: "#/components/parameters/Skill" }]
+    get:
+      operationId: getSkill
+      tags: [skills]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateSkillDraft
+      tags: [skills]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateSkillDraft" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Skill" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/skills/{skill}/publish:
+    parameters: [{ $ref: "#/components/parameters/Skill" }]
+    post:
+      operationId: publishSkill
+      tags: [skills]
+      summary: Snapshot the draft as the next immutable version
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PublishSkill" } } }
+      responses:
+        "201": { description: Published, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/skills/{skill}/versions:
+    parameters: [{ $ref: "#/components/parameters/Skill" }]
+    get:
+      operationId: listSkillVersions
+      tags: [skills]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersionList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/skills/{skill}/versions/{number}:
+    parameters:
+      - { $ref: "#/components/parameters/Skill" }
+      - { name: number, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getSkillVersion
+      tags: [skills]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SkillVersion" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -357,6 +428,7 @@ components:
   parameters:
     Customer: { name: customer, in: path, required: true, schema: { type: string }, description: Customer key }
     Project: { name: project, in: path, required: true, schema: { type: string }, description: Project key }
+    Skill: { name: skill, in: path, required: true, schema: { type: string }, description: Skill ID }
     Entry: { name: entry, in: path, required: true, schema: { type: string }, description: Knowledge entry ID }
     Provider: { name: provider, in: path, required: true, schema: { type: string, enum: [anthropic, openai] } }
     Item: { name: item, in: path, required: true, schema: { type: string }, description: "Item key, e.g. WEB-42" }
@@ -734,3 +806,67 @@ components:
       additionalProperties: false
       required: [items]
       properties: { items: { type: array, items: { $ref: "#/components/schemas/KnowledgeSearchHit" } } }
+    SkillFiles:
+      type: object
+      additionalProperties: { type: string }
+      description: Supporting text files by relative path
+    Skill:
+      type: object
+      additionalProperties: false
+      required: [id, scope, name, description, body, files, latest_version, created_at, updated_at, version]
+      properties:
+        id: { type: string }
+        scope: { type: string }
+        name: { type: string }
+        description: { type: string, description: Draft description }
+        body: { type: string, description: Draft SKILL.md body }
+        files: { $ref: "#/components/schemas/SkillFiles" }
+        latest_version: { type: integer, format: int64, description: "0: never published" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, format: int64, description: Optimistic concurrency of the draft }
+    SkillList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Skill" } } }
+    CreateSkill:
+      type: object
+      additionalProperties: false
+      required: [scope, name, description]
+      properties:
+        scope: { type: string }
+        name: { type: string }
+        description: { type: string }
+        body: { type: string }
+        files: { $ref: "#/components/schemas/SkillFiles" }
+    UpdateSkillDraft:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, format: int64 }
+        description: { type: string }
+        body: { type: string }
+        files: { $ref: "#/components/schemas/SkillFiles" }
+    PublishSkill:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties: { version: { type: integer, format: int64 } }
+    SkillVersion:
+      type: object
+      additionalProperties: false
+      required: [number, description, body, files, published_by, published_at]
+      properties:
+        number: { type: integer, format: int64 }
+        description: { type: string }
+        body: { type: string }
+        files: { $ref: "#/components/schemas/SkillFiles" }
+        published_by: { type: string }
+        published_at: { type: string, format: date-time }
+    SkillVersionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/SkillVersion" } } }
