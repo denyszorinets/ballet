@@ -51,6 +51,29 @@ Errors
 
    Errors returned by the provider itself are passed through unchanged.
 
+Embeddings
+----------
+
+``POST /v1/embeddings`` is OpenAI-compatible
+(``{"model", "input": string | [string]}`` →
+``{"object": "list", "model", "data": [{"index", "embedding"}], "usage"}``)
+and serves hybrid search (:doc:`/architecture/decisions/0021-hybrid-vector-search-over-all-content`).
+
+Models
+   ``hash-256`` (default, ``[embeddings] default_model``) is computed by
+   the gateway itself: deterministic feature hashing of words and word
+   pairs into 256 dimensions. It needs no provider and captures lexical
+   overlap only — suitable for development, tests and offline use. Any
+   other model is forwarded to the customer's ``openai`` credential
+   (OpenAI or any OpenAI-compatible API via ``base_url``).
+
+Callers
+   Run tokens with ``llm.invoke`` (scope from the token), or service
+   tokens with ``llm.embed`` (Knowledge, Core indexing), which must name
+   the customer in ``X-Ballet-Customer`` (and optionally
+   ``X-Ballet-Project``) for credentials and metering. ``kit/embed``
+   provides the ``Gateway`` client and the ``Hash`` embedder.
+
 Usage metering
 --------------
 
