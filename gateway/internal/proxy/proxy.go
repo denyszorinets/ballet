@@ -35,6 +35,8 @@ type Anthropic struct {
 	Logger     *slog.Logger
 	// Observe, if set, wraps successful responses (usage metering).
 	Observe func(claims runtoken.Claims, resp *http.Response) error
+	// Transport for provider requests (default http.DefaultTransport).
+	Transport http.RoundTripper
 }
 
 type ctxKey struct{}
@@ -86,6 +88,7 @@ func (a *Anthropic) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (a *Anthropic) reverseProxy() *httputil.ReverseProxy {
 	return &httputil.ReverseProxy{
+		Transport: a.Transport,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			t := pr.In.Context().Value(ctxKey{}).(target)
 			pr.SetURL(t.url)

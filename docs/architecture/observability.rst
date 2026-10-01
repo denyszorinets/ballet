@@ -5,7 +5,9 @@ Token usage and cost
 --------------------
 
 Every LLM request from a run passes through the LLM gateway, which
-records input, output and cache tokens, model, and computed cost.
+records input, output and cache tokens and the model
+(:doc:`/reference/llm-gateway`). Cost is computed from tokens and a
+price table (planned).
 
 Two stores, by purpose:
 

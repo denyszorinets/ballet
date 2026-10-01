@@ -337,6 +337,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        /** LLM token usage of the project, grouped by ticket or model */
+        get: operations["getProjectUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -559,6 +579,26 @@ export interface components {
             /** @description Write-only; never returned */
             api_key: string;
             base_url?: string;
+        };
+        UsageTotals: {
+            /** @description Ticket key or model of the group */
+            key?: string;
+            /** Format: int64 */
+            requests: number;
+            /** Format: int64 */
+            input_tokens: number;
+            /** Format: int64 */
+            output_tokens: number;
+            /** Format: int64 */
+            cache_read_tokens: number;
+            /** Format: int64 */
+            cache_write_tokens: number;
+        };
+        UsageReport: {
+            /** @enum {string} */
+            group_by: "ticket" | "model";
+            items: components["schemas"]["UsageTotals"][];
+            total: components["schemas"]["UsageTotals"];
         };
     };
     responses: {
@@ -1282,6 +1322,33 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getProjectUsage: {
+        parameters: {
+            query?: {
+                group_by?: "ticket" | "model";
+                since?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageReport"];
+                };
             };
             default: components["responses"]["Error"];
         };

@@ -2,6 +2,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -72,6 +73,40 @@ func (c *Client) ResolveCredential(ctx context.Context, customer, project, provi
 	return cred, nil
 }
 
+// Post sends body as JSON to an internal endpoint and expects 2xx.
+func (c *Client) Post(ctx context.Context, path string, body any) error {
+	data, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	tok, err := c.Token(ctx)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+path, bytes.NewReader(data))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+tok)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return fmt.Errorf("core %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("core %s: %s", path, resp.Status)
+	}
+	return nil
+}
+
+func (c *Client) httpClient() *http.Client {
+	if c.HTTP != nil {
+		return c.HTTP
+	}
+	return http.DefaultClient
+}
+
 func (c *Client) get(ctx context.Context, path string, out any) (int, error) {
 	tok, err := c.Token(ctx)
 	if err != nil {
@@ -82,11 +117,7 @@ func (c *Client) get(ctx context.Context, path string, out any) (int, error) {
 		return 0, err
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
-	httpc := c.HTTP
-	if httpc == nil {
-		httpc = http.DefaultClient
-	}
-	resp, err := httpc.Do(req)
+	resp, err := c.httpClient().Do(req)
 	if err != nil {
 		return 0, fmt.Errorf("core %s: %w", path, err)
 	}

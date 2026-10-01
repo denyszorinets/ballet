@@ -42,11 +42,14 @@ type Provider struct {
 func New(t testing.TB, key string) *Provider {
 	t.Helper()
 	p := &Provider{Key: key}
-	srv := httptest.NewServer(http.HandlerFunc(p.serve))
+	srv := httptest.NewServer(p)
 	t.Cleanup(srv.Close)
 	p.URL = srv.URL
 	return p
 }
+
+// ServeHTTP serves the fake Messages API (for standalone use).
+func (p *Provider) ServeHTTP(w http.ResponseWriter, r *http.Request) { p.serve(w, r) }
 
 // Requests returns the recorded requests.
 func (p *Provider) Requests() []Request {

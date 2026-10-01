@@ -65,6 +65,7 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 		Tenancy:      &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		RBAC:         r,
 		RoleBindings: &app.RoleBindings{RBAC: r, Tenancy: st, Now: time.Now, NewID: store.NewID},
+		Usage:        &app.Usage{Store: st, Tenancy: st, Authz: authz},
 		Credentials:  &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID},
 		Tracker:      &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 	})
@@ -360,4 +361,18 @@ func TestCredentialAPI_SetListDeleteWithoutExposingSecrets(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, rec.Code)
 	_, list = call(t, api, "GET", "/api/v1/customers/acme/credentials", "alice", "")
 	assert.Len(t, list["items"], 1)
+}
+
+func TestUsageAPI_ReportShape(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+
+	code, rep := call(t, api, "GET", "/api/v1/projects/WEB/usage?group_by=model", "alice", "")
+	require.Equal(t, http.StatusOK, code, rep)
+	assert.Equal(t, "model", rep["group_by"])
+	assert.Empty(t, rep["items"])
+
+	code, _ = call(t, api, "GET", "/api/v1/projects/WEB/usage?since=yesterday", "alice", "")
+	assert.Equal(t, http.StatusBadRequest, code)
 }
