@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -66,8 +65,12 @@ type PingResult struct {
 
 // SubscribeParams are the params of stream.subscribe.
 type SubscribeParams struct {
-	Stream  string `json:"stream"`             // "project:<KEY>" or "item:<KEY>"
-	FromSeq *int64 `json:"from_seq,omitempty"` // resume after this seq
+	// Subscription is the client-chosen subscription ID, unique on the
+	// connection. Events can arrive before the subscribe response (replay
+	// starts immediately), so the client must know the ID up front.
+	Subscription string `json:"subscription"`
+	Stream       string `json:"stream"`             // "project:<KEY>" or "item:<KEY>"
+	FromSeq      *int64 `json:"from_seq,omitempty"` // resume after this seq
 }
 
 // SubscribeResult is the result of stream.subscribe.
@@ -107,7 +110,6 @@ const CodeResyncRequired = -32010
 type connState struct {
 	mu   sync.Mutex
 	subs map[string]*app.Subscription
-	next int
 }
 
 type handlers struct {
@@ -124,7 +126,9 @@ func (h *handlers) onConnect(c *rpc.Conn) {
 		st.mu.Lock()
 		defer st.mu.Unlock()
 		for _, s := range st.subs {
-			s.Close()
+			if s != nil {
+				s.Close()
+			}
 		}
 	}()
 }
@@ -156,7 +160,7 @@ func (h *handlers) handle(ctx context.Context, req *rpc.Request) (any, error) {
 		s, ok := st.subs[p.Subscription]
 		delete(st.subs, p.Subscription)
 		st.mu.Unlock()
-		if !ok {
+		if !ok || s == nil {
 			return nil, rpc.Errorf(rpc.CodeNotFound, "subscription %s not found", p.Subscription)
 		}
 		s.Close()
@@ -170,9 +174,16 @@ func (h *handlers) subscribe(ctx context.Context, c *rpc.Conn, p SubscribeParams
 	if st == nil {
 		return nil, rpc.Errorf(rpc.CodeInternal, "connection not registered")
 	}
+	subID := p.Subscription
+	if subID == "" || len(subID) > 64 {
+		return nil, rpc.Errorf(rpc.CodeInvalidParams, "subscription must be a client-chosen ID of 1-64 characters")
+	}
 	st.mu.Lock()
-	st.next++
-	subID := fmt.Sprintf("s%d", st.next)
+	if _, taken := st.subs[subID]; taken {
+		st.mu.Unlock()
+		return nil, rpc.Errorf(rpc.CodeInvalidParams, "subscription %s already exists on this connection", subID)
+	}
+	st.subs[subID] = nil // reserve the ID while subscribing
 	st.mu.Unlock()
 
 	deliver := func(e app.StreamEvent) error {
@@ -183,6 +194,9 @@ func (h *handlers) subscribe(ctx context.Context, c *rpc.Conn, p SubscribeParams
 	}
 	sub, err := h.deps.Streams.Subscribe(ctx, p.Stream, p.FromSeq, deliver)
 	if err != nil {
+		st.mu.Lock()
+		delete(st.subs, subID)
+		st.mu.Unlock()
 		return nil, rpcError(err)
 	}
 	st.mu.Lock()
