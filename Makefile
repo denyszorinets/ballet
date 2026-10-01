@@ -107,8 +107,11 @@ docs-check: ## Strict docs build (warnings are errors) + linkcheck
 
 ##@ Aggregate
 
+.PHONY: go-check
+go-check: format-check vet lint test-race test-standalone build ## Run all Go checks
+
 .PHONY: check
-check: format-check vet lint test-race test-standalone build web-check ## Run all Go and web checks (CI entry point)
+check: go-check web-check ## Run all Go and web checks (CI entry point)
 
 .PHONY: clean
 clean: ## Remove build artifacts
