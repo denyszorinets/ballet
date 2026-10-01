@@ -90,6 +90,12 @@ web-e2e: ## Run web end-to-end tests (Playwright, Google Chrome)
 .PHONY: web-check
 web-check: web-lint web-typecheck web-test ## Lint, type-check and unit-test the web UI
 
+##@ Development dependencies
+
+.PHONY: dev-keycloak
+dev-keycloak: ## Run development Keycloak on :8180 (Java distribution, realm "ballet")
+	scripts/dev-keycloak.sh
+
 ##@ Documentation
 
 .PHONY: docs

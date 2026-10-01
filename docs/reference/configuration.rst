@@ -81,6 +81,34 @@ each with ``time``, ``level``, ``msg`` and ``service``.
 :Default: ``"info"``
 :Environment: ``BALLET_<SERVICE>_LOG_LEVEL``
 
+.. _reference-config-oidc:
+
+``[oidc]`` (core)
+-----------------
+
+Human authentication (:doc:`/how-to/configure-oidc`).
+
+``issuer_url``
+~~~~~~~~~~~~~~
+
+URL of the OIDC issuer; its discovery document must be at
+``<issuer_url>/.well-known/openid-configuration``. Read at startup; the
+service does not start if the issuer is unreachable.
+
+:Type: string (URL)
+:Required: yes
+:Default: none
+:Environment: ``BALLET_CORE_OIDC_ISSUER_URL``
+
+``audience``
+~~~~~~~~~~~~
+
+Audience (``aud``) that access tokens must contain.
+
+:Type: string
+:Default: ``"ballet"``
+:Environment: ``BALLET_CORE_OIDC_AUDIENCE``
+
 Operational endpoints
 ---------------------
 
