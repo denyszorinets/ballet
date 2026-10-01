@@ -3,6 +3,11 @@ Development
 
 Contributor workflow for Ballet itself.
 
+.. toctree::
+   :maxdepth: 1
+
+   code-layout
+
 Workflow
 --------
 

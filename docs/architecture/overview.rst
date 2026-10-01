@@ -64,6 +64,7 @@ deployable service, plus the Svelte UI:
 
 .. code-block:: text
 
+   kit/         Go module — shared operational plumbing (no domain logic)
    core/        Go module — tenancy, tracker, scheduler, orchestrator,
                 RBAC, skill registry, planner, tracker MCP
    knowledge/   Go module — knowledge spaces, search, lineage, MCP

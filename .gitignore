@@ -1,5 +1,9 @@
 # Go build output
 /bin/*
+/core/core
+/gateway/gateway
+/knowledge/knowledge
+/runner/runner
 !/bin/graph
 *.test
 *.out
