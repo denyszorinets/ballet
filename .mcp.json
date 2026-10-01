@@ -2,11 +2,24 @@
   "mcpServers": {
     "filesystem": {
       "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/app"]
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/app"
+      ]
     },
-    "playwright" :{
+    "playwright": {
       "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest"]
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--browser",
+        "chrome",
+        "--headless",
+        "--no-sandbox",
+        "--output-dir",
+        ".playwright-mcp"
+      ]
     },
     "codegraph": {
       "command": "npx",

@@ -27,6 +27,11 @@ RUN go install github.com/josharian/impl@v1.4.0 && \
     go install github.com/go-delve/delve/cmd/dlv@latest && \
     go install golang.org/x/tools/gopls@latest
 
+# Google Chrome for Playwright (web e2e tests and the Playwright MCP server).
+# Playwright's own installer supports only Debian/Ubuntu.
+RUN dnf install -y https://dl.google.com/linux/direct/google-chrome-stable_current_x86_64.rpm && \
+    dnf clean all
+
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
 

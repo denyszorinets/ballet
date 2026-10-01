@@ -7,6 +7,7 @@ Contributor workflow for Ballet itself.
    :maxdepth: 1
 
    code-layout
+   web
 
 Workflow
 --------
