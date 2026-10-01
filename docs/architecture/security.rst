@@ -46,16 +46,18 @@ arrive):
      - organization only
    * - ``customer-admin``
      - Read and update the customer; create, read, update its projects;
-       manage and read role bindings within the customer
+       manage and read role bindings within the customer; read and write
+       its tracker
      - customer
    * - ``engineer``
-     - Read customer and projects (tracker work as it is added)
+     - Read customer and projects; read and write the tracker
+       (milestones, epics, tickets)
      - customer, project
    * - ``approver``
-     - Read customer and projects (approvals as they are added)
+     - Read customer, projects and tracker (approvals as they are added)
      - customer, project
    * - ``viewer``
-     - Read customer and projects
+     - Read customer, projects and tracker
      - customer, project
 
 Scope semantics:

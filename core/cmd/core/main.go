@@ -142,6 +142,9 @@ func run() error {
 		Tenancy:      &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		RBAC:         authz,
 		RoleBindings: &app.RoleBindings{RBAC: authz, Tenancy: st, Now: time.Now, NewID: store.NewID},
+		Tracker: &app.Tracker{
+			Items: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
+		},
 	})
 
 	return svc.ListenAndServe(ctx)

@@ -24,6 +24,8 @@ const (
 	ActProjectUpdate     Action = "project.update"
 	ActRoleBindingManage Action = "role_binding.manage"
 	ActRoleBindingRead   Action = "role_binding.read"
+	ActTrackerRead       Action = "tracker.read"  // milestones, epics, tickets, dependencies, history
+	ActTrackerWrite      Action = "tracker.write" // create, edit and transition them
 )
 
 // AllActions lists every action, for documentation and exhaustive tests.
@@ -31,6 +33,7 @@ var AllActions = []Action{
 	ActCustomerCreate, ActCustomerRead, ActCustomerUpdate,
 	ActProjectCreate, ActProjectRead, ActProjectUpdate,
 	ActRoleBindingManage, ActRoleBindingRead,
+	ActTrackerRead, ActTrackerWrite,
 }
 
 // Role is a named set of actions.
@@ -48,15 +51,15 @@ const (
 // AllRoles lists every role.
 var AllRoles = []Role{RoleOrgAdmin, RoleCustomerAdmin, RoleEngineer, RoleApprover, RoleViewer}
 
-var readActions = []Action{ActCustomerRead, ActProjectRead}
+var readActions = []Action{ActCustomerRead, ActProjectRead, ActTrackerRead}
 
 var grants = map[Role][]Action{
 	RoleOrgAdmin: AllActions,
 	RoleCustomerAdmin: {
 		ActCustomerRead, ActCustomerUpdate, ActProjectCreate, ActProjectRead, ActProjectUpdate,
-		ActRoleBindingManage, ActRoleBindingRead,
+		ActRoleBindingManage, ActRoleBindingRead, ActTrackerRead, ActTrackerWrite,
 	},
-	RoleEngineer: readActions,
+	RoleEngineer: append(slices.Clone(readActions), ActTrackerWrite),
 	RoleApprover: readActions,
 	RoleViewer:   readActions,
 }

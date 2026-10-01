@@ -86,6 +86,12 @@ func (s *Store) ProjectByKey(ctx context.Context, key string) (tenancy.Project, 
 	return p, mapReadErr("project "+key, err)
 }
 
+// ProjectByID returns the project with id.
+func (s *Store) ProjectByID(ctx context.Context, id string) (tenancy.Project, error) {
+	p, err := scanProject(s.db.QueryRow(ctx, `SELECT `+projectCols+` FROM projects WHERE id = ?`, id))
+	return p, mapReadErr("project "+id, err)
+}
+
 // ListProjects returns a customer's projects ordered by key.
 func (s *Store) ListProjects(ctx context.Context, customerID string) ([]tenancy.Project, error) {
 	rows, err := s.db.Query(ctx, `SELECT `+projectCols+` FROM projects WHERE customer_id = ? ORDER BY key`, customerID)
