@@ -24,9 +24,11 @@ Modules
    imports another service module; services talk over their APIs.
 
 ``kit``
-   Operational plumbing shared by all services: HTTP serving with
-   graceful shutdown, health endpoints, and (later) configuration,
-   logging and metrics. ``kit`` contains no Ballet domain concepts.
+   Operational plumbing shared by all services: configuration loading
+   (``kit/config``), JSON logging (``kit/logging``), health and readiness
+   (``kit/health``), graceful HTTP serving (``kit/server``), and the
+   ``kit/service`` wiring that combines them with Prometheus metrics.
+   ``kit`` contains no Ballet domain concepts.
 
 Each service module declares
 ``replace github.com/denyszorinets/ballet/kit => ../kit`` so that it is
@@ -65,23 +67,27 @@ Services and ports
 
    * - Service
      - Default address
-     - Health endpoint
+     - Endpoints
    * - core
      - ``:8080``
-     - ``GET /healthz``
+     - ``/healthz`` ``/readyz`` ``/metrics``
    * - knowledge
      - ``:8081``
-     - ``GET /healthz``
+     - ``/healthz`` ``/readyz`` ``/metrics``
    * - gateway
      - ``:8082``
-     - ``GET /healthz``
+     - ``/healthz`` ``/readyz`` ``/metrics``
    * - runner
      - ``:8083``
-     - ``GET /healthz``
+     - ``/healthz`` ``/readyz`` ``/metrics``
 
 Run a service locally:
 
 .. code-block:: bash
 
-   go run ./core/cmd/core -addr :8080
+   go run ./core/cmd/core
    curl localhost:8080/healthz
+
+Each ``main.go`` defines a ``serviceConfig`` struct embedding
+``service.Config`` and adds service-specific sections to it; see
+:doc:`/reference/configuration`.
