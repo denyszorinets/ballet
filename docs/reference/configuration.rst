@@ -165,6 +165,23 @@ issued run token.
 :Sensitive: yes — private keys
 :Environment: ``BALLET_CORE_TOKENS_KEY_FILE``
 
+.. _reference-config-secrets:
+
+``[secrets]`` (core)
+--------------------
+
+``key_file``
+~~~~~~~~~~~~
+
+AES-256 key (base64) that encrypts secrets at rest, such as LLM
+credentials. Generated with mode ``0600`` if missing. Back it up with
+the database — without it, stored credentials cannot be decrypted.
+
+:Type: string (path)
+:Default: ``"data/secrets.key"``
+:Sensitive: yes
+:Environment: ``BALLET_CORE_SECRETS_KEY_FILE``
+
 .. _reference-config-services:
 
 ``[services]`` (core)

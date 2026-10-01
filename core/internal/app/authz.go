@@ -23,6 +23,7 @@ const (
 	ActRoleBindingRead   = rbac.ActRoleBindingRead
 	ActTrackerRead       = rbac.ActTrackerRead
 	ActTrackerWrite      = rbac.ActTrackerWrite
+	ActCredentialManage  = rbac.ActCredentialManage
 )
 
 // Scope is where an action applies: customer and project keys; empty

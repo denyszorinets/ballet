@@ -47,7 +47,7 @@ arrive):
    * - ``customer-admin``
      - Read and update the customer; create, read, update its projects;
        manage and read role bindings within the customer; read and write
-       its tracker
+       its tracker; manage its LLM credentials
      - customer
    * - ``engineer``
      - Read customer and projects; read and write the tracker
@@ -96,8 +96,14 @@ on whose behalf the planner acts; audit entries show both.
 Secrets
 -------
 
-- LLM provider credentials are stored per customer (optionally per
-  project), encrypted at rest, and used only by the LLM gateway.
+- LLM provider credentials are stored in Core per customer (default) and
+  optionally per project (override), encrypted with AES-256-GCM using
+  the key in ``[secrets] key_file``; each ciphertext is bound to its
+  scope. The REST API accepts keys but only ever returns a fingerprint;
+  events record the fingerprint only. The decrypted key is returned
+  solely by ``/internal/v1/credentials/resolve`` to services holding
+  ``credentials.read`` (the gateway) — agent containers never receive
+  provider keys.
 - Git platform credentials are stored per project. Core uses an API
   token for the forge adapter (open, review, merge pull requests); the
   Runner uses a clone credential; containers receive a credential
