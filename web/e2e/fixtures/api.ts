@@ -24,6 +24,20 @@ export interface FakeCore {
 	items: FakeItem[];
 	deps: { id: string; from: string; to: string; type: 'blocks' | 'relates' }[];
 	knowledge: FakeEntry[];
+	skills: FakeSkill[];
+	pins: { project: string; name: string; version: number; disabled: boolean }[];
+}
+
+export interface FakeSkill {
+	id: string;
+	scope: string;
+	name: string;
+	description: string;
+	body: string;
+	files: Record<string, string>;
+	version: number;
+	/** Published versions, oldest first. */
+	versions: { description: string; body: string; files: Record<string, string> }[];
 }
 
 export interface FakeEntry {
@@ -61,24 +75,34 @@ const ROLES = [
 		actions: [
 			'customer.create',
 			'customer.read',
-			'customer.update',
-			'project.create',
 			'project.read',
+			'tracker.read',
+			'knowledge.read',
+			'skill.read',
 			'role_binding.manage',
 			'role_binding.read',
-			'knowledge.read',
-			'knowledge.write'
+			'project.create',
+			'customer.update',
+			'tracker.write',
+			'knowledge.write',
+			'skill.write'
 		]
 	},
 	{
 		role: 'customer-admin',
 		actions: [
 			'customer.read',
-			'customer.update',
-			'project.create',
 			'project.read',
+			'tracker.read',
+			'knowledge.read',
+			'skill.read',
 			'role_binding.manage',
-			'role_binding.read'
+			'role_binding.read',
+			'project.create',
+			'customer.update',
+			'tracker.write',
+			'knowledge.write',
+			'skill.write'
 		]
 	},
 	{
@@ -87,16 +111,20 @@ const ROLES = [
 			'customer.read',
 			'project.read',
 			'tracker.read',
-			'tracker.write',
 			'knowledge.read',
+			'skill.read',
+			'tracker.write',
 			'knowledge.write'
 		]
 	},
 	{
 		role: 'approver',
-		actions: ['customer.read', 'project.read', 'tracker.read', 'knowledge.read']
+		actions: ['customer.read', 'project.read', 'tracker.read', 'knowledge.read', 'skill.read']
 	},
-	{ role: 'viewer', actions: ['customer.read', 'project.read', 'tracker.read', 'knowledge.read'] }
+	{
+		role: 'viewer',
+		actions: ['customer.read', 'project.read', 'tracker.read', 'knowledge.read', 'skill.read']
+	}
 ];
 
 const now = '2026-10-01T00:00:00Z';
@@ -120,12 +148,32 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		items: [],
 		deps: [],
 		knowledge: [],
+		skills: [],
+		pins: [],
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
 	const resolved = (key: string) =>
 		['done', 'cancelled'].includes(core.items.find((i) => i.key === key)?.state ?? '');
 	const withTimes = <T extends object>(o: T) => ({ ...o, created_at: now, updated_at: now });
+	const skillJSON = (sk: FakeSkill) => ({
+		id: sk.id,
+		scope: sk.scope,
+		name: sk.name,
+		description: sk.description,
+		body: sk.body,
+		files: sk.files,
+		latest_version: sk.versions.length,
+		version: sk.version,
+		created_at: now,
+		updated_at: now
+	});
+	const versionJSON = (v: FakeSkill['versions'][number], n: number) => ({
+		number: n,
+		...v,
+		published_by: 'user-alice',
+		published_at: now
+	});
 	const entryJSON = (e: FakeEntry) => ({
 		id: e.id,
 		kind: e.kind,
@@ -356,6 +404,93 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				e.version++;
 			}
 			return r.fulfill({ json: entryJSON(e) });
+		}
+		if (path === '/skills' && method === 'GET') {
+			const items = core.skills.filter((x) => x.scope === url.searchParams.get('scope'));
+			return r.fulfill({ json: { items: items.map(skillJSON) } });
+		}
+		if (path === '/skills' && method === 'POST') {
+			if (core.skills.some((x) => x.scope === body.scope && x.name === body.name)) {
+				return err(r, 409, 'already_exists', 'skill already exists');
+			}
+			const sk: FakeSkill = {
+				id: id(),
+				scope: body.scope,
+				name: body.name,
+				description: body.description,
+				body: body.body ?? '',
+				files: body.files ?? {},
+				version: 1,
+				versions: []
+			};
+			core.skills.push(sk);
+			return r.fulfill({ status: 201, json: skillJSON(sk) });
+		}
+		if ((m = path.match(/^\/skills\/([^/]+)(\/[a-z]+)?$/))) {
+			const sk = core.skills.find((x) => x.id === m![1]);
+			if (!sk) return err(r, 404, 'not_found', 'skill not found');
+			const sub = m[2] ?? '';
+			if (sub === '/versions') {
+				return r.fulfill({ json: { items: sk.versions.map((v, i) => versionJSON(v, i + 1)) } });
+			}
+			if (sub === '/publish') {
+				if (body.version !== sk.version) return err(r, 409, 'conflict', 'stale version');
+				sk.versions.push({ description: sk.description, body: sk.body, files: { ...sk.files } });
+				return r.fulfill({
+					status: 201,
+					json: versionJSON(sk.versions.at(-1)!, sk.versions.length)
+				});
+			}
+			if (method === 'PATCH') {
+				if (body.version !== sk.version) return err(r, 409, 'conflict', 'stale version');
+				sk.description = body.description ?? sk.description;
+				sk.body = body.body ?? sk.body;
+				sk.files = body.files ?? sk.files;
+				sk.version++;
+			}
+			return r.fulfill({ json: skillJSON(sk) });
+		}
+		if ((m = path.match(/^\/projects\/([^/]+)\/skill-pins$/))) {
+			const items = core.pins.filter((p) => p.project === m![1]);
+			return r.fulfill({
+				json: { items: items.map(({ name, version, disabled }) => ({ name, version, disabled })) }
+			});
+		}
+		if ((m = path.match(/^\/projects\/([^/]+)\/skills\/([^/]+)\/pin$/))) {
+			const [, project, name] = m;
+			core.pins = core.pins.filter((p) => p.project !== project || p.name !== name);
+			if (method === 'PUT') {
+				core.pins.push({ project, name, version: body.version ?? 0, disabled: !!body.disabled });
+			}
+			return r.fulfill({ status: 204 });
+		}
+		if ((m = path.match(/^\/projects\/([^/]+)\/skills$/))) {
+			const project = core.projects.find((p) => p.key === m![1]);
+			const chain = ['organization', `customer:${project?.customer}`, `project:${m[1]}`];
+			const best: Record<string, FakeSkill> = {};
+			for (const sk of core.skills) {
+				const rank = chain.indexOf(sk.scope);
+				if (rank >= 0 && (!best[sk.name] || rank > chain.indexOf(best[sk.name].scope))) {
+					best[sk.name] = sk;
+				}
+			}
+			const items = Object.values(best).flatMap((sk) => {
+				const pin = core.pins.find((p) => p.project === m![1] && p.name === sk.name);
+				if (pin?.disabled || sk.versions.length === 0) return [];
+				const pinned = !!pin && pin.version > 0;
+				const version = pinned ? pin!.version : sk.versions.length;
+				return [
+					{
+						name: sk.name,
+						skill_id: sk.id,
+						scope: sk.scope,
+						version,
+						latest_version: sk.versions.length,
+						pinned
+					}
+				];
+			});
+			return r.fulfill({ json: { items } });
 		}
 		if (path === '/role-bindings' && method === 'GET')
 			return r.fulfill({ json: { items: core.bindings } });

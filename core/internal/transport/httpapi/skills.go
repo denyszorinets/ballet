@@ -191,6 +191,24 @@ func registerSkillResolution(mux *router, sk *app.Skills) {
 		writeJSON(w, http.StatusOK, out)
 	})
 
+	mux.handle("GET /api/v1/projects/{project}/skill-pins", func(w http.ResponseWriter, r *http.Request) {
+		pins, err := sk.Pins(r.Context(), r.PathValue("project"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		type pinJSON struct {
+			Name     string `json:"name"`
+			Version  int64  `json:"version"`
+			Disabled bool   `json:"disabled"`
+		}
+		out := listJSON[pinJSON]{Items: make([]pinJSON, 0, len(pins))}
+		for _, p := range pins {
+			out.Items = append(out.Items, pinJSON(p))
+		}
+		writeJSON(w, http.StatusOK, out)
+	})
+
 	mux.handle("PUT /api/v1/projects/{project}/skills/{name}/pin", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Version  int64 `json:"version"`

@@ -261,6 +261,19 @@ func (sk *Skills) Resolve(ctx context.Context, projectKey string) ([]skill.Resol
 	return skill.Resolve(all, pins), nil
 }
 
+// Pins returns a project's pins, including disabled skills that Resolve
+// leaves out. Requires skill.read on the project.
+func (sk *Skills) Pins(ctx context.Context, projectKey string) ([]skill.Pin, error) {
+	projectID, _, chain, err := sk.projectScope(ctx, projectKey)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := sk.authorize(ctx, ActSkillRead, chain[2]); err != nil {
+		return nil, err
+	}
+	return sk.Store.SkillPins(ctx, projectID)
+}
+
 // SetPin pins a skill name for a project (version 0 = latest) or excludes
 // it. Requires skill.write on the project.
 func (sk *Skills) SetPin(ctx context.Context, projectKey string, p skill.Pin) error {

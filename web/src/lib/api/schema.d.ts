@@ -554,6 +554,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project}/skill-pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        /** The project's pins, including disabled skills (which resolution leaves out) */
+        get: operations["listProjectSkillPins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project}/skills/{name}/pin": {
         parameters: {
             query?: never;
@@ -982,6 +1002,18 @@ export interface components {
             version?: number;
             /** @description Exclude the skill from the project */
             disabled?: boolean;
+        };
+        ProjectSkillPin: {
+            name: string;
+            /**
+             * Format: int64
+             * @description 0: the latest published version
+             */
+            version: number;
+            disabled: boolean;
+        };
+        ProjectSkillPinList: {
+            items: components["schemas"]["ProjectSkillPin"][];
         };
         SearchHit: {
             /** @enum {string} */
@@ -2122,6 +2154,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResolvedSkillList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listProjectSkillPins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSkillPinList"];
                 };
             };
             default: components["responses"]["Error"];
