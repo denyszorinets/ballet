@@ -57,3 +57,26 @@ targets. ``make help`` lists them all.
 
 Before committing: ``make check`` and, when docs changed,
 ``make docs-check``.
+
+Continuous integration
+----------------------
+
+GitHub Actions (``.github/workflows/ci.yml``) runs on every pull request
+and push to ``develop`` and ``main``, with one job per area:
+
+.. list-table::
+   :header-rows: 1
+
+   * - Job
+     - Runs
+   * - Go
+     - ``make go-check``
+   * - Web
+     - ``make web-install web-check web-build``
+   * - Web e2e
+     - ``make web-e2e`` (Chrome preinstalled on the runner); Playwright
+       results are uploaded on failure
+   * - Docs
+     - ``make docs-check``
+
+A pull request is merged only when all jobs pass.
