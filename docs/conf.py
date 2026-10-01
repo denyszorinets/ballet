@@ -27,4 +27,5 @@ extlinks = {
 }
 
 # The repository is private: anonymous link checks would get 404.
-linkcheck_ignore = [rf"{_github}/.*"]
+# Local development URLs exist only on a developer's machine.
+linkcheck_ignore = [rf"{_github}/.*", r"https?://(localhost|127\.0\.0\.1)(:\d+)?(/.*)?"]
