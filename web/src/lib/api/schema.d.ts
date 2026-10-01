@@ -183,6 +183,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project}/changesets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        /** The project's plan changesets, newest first */
+        get: operations["listChangesets"];
+        put?: never;
+        /** Propose planning changes for a human to approve */
+        post: operations["proposeChangeset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/changesets/{changeset}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Changeset ID */
+                changeset: components["parameters"]["Changeset"];
+            };
+            cookie?: never;
+        };
+        get: operations["getChangeset"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/changesets/{changeset}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Changeset ID */
+                changeset: components["parameters"]["Changeset"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply the approved operations atomically (humans only) */
+        post: operations["applyChangeset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/changesets/{changeset}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Changeset ID */
+                changeset: components["parameters"]["Changeset"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject the whole changeset (humans only) */
+        post: operations["rejectChangeset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{item}": {
         parameters: {
             query?: never;
@@ -815,6 +895,91 @@ export interface components {
             /** @description Key of the other item */
             item: string;
         };
+        /** @enum {string} */
+        ChangesetStatus: "proposed" | "applied" | "rejected";
+        /** @description Key of an existing item of the project ("WEB-12"), or "$" + the ref of an earlier create_item operation ("$login") */
+        ItemReference: string;
+        ChangesetCreateItem: {
+            kind: components["schemas"]["ItemKind"];
+            title: string;
+            description?: string;
+            type?: components["schemas"]["TicketType"];
+            acceptance_criteria?: string[];
+            policy?: components["schemas"]["Policy"];
+            epic?: components["schemas"]["ItemReference"];
+            milestone?: components["schemas"]["ItemReference"];
+        };
+        ChangesetUpdateItem: {
+            /** @description Key of an existing item */
+            item: string;
+            title?: string;
+            description?: string;
+            type?: components["schemas"]["TicketType"];
+            acceptance_criteria?: string[];
+            policy?: components["schemas"]["Policy"];
+            /** @description Item reference; "" removes the epic */
+            epic?: string;
+            /** @description Item reference; "" removes the milestone */
+            milestone?: string;
+        };
+        ChangesetDependency: {
+            from: components["schemas"]["ItemReference"];
+            to: components["schemas"]["ItemReference"];
+            /**
+             * @description blocks: from blocks to
+             * @enum {string}
+             */
+            type: "blocks" | "relates";
+        };
+        /** @description Exactly the payload matching kind is set. */
+        ChangesetOperation: {
+            /** @enum {string} */
+            kind: "create_item" | "update_item" | "add_dependency";
+            /** @description create_item: name later operations use as $ref */
+            ref?: string;
+            create?: components["schemas"]["ChangesetCreateItem"];
+            update?: components["schemas"]["ChangesetUpdateItem"];
+            dependency?: components["schemas"]["ChangesetDependency"];
+        };
+        ChangesetResult: {
+            /** @description Created or updated item */
+            key?: string;
+            /** @description Added dependency ID */
+            dependency?: string;
+        };
+        Changeset: {
+            id: string;
+            project: string;
+            title: string;
+            /** @description Markdown */
+            summary: string;
+            status: components["schemas"]["ChangesetStatus"];
+            operations: components["schemas"]["ChangesetOperation"][];
+            proposed_by: components["schemas"]["Actor"];
+            /** Format: date-time */
+            created_at: string;
+            decided_by?: components["schemas"]["Actor"];
+            /** Format: date-time */
+            decided_at?: string;
+            /** @description 0-based indices of applied operations */
+            approved: number[];
+            /** @description Per operation once applied; empty before */
+            results: components["schemas"]["ChangesetResult"][];
+            /** Format: int64 */
+            version: number;
+        };
+        ChangesetList: {
+            items: components["schemas"]["Changeset"][];
+        };
+        ProposeChangeset: {
+            title: string;
+            summary?: string;
+            operations: components["schemas"]["ChangesetOperation"][];
+        };
+        ApplyChangeset: {
+            /** @description 0-based indices of the approved operations */
+            operations: number[];
+        };
         Credential: {
             /** @enum {string} */
             provider: "anthropic" | "openai";
@@ -1050,6 +1215,8 @@ export interface components {
         Project: string;
         /** @description Skill ID */
         Skill: string;
+        /** @description Changeset ID */
+        Changeset: string;
         /** @description Knowledge entry ID */
         Entry: string;
         Provider: "anthropic" | "openai";
@@ -1451,6 +1618,136 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listChangesets: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["ChangesetStatus"];
+            };
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangesetList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    proposeChangeset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposeChangeset"];
+            };
+        };
+        responses: {
+            /** @description Proposed */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Changeset"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getChangeset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Changeset ID */
+                changeset: components["parameters"]["Changeset"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Changeset"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    applyChangeset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Changeset ID */
+                changeset: components["parameters"]["Changeset"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyChangeset"];
+            };
+        };
+        responses: {
+            /** @description Applied */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Changeset"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    rejectChangeset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Changeset ID */
+                changeset: components["parameters"]["Changeset"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rejected */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Changeset"];
                 };
             };
             default: components["responses"]["Error"];

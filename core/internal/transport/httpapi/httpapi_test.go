@@ -58,6 +58,7 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 	admin, err := rbac.ParseBootstrap("sub:alice")
 	require.NoError(t, err)
 	r := &app.RBAC{Store: st, Bootstrap: []rbac.Binding{admin}}
+	tracker := &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID}
 	mux := http.NewServeMux()
 	httpapi.Register(mux, httpapi.Deps{
 		Authenticate: authn,
@@ -69,7 +70,8 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 		Skills:       &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		Search:       &app.Search{Store: st, Tenancy: st, Authz: authz},
 		Credentials:  &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID},
-		Tracker:      &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Tracker:      tracker,
+		Changesets:   &app.Changesets{Store: st, Tracker: tracker},
 	})
 	return contract(t, mux)
 }
@@ -444,4 +446,54 @@ func TestSearchAPI_Shape(t *testing.T) {
 	assert.Empty(t, out["items"])
 	code, _ = call(t, api, "GET", "/api/v1/search?q=x&kind=user", "alice", "")
 	assert.Equal(t, http.StatusBadRequest, code)
+}
+
+func TestChangesetAPI_ProposeApplyReject(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+
+	plan := `{"title":"Auth","summary":"Accounts.","operations":[
+		{"kind":"create_item","ref":"auth","create":{"kind":"epic","title":"Auth"}},
+		{"kind":"create_item","ref":"login","create":{"kind":"ticket","title":"Login","epic":"$auth","acceptance_criteria":["OIDC"]}},
+		{"kind":"create_item","ref":"logout","create":{"kind":"ticket","title":"Logout","epic":"$auth"}},
+		{"kind":"add_dependency","dependency":{"from":"$login","to":"$logout","type":"blocks"}}]}`
+	code, cs := call(t, api, "POST", "/api/v1/projects/WEB/changesets", "alice", plan)
+	require.Equal(t, http.StatusCreated, code, cs)
+	assert.Equal(t, "proposed", cs["status"])
+	assert.Empty(t, cs["results"])
+	id := cs["id"].(string)
+
+	code, list := call(t, api, "GET", "/api/v1/projects/WEB/changesets?status=proposed", "alice", "")
+	require.Equal(t, http.StatusOK, code, list)
+	assert.Len(t, list["items"], 1)
+
+	code, out := call(t, api, "POST", "/api/v1/changesets/"+id+"/apply", "alice", `{"operations":[1]}`)
+	assert.Equal(t, http.StatusBadRequest, code, "login needs the epic: %v", out)
+
+	code, applied := call(t, api, "POST", "/api/v1/changesets/"+id+"/apply", "alice", `{"operations":[0,1]}`)
+	require.Equal(t, http.StatusOK, code, applied)
+	assert.Equal(t, "applied", applied["status"])
+	assert.Equal(t, []any{0.0, 1.0}, applied["approved"])
+	assert.Equal(t, "WEB-2", applied["results"].([]any)[1].(map[string]any)["key"])
+	assert.Equal(t, "alice", applied["decided_by"].(map[string]any)["subject"])
+
+	code, item := call(t, api, "GET", "/api/v1/items/WEB-2", "alice", "")
+	require.Equal(t, http.StatusOK, code, item)
+	assert.Equal(t, "WEB-1", item["epic"])
+
+	code, _ = call(t, api, "POST", "/api/v1/changesets/"+id+"/reject", "alice", "")
+	assert.Equal(t, http.StatusConflict, code, "already applied")
+
+	code, bad := call(t, api, "POST", "/api/v1/projects/WEB/changesets", "alice",
+		`{"title":"x","operations":[{"kind":"add_dependency","dependency":{"from":"WEB-1","to":"WEB-9","type":"blocks"}}]}`)
+	assert.Equal(t, http.StatusBadRequest, code, bad)
+	code, _ = call(t, api, "GET", "/api/v1/changesets/nope", "alice", "")
+	assert.Equal(t, http.StatusNotFound, code)
+
+	_, second := call(t, api, "POST", "/api/v1/projects/WEB/changesets", "alice",
+		`{"title":"x","operations":[{"kind":"create_item","ref":"x","create":{"kind":"ticket","title":"x"}}]}`)
+	code, rejected := call(t, api, "POST", "/api/v1/changesets/"+second["id"].(string)+"/reject", "alice", "")
+	require.Equal(t, http.StatusOK, code, rejected)
+	assert.Equal(t, "rejected", rejected["status"])
 }

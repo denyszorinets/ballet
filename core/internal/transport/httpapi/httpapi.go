@@ -25,6 +25,7 @@ type Deps struct {
 	RBAC         *app.RBAC
 	RoleBindings *app.RoleBindings
 	Tracker      *app.Tracker
+	Changesets   *app.Changesets
 	Credentials  *app.Credentials
 	Usage        *app.Usage
 	Knowledge    *KnowledgeProxy // nil: knowledge routes not served
@@ -49,6 +50,7 @@ func Register(mux *http.ServeMux, d Deps) []string {
 	registerRBAC(r, d.RoleBindings)
 	registerTracker(r, d.Tracker)
 	registerDependencies(r, d.Tracker)
+	registerChangesets(r, d.Changesets)
 	registerCredentials(r, d.Credentials)
 	registerUsage(r, d.Usage)
 	registerKnowledge(r, d.Knowledge)

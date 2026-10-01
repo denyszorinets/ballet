@@ -199,6 +199,9 @@ func run() error {
 	internalapi.RegisterCredentials(internalAPI, credentials)
 	usage := &app.Usage{Store: st, Tenancy: st, Authz: authz}
 	internalapi.RegisterUsage(internalAPI, usage)
+	tracker := &app.Tracker{
+		Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
+	}
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,
@@ -212,9 +215,8 @@ func run() error {
 		Knowledge: &httpapi.KnowledgeProxy{
 			URL: knowledgeURL, Access: &app.KnowledgeAccess{Tenancy: st, Authz: authz}, Tokens: tokenIssuer,
 		},
-		Tracker: &app.Tracker{
-			Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
-		},
+		Tracker:    tracker,
+		Changesets: &app.Changesets{Store: st, Tracker: tracker},
 	})
 
 	searchIndexer := &app.SearchIndexer{

@@ -31,7 +31,11 @@ product/project manager for one project. The planner:
 
 The planner never changes the plan silently. A human approves a changeset
 — in the same chat — as a whole or item by item; only approved items are
-created. The planner may *suggest* an execution policy for a ticket but
+created. A changeset is a list of operations (create an item, update an
+item, add a dependency) that may refer to items created earlier in the
+same changeset; approving an operation requires approving the ones it
+refers to, and the approved operations are applied atomically
+(:ref:`reference-rest-changesets`). The planner may *suggest* an execution policy for a ticket but
 cannot grant autonomy — only a human can.
 
 See :doc:`/architecture/decisions/0020-planner-runs-in-process-in-core`.

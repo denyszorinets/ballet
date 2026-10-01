@@ -39,10 +39,14 @@ func (s *Store) AddDependency(ctx context.Context, d tracker.Dependency, graphVe
 	return mapWriteErr("add dependency", s.db.Batch(ctx,
 		sqlstore.ExecOne(`UPDATE projects SET graph_version = graph_version + 1 WHERE id = ? AND graph_version = ?`,
 			d.ProjectID, graphVersion),
-		sqlstore.Exec(`INSERT INTO dependencies (`+depCols+`) VALUES (?, ?, ?, ?, ?, ?)`,
-			d.ID, d.ProjectID, d.FromID, d.ToID, string(d.Type), formatTime(d.CreatedAt)),
+		insertDepStmt(d),
 		s.AppendEvent(e),
 	))
+}
+
+func insertDepStmt(d tracker.Dependency) sqlstore.Stmt {
+	return sqlstore.Exec(`INSERT INTO dependencies (`+depCols+`) VALUES (?, ?, ?, ?, ?, ?)`,
+		d.ID, d.ProjectID, d.FromID, d.ToID, string(d.Type), formatTime(d.CreatedAt))
 }
 
 // RemoveDependency deletes d and records e. Removing an edge cannot create
