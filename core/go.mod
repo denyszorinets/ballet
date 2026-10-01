@@ -6,6 +6,7 @@ require (
 	github.com/denyszorinets/ballet/kit v0.0.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/google/uuid v1.6.0
+	github.com/prometheus/client_golang v1.24.1
 	github.com/stretchr/testify v1.12.1
 )
 
@@ -26,7 +27,6 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
-	github.com/prometheus/client_golang v1.24.1 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect

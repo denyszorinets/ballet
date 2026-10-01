@@ -19,6 +19,10 @@ type Session struct {
 	CreatedBy string // subject of the human who started it
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	// Summary replaces messages up to SummaryUpTo (a Seq) in what the model
+	// sees once the conversation was compacted; "" when never compacted.
+	Summary     string
+	SummaryUpTo int64
 }
 
 const maxTitle = 200

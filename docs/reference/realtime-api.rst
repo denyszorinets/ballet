@@ -213,6 +213,9 @@ and ``type``:
      - The tool returned ``text`` (``is_error`` on failure)
    * - ``message``
      - Message ``seq`` was stored in the transcript
+   * - ``compacted``
+     - Messages up to ``seq`` were summarized for the model (the
+       transcript is unchanged)
    * - ``error``
      - The turn failed or hit ``planner.max_rounds`` (``text`` explains)
    * - ``done``

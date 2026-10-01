@@ -10,13 +10,14 @@ import (
 	"github.com/denyszorinets/ballet/kit/sqlstore"
 )
 
-const sessionCols = `id, project_id, title, created_by, created_at, updated_at`
+const sessionCols = `id, project_id, title, created_by, created_at, updated_at, summary, summary_upto`
 
 // CreatePlannerSession inserts a session and records e.
 func (s *Store) CreatePlannerSession(ctx context.Context, ps planner.Session, e event.Event) error {
 	return mapWriteErr("create planner session", s.db.Batch(ctx,
-		sqlstore.Exec(`INSERT INTO planner_sessions (`+sessionCols+`) VALUES (?, ?, ?, ?, ?, ?)`,
-			ps.ID, ps.ProjectID, ps.Title, ps.CreatedBy, formatTime(ps.CreatedAt), formatTime(ps.UpdatedAt)),
+		sqlstore.Exec(`INSERT INTO planner_sessions (`+sessionCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			ps.ID, ps.ProjectID, ps.Title, ps.CreatedBy, formatTime(ps.CreatedAt), formatTime(ps.UpdatedAt),
+			ps.Summary, ps.SummaryUpTo),
 		s.AppendEvent(e),
 	))
 }
@@ -78,6 +79,15 @@ func (s *Store) AppendPlannerMessage(ctx context.Context, m planner.Message, e e
 	return m, nil
 }
 
+// SetPlannerSummary stores a session's compaction summary covering the
+// messages up to seq upTo, and records e.
+func (s *Store) SetPlannerSummary(ctx context.Context, sessionID, summary string, upTo int64, e event.Event) error {
+	return mapWriteErr("set planner summary", s.db.Batch(ctx,
+		sqlstore.ExecOne(`UPDATE planner_sessions SET summary = ?, summary_upto = ? WHERE id = ?`, summary, upTo, sessionID),
+		s.AppendEvent(e),
+	))
+}
+
 // PlannerMessages returns a session's transcript in order.
 func (s *Store) PlannerMessages(ctx context.Context, sessionID string) ([]planner.Message, error) {
 	rows, err := s.db.Query(ctx, `SELECT seq, role, content, author, stop_reason, usage, created_at
@@ -111,7 +121,7 @@ func (s *Store) PlannerMessages(ctx context.Context, sessionID string) ([]planne
 func scanSession(r scanner) (planner.Session, error) {
 	var ps planner.Session
 	var created, updated string
-	if err := r.Scan(&ps.ID, &ps.ProjectID, &ps.Title, &ps.CreatedBy, &created, &updated); err != nil {
+	if err := r.Scan(&ps.ID, &ps.ProjectID, &ps.Title, &ps.CreatedBy, &created, &updated, &ps.Summary, &ps.SummaryUpTo); err != nil {
 		return planner.Session{}, err
 	}
 	var err error
