@@ -34,8 +34,9 @@ func TestMeter_RecordsUsageOfJSONAndStreamingResponses(t *testing.T) {
 	var mu sync.Mutex
 	var records []usage.Record
 	gw := &proxy.Anthropic{
-		Verifier: runtoken.NewStaticVerifier(ring.PublicKeys(), time.Now),
-		Core:     staticCreds{prov.URL},
+		Verifier:  runtoken.NewStaticVerifier(ring.PublicKeys(), time.Now),
+		Core:      staticCreds{prov.URL},
+		Transport: &http.Transport{},
 		Observe: usage.Observe(func(r usage.Record) {
 			mu.Lock()
 			records = append(records, r)
@@ -50,10 +51,12 @@ func TestMeter_RecordsUsageOfJSONAndStreamingResponses(t *testing.T) {
 	}, time.Hour)
 	require.NoError(t, err)
 
+	client := &http.Client{Transport: &http.Transport{}}
+	t.Cleanup(client.CloseIdleConnections)
 	for _, body := range []string{`{"model":"claude-a"}`, `{"model":"claude-b","stream":true}`} {
 		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/v1/messages", strings.NewReader(body))
 		req.Header.Set("x-api-key", tok)
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := client.Do(req)
 		require.NoError(t, err)
 		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
