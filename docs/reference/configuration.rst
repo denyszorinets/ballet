@@ -286,6 +286,13 @@ Read at start-up; changes need a restart.
    planner's built-in instructions (if the project has one). Default
    ``"planner"``; ``BALLET_CORE_PLANNER_SKILL``.
 
+``compact_at_tokens``
+   Estimated context size (tokens) above which the planner summarizes
+   the conversation before the current human message, so long chats keep
+   fitting the model's context window (:ref:`reference-planner-compaction`).
+   ``0`` disables compaction. Default ``100000``;
+   ``BALLET_CORE_PLANNER_COMPACT_AT_TOKENS``.
+
 ``[core]`` and ``[storage]`` (knowledge)
 ----------------------------------------
 
@@ -399,7 +406,8 @@ Every service serves these on its ``[server] addr``:
        logged, not returned. Core checks ``database``.
    * - ``GET /metrics``
      - Prometheus metrics: Go runtime, process, and
-       ``ballet_build_info{service,version}``.
+       ``ballet_build_info{service,version}``; Core also
+       ``ballet_planner_compactions_total``.
    * - ``GET /.well-known/jwks.json`` (core only)
      - Public keys for verifying run tokens (:doc:`run-tokens`).
    * - ``GET /config.json`` (core only)

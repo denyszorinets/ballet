@@ -83,6 +83,29 @@ Tools
 Each tool's input is a JSON object described to the model by a JSON
 Schema; unknown fields are rejected. Outputs are JSON.
 
+.. _reference-planner-compaction:
+
+Context compaction
+------------------
+
+Before each model call the planner estimates the context the model would
+see: the token usage the provider reported for the last answer plus the
+messages added since (about four characters per token when no usage is
+known). Above ``planner.compact_at_tokens`` it asks the model to
+summarize everything **before the latest human message** (including any
+earlier summary), stores the summary on the session, and from then on
+sends the model that summary plus the newer messages. The current turn is
+never summarized, so tool calls and their results stay together.
+
+- The transcript stays complete: the UI and
+  ``GET /api/v1/planner/sessions/{session}`` show every message.
+- Each compaction records a ``planner.compacted`` event (``up_to``,
+  ``estimated_tokens``), sends a ``compacted`` planner output, and
+  increments the ``ballet_planner_compactions_total`` metric.
+- A failed compaction is logged and the call proceeds uncompacted.
+- A single turn whose own tool rounds outgrow the context cannot be
+  compacted; ``planner.max_rounds`` bounds it.
+
 Limits
 ------
 

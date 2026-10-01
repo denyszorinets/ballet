@@ -24,6 +24,7 @@ type PlannerStore interface {
 	ListPlannerSessions(ctx context.Context, projectID string) ([]planner.Session, error)
 	AppendPlannerMessage(ctx context.Context, m planner.Message, e event.Event) (planner.Message, error)
 	PlannerMessages(ctx context.Context, sessionID string) ([]planner.Message, error)
+	SetPlannerSummary(ctx context.Context, sessionID, summary string, upTo int64, e event.Event) error
 }
 
 // LLM streams one model response (the Anthropic Messages API through the
@@ -85,6 +86,7 @@ const (
 	OutputToolCall   = "tool_call"   // the model called a tool
 	OutputToolResult = "tool_result" // the tool returned
 	OutputMessage    = "message"     // a message was stored (reload the transcript)
+	OutputCompacted  = "compacted"   // older messages were summarized for the model
 	OutputDone       = "done"        // the turn ended; Text is the reason
 	OutputError      = "error"       // the turn failed; Text is the error
 )
@@ -128,9 +130,14 @@ type Planner struct {
 	Model        string
 	MaxTokens    int
 	MaxRounds    int // tool rounds per turn
-	Now          func() time.Time
-	NewID        func() string
-	Logger       *slog.Logger
+	// CompactAt is the estimated context size (tokens) above which older
+	// messages are summarized before calling the model; 0 disables.
+	CompactAt int
+	// OnCompact is called after each compaction (metrics); optional.
+	OnCompact func()
+	Now       func() time.Time
+	NewID     func() string
+	Logger    *slog.Logger
 	// Context bounds every turn (Core's lifetime); turns outlive the
 	// requests that start them.
 	Context context.Context
@@ -388,9 +395,19 @@ func (pl *Planner) turn(ctx context.Context, s planner.Session, p tenancy.Projec
 			fail(err)
 			return
 		}
+		caller := LLMCaller{CustomerKey: c.Key, ProjectKey: p.Key, SessionID: s.ID, ActingFor: human.Subject}
+		if pl.CompactAt > 0 && estimateTokens(s, history) > pl.CompactAt {
+			if err := pl.compact(ctx, &s, c, caller, history, actor); err != nil {
+				if ctx.Err() != nil {
+					reason = "cancelled"
+					return
+				}
+				pl.logger().WarnContext(store, "planner compaction failed", "session", s.ID, "error", err)
+			}
+		}
 		resp, err := pl.LLM.Stream(ctx, LLMRequest{
-			Caller: LLMCaller{CustomerKey: c.Key, ProjectKey: p.Key, SessionID: s.ID, ActingFor: human.Subject},
-			Model:  pl.Model, System: system, Messages: planner.RepairHistory(history), Tools: specs, MaxTokens: pl.MaxTokens,
+			Caller: caller, Model: pl.Model, System: system, Messages: modelInput(s, history), Tools: specs,
+			MaxTokens: pl.MaxTokens,
 		}, func(text string) {
 			pl.emit(PlannerOutput{Session: s.ID, Type: OutputText, Text: text})
 		})
@@ -437,6 +454,114 @@ func (pl *Planner) turn(ctx context.Context, s planner.Session, p tenancy.Projec
 			return
 		}
 	}
+}
+
+// summaryIntro introduces the compaction summary to the model.
+const summaryIntro = "Summary of the earlier conversation (older messages are not shown):\n\n"
+
+// compactInstructions is the system prompt of a compaction call.
+const compactInstructions = `You maintain the memory of a planning conversation between a human and
+the planner of a software project. Write a concise summary that lets the
+planner continue without the earlier messages: goals and requirements,
+decisions and their reasons, open questions, changesets proposed and their
+outcome, knowledge entries written, item keys mentioned, and what was about
+to happen next. Write plain Markdown; do not address the human.`
+
+// after returns the messages after seq upTo.
+func after(history []planner.Message, upTo int64) []planner.Message {
+	for i, m := range history {
+		if m.Seq > upTo {
+			return history[i:]
+		}
+	}
+	return nil
+}
+
+// modelInput is what the model sees: the summary (if compacted) and the
+// messages after it.
+func modelInput(s planner.Session, history []planner.Message) []planner.Message {
+	msgs := after(history, s.SummaryUpTo)
+	if s.Summary != "" {
+		msgs = append([]planner.Message{{Role: planner.RoleUser, Content: []planner.Block{planner.Text(summaryIntro + s.Summary)}}}, msgs...)
+	}
+	return planner.RepairHistory(msgs)
+}
+
+// size is a rough token estimate of content (4 characters per token).
+func size(msgs []planner.Message) int {
+	n := 0
+	for _, m := range msgs {
+		for _, b := range m.Content {
+			n += len(b.Text) + len(b.Input)
+		}
+	}
+	return n / 4
+}
+
+// estimateTokens estimates the context the model would see: the usage the
+// provider reported for the last answer plus the messages added since, or
+// a character estimate when no usage is known.
+func estimateTokens(s planner.Session, history []planner.Message) int {
+	msgs := after(history, s.SummaryUpTo)
+	for i := len(msgs) - 1; i >= 0; i-- {
+		u := msgs[i].Usage
+		if total := u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens + u.OutputTokens; msgs[i].Role == planner.RoleAssistant && total > 0 {
+			return int(total) + size(msgs[i+1:])
+		}
+	}
+	return size(msgs) + len(s.Summary)/4
+}
+
+// compact summarizes the messages before the latest human message into
+// the session's summary. The current turn (from that message on) stays
+// verbatim, so tool calls and their results are never split.
+func (pl *Planner) compact(ctx context.Context, s *planner.Session, c tenancy.Customer, caller LLMCaller, history []planner.Message, actor event.Actor) error {
+	msgs := after(history, s.SummaryUpTo)
+	cut := -1
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == planner.RoleUser && msgs[i].Author != "" {
+			cut = i
+			break
+		}
+	}
+	if cut <= 0 {
+		return nil // nothing before the current turn to summarize
+	}
+	old := msgs[:cut]
+	input := append([]planner.Message(nil), old...)
+	if s.Summary != "" {
+		input = append([]planner.Message{{Role: planner.RoleUser, Content: []planner.Block{planner.Text(summaryIntro + s.Summary)}}}, input...)
+	}
+	input = append(input, planner.Message{Role: planner.RoleUser, Content: []planner.Block{planner.Text("Write the summary now.")}})
+	resp, err := pl.LLM.Stream(ctx, LLMRequest{
+		Caller: caller, Model: pl.Model, System: compactInstructions, Messages: planner.RepairHistory(input),
+		MaxTokens: pl.MaxTokens,
+	}, func(string) {})
+	if err != nil {
+		return err
+	}
+	var summary strings.Builder
+	for _, b := range resp.Content {
+		if b.Type == planner.BlockText {
+			summary.WriteString(b.Text)
+		}
+	}
+	if strings.TrimSpace(summary.String()) == "" {
+		return errors.New("the model returned an empty summary")
+	}
+	upTo := old[len(old)-1].Seq
+	e := event.Event{Customer: c.ID, Project: s.ProjectID, EntityType: "planner_session", EntityID: s.ID,
+		Type: "planner.compacted", Actor: actor, OccurredAt: pl.Now(),
+		Payload: mustJSON(map[string]any{"up_to": upTo, "estimated_tokens": estimateTokens(*s, history)})}
+	if err := pl.Store.SetPlannerSummary(context.WithoutCancel(ctx), s.ID, summary.String(), upTo, e); err != nil {
+		return err
+	}
+	s.Summary, s.SummaryUpTo = summary.String(), upTo
+	pl.emit(PlannerOutput{Session: s.ID, Type: OutputCompacted, Seq: upTo})
+	if pl.OnCompact != nil {
+		pl.OnCompact()
+	}
+	return nil
 }
 
 // callTool runs one tool call; failures become error results the model

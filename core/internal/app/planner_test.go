@@ -295,3 +295,74 @@ func TestPlanner_Authorization(t *testing.T) {
 	_, err = pl.Send(user(t, "eve"), s.ID, "hi")
 	assert.ErrorIs(t, err, app.ErrForbidden)
 }
+
+func TestPlanner_CompactsLongConversationsForTheModelOnly(t *testing.T) {
+	env := newRBACEnv(t)
+	seed(t, env)
+	llm := &fakeLLM{}
+	pl := newPlanner(t, llm, env.store, env)
+	pl.CompactAt = 50
+	compactions := 0
+	pl.OnCompact = func() { compactions++ }
+	bob := user(t, "bob", "acme-devs")
+	s, _ := pl.CreateSession(bob, "WEB", "t")
+	wait := collect(t, pl, bob, s.ID)
+
+	big := func(text string) *app.LLMResponse {
+		r := say(text)
+		r.Usage = planner.Usage{InputTokens: 40, CacheReadTokens: 20, OutputTokens: 5}
+		return r
+	}
+	llm.script(big("First answer."))
+	_, err := pl.Send(bob, s.ID, "first question")
+	require.NoError(t, err)
+	wait()
+	assert.Zero(t, compactions, "the first call has nothing to compact")
+
+	llm.script(say("SUMMARY: bob asked a first question."), big("Second answer."))
+	_, err = pl.Send(bob, s.ID, "second question")
+	require.NoError(t, err)
+	out := wait()
+	assert.Equal(t, 1, compactions)
+	assert.Contains(t, types(out), app.OutputCompacted)
+
+	summarize := llm.request(1)
+	assert.Contains(t, summarize.System, "memory of a planning conversation")
+	assert.Empty(t, summarize.Tools)
+	main := llm.request(2)
+	require.Len(t, main.Messages, 1, "summary and the new question, merged into one user message")
+	assert.Contains(t, main.Messages[0].Content[0].Text, "SUMMARY: bob asked a first question.")
+	assert.Equal(t, "second question", main.Messages[0].Content[1].Text)
+
+	view, msgs, err := pl.Session(bob, s.ID)
+	require.NoError(t, err)
+	assert.Len(t, msgs, 4, "the transcript stays complete")
+	assert.Equal(t, int64(2), view.SummaryUpTo)
+
+	// A restarted planner keeps using the summary.
+	restarted := newPlanner(t, llm, env.store, env)
+	wait2 := collect(t, restarted, bob, s.ID)
+	llm.script(say("Third."))
+	_, err = restarted.Send(bob, s.ID, "third")
+	require.NoError(t, err)
+	wait2()
+	third := llm.request(3)
+	assert.Contains(t, third.Messages[0].Content[0].Text, "SUMMARY")
+}
+
+func TestPlanner_CompactionNeedsEarlierTurns(t *testing.T) {
+	env := newRBACEnv(t)
+	seed(t, env)
+	llm := &fakeLLM{}
+	pl := newPlanner(t, llm, env.store, env)
+	pl.CompactAt = 1
+	bob := user(t, "bob", "acme-devs")
+	s, _ := pl.CreateSession(bob, "WEB", "t")
+	wait := collect(t, pl, bob, s.ID)
+	llm.script(say("ok"))
+	_, err := pl.Send(bob, s.ID, "a long first question that is over the threshold")
+	require.NoError(t, err)
+	out := wait()
+	assert.NotContains(t, types(out), app.OutputCompacted, "the current turn is never summarized")
+	assert.Len(t, llm.requests, 1)
+}

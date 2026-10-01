@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/app/plannertools"
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
@@ -65,6 +67,9 @@ type plannerConfig struct {
 	MaxTokens int    `toml:"max_tokens"` // per model response
 	MaxRounds int    `toml:"max_rounds"` // tool rounds per turn
 	Skill     string `toml:"skill"`      // project skill appended to the instructions
+	// CompactAtTokens: estimated context size above which older messages
+	// are summarized for the model; 0 disables compaction.
+	CompactAtTokens int `toml:"compact_at_tokens"`
 }
 
 // knowledgeConfig locates the Knowledge service (ADR-0022).
@@ -129,7 +134,9 @@ func defaultConfig() serviceConfig {
 		Secrets:   secretsConfig{KeyFile: "data/secrets.key"},
 		Knowledge: knowledgeConfig{URL: "http://localhost:8081"},
 		Gateway:   gatewayConfig{URL: "http://localhost:8082"},
-		Planner:   plannerConfig{Model: "claude-sonnet-5-5", MaxTokens: 8192, MaxRounds: 20, Skill: "planner"},
+		Planner: plannerConfig{
+			Model: "claude-sonnet-5-5", MaxTokens: 8192, MaxRounds: 20, Skill: "planner", CompactAtTokens: 100_000,
+		},
 	}
 }
 
@@ -144,8 +151,9 @@ func (c serviceConfig) Validate() error {
 	if c.Storage.Path == "" {
 		errs = append(errs, errors.New("storage.path must not be empty"))
 	}
-	if c.Planner.Model == "" || c.Planner.MaxTokens < 1 || c.Planner.MaxRounds < 1 {
-		errs = append(errs, errors.New("planner.model must be set; planner.max_tokens and planner.max_rounds at least 1"))
+	if c.Planner.Model == "" || c.Planner.MaxTokens < 1 || c.Planner.MaxRounds < 1 || c.Planner.CompactAtTokens < 0 {
+		errs = append(errs, errors.New("planner.model must be set; planner.max_tokens and planner.max_rounds at least 1; "+
+			"planner.compact_at_tokens not negative"))
 	}
 	if u, err := url.Parse(c.Gateway.URL); err != nil || u.Host == "" {
 		errs = append(errs, fmt.Errorf("gateway.url: invalid URL %q", c.Gateway.URL))
@@ -229,6 +237,11 @@ func run() error {
 		Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 	}
 	skills := &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID}
+	compactions := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "ballet_planner_compactions_total",
+		Help: "Planner conversations compacted (older messages summarized for the model).",
+	})
+	svc.Metrics.MustRegister(compactions)
 	search := &app.Search{Store: st, Tenancy: st, Authz: authz, Embedder: embed.Hash{}}
 	knowledgeAccess := &app.KnowledgeAccess{Tenancy: st, Authz: authz}
 	changesets := &app.Changesets{Store: st, Tracker: tracker}
@@ -243,6 +256,7 @@ func run() error {
 			return skills.ProjectSkillBody(ctx, projectKey, cfg.Planner.Skill)
 		},
 		Model: cfg.Planner.Model, MaxTokens: cfg.Planner.MaxTokens, MaxRounds: cfg.Planner.MaxRounds,
+		CompactAt: cfg.Planner.CompactAtTokens, OnCompact: compactions.Inc,
 		Now: time.Now, NewID: store.NewID, Logger: svc.Logger, Context: ctx,
 	}
 	httpapi.Register(svc.Mux, httpapi.Deps{
