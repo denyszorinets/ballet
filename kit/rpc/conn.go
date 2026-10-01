@@ -214,27 +214,35 @@ func (c *Conn) Call(ctx context.Context, method string, params, result any) erro
 		c.dropPending(id)
 		return err
 	}
+	var resp message
+	var ok bool
 	select {
-	case resp, ok := <-ch:
-		if !ok {
-			return ErrClosed
-		}
-		if resp.Error != nil {
-			return resp.Error
-		}
-		if result == nil {
-			return nil
-		}
-		if err := c.codec.unmarshal(resp.Result, result); err != nil {
-			return fmt.Errorf("rpc: decode result of %s: %w", method, err)
-		}
-		return nil
+	case resp, ok = <-ch:
 	case <-ctx.Done():
 		c.dropPending(id)
 		return ctx.Err()
 	case <-c.done:
+		// The peer may have answered just before closing (e.g. an auth
+		// error followed by close): prefer a response already delivered.
+		select {
+		case resp, ok = <-ch:
+		default:
+			return ErrClosed
+		}
+	}
+	if !ok {
 		return ErrClosed
 	}
+	if resp.Error != nil {
+		return resp.Error
+	}
+	if result == nil {
+		return nil
+	}
+	if err := c.codec.unmarshal(resp.Result, result); err != nil {
+		return fmt.Errorf("rpc: decode result of %s: %w", method, err)
+	}
+	return nil
 }
 
 // Notify sends a notification (no response).
