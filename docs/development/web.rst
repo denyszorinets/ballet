@@ -53,6 +53,14 @@ Conventions
   routes fall back to ``index.html``.
 - API clients live in ``src/lib/api/`` and take ``fetch`` as a parameter
   so they can be unit-tested without a server.
+- The realtime client (``src/lib/realtime/``) implements
+  :doc:`/reference/realtime-api`: MessagePack/JSON, authentication with
+  refresh, heartbeats, reconnect with backoff, and stream subscriptions
+  that resume after reconnecting (``onResync`` when the gap is too large).
+  ``statusStore(client)`` exposes the connection status as a Svelte store.
+- ``*.integration.spec.ts`` tests run the realtime client against the Go
+  reference server ``kit/rpc/cmd/rpc-testserver``; they need the Go
+  toolchain (``bun run test`` builds the server).
 - End-to-end tests stub backend calls with ``page.route()`` unless they
   are explicitly integration tests.
 

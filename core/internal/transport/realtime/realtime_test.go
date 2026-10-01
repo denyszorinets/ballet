@@ -138,7 +138,7 @@ func TestRealtime_SubscribeReceiveAndResume(t *testing.T) {
 	c := e.dial(t, "alice", []string{"admins"}, &first)
 
 	var sub realtime.SubscribeResult
-	require.NoError(t, c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "project:WEB"}, &sub))
+	require.NoError(t, c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "a", Stream: "project:WEB"}, &sub))
 	a := e.create(t, "a")
 	assert.Equal(t, []string{a.Key}, first.keys(t, 1))
 	lastSeq := first.events[0].Seq
@@ -150,7 +150,7 @@ func TestRealtime_SubscribeReceiveAndResume(t *testing.T) {
 
 	var second inbox
 	c2 := e.dial(t, "alice", []string{"admins"}, &second)
-	require.NoError(t, c2.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "project:WEB", FromSeq: &lastSeq}, &sub))
+	require.NoError(t, c2.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "b", Stream: "project:WEB", FromSeq: &lastSeq}, &sub))
 	d := e.create(t, "d")
 	assert.Equal(t, []string{b.Key, cc.Key, d.Key}, second.keys(t, 3))
 
@@ -167,13 +167,18 @@ func TestRealtime_SubscribeErrors(t *testing.T) {
 	c := e.dial(t, "alice", []string{"admins"}, &inbox{})
 	zero := int64(0)
 
-	err := c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "project:WEB", FromSeq: &zero}, nil)
+	err := c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "z", Stream: "project:WEB", FromSeq: &zero}, nil)
 	assert.True(t, rpc.IsCode(err, realtime.CodeResyncRequired), "%v", err)
 
 	stranger := e.dial(t, "eve", nil, &inbox{})
-	err = stranger.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "project:WEB"}, nil)
+	err = stranger.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "s", Stream: "project:WEB"}, nil)
 	assert.True(t, rpc.IsCode(err, rpc.CodeForbidden))
 
-	err = c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "bogus"}, nil)
+	err = c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "x", Stream: "bogus"}, nil)
 	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidParams))
+	err = c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Stream: "project:WEB"}, nil)
+	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidParams), "subscription ID is required")
+	require.NoError(t, c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "dup", Stream: "project:WEB"}, nil))
+	err = c.Call(t.Context(), "stream.subscribe", realtime.SubscribeParams{Subscription: "dup", Stream: "project:WEB"}, nil)
+	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidParams), "IDs are unique per connection")
 }

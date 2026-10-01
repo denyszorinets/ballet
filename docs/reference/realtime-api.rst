@@ -124,8 +124,12 @@ as they are recorded:
      - Changes of one item
      - ``tracker.read`` on its project
 
-``stream.subscribe`` — ``{"stream", "from_seq"?}`` → ``{"subscription", "seq"}``
-   ``seq`` is the event log position at subscription time. Without
+``stream.subscribe`` — ``{"subscription", "stream", "from_seq"?}`` → ``{"subscription", "seq"}``
+   ``subscription`` is an ID chosen by the client (1–64 characters,
+   unique on the connection); every ``stream.event`` carries it. The
+   client chooses it because replayed events can arrive *before* the
+   subscribe response. ``seq`` is the event log position at subscription
+   time. Without
    ``from_seq``, only events after ``seq`` are delivered. With
    ``from_seq``, the server first replays the stream's events after
    ``from_seq``, then continues live — no gaps, no duplicates. If more
