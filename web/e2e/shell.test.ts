@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
+import { fakeCore } from './fixtures/api';
 import { fakeOIDC } from './fixtures/oidc';
 
 test.beforeEach(async ({ page }) => {
 	await fakeOIDC(page);
+	await fakeCore(page);
 	await page.route('**/api/v1/customers', (r) =>
 		r.fulfill({
 			json: {

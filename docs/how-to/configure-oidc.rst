@@ -64,14 +64,19 @@ Authentication alone grants nothing; access comes from role bindings
    [rbac]
    bootstrap_org_admins = ["groups:ballet-admins"]
 
-They can then create customers and role bindings through the API, e.g.
-make the ``acme-devs`` group engineers of customer ``acme``:
+They can then create customers, projects and role bindings in the web
+UI — **Customers** (create, rename, add projects) and **Access** (grant
+and remove role bindings) — or through the API, e.g. make the
+``acme-devs`` group engineers of customer ``acme``:
 
 .. code-block:: bash
 
    curl -X POST localhost:8080/api/v1/role-bindings \
      -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
      -d '{"claim":"groups","value":"acme-devs","role":"engineer","scope":"customer:acme"}'
+
+The UI shows administration controls only to users whose bindings allow
+them; Core enforces the same rules on every request.
 
 Development identity provider
 -----------------------------

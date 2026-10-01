@@ -7,7 +7,11 @@
 
 	$effect(() => {
 		getSession()
-			.then((s) => s.auth.completeLogin(window.location.href))
+			.then(async (s) => {
+				const returnTo = await s.auth.completeLogin(window.location.href);
+				await s.permissions.load(s.api).catch(() => {});
+				return returnTo;
+			})
 			// returnTo is a same-origin path validated by Auth.completeLogin.
 			// eslint-disable-next-line svelte/no-navigation-without-resolve
 			.then((returnTo) => goto(returnTo, { replaceState: true }))
