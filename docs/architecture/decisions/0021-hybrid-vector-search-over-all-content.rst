@@ -16,7 +16,16 @@ Decision
 --------
 
 All searchable content is indexed for **hybrid search** — full-text
-(SQLite FTS5) plus vectors (``sqlite-vec``), with results fused by rank:
+(SQLite FTS5) plus vector similarity, with results fused by reciprocal
+rank:
+
+- Embeddings are stored as ``float32`` blobs next to the content and
+  compared with ``vec_distance_cosine`` (exact, brute-force scan; no
+  approximate index). On embedded SQLite this function is a Go
+  implementation; on rqlite it comes from the ``sqlite-vec`` extension
+  (:doc:`0019-sqlite-first-rqlite-later`).
+
+Indexed content:
 
 - **Knowledge service:** knowledge entries, per customer space.
 - **Core:** skills (respecting scope), tickets, epics, stage reports and
@@ -89,6 +98,14 @@ Follow-up
 
 - Choose the default embeddings provider (an OpenAI-compatible
   embeddings API covers hosted and local options).
+
+Validation
+----------
+
+Spike :issue:`28`: hybrid FTS5 + cosine query with reciprocal rank fusion
+returns identical results on embedded SQLite (modernc.org/sqlite with Go
+vector functions) and on rqlite with ``sqlite-vec``. See
+:doc:`0019-sqlite-first-rqlite-later` for details.
 
 References
 ----------

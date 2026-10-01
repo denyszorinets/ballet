@@ -19,7 +19,12 @@ Decision
 - Both services use **SQLite** — one database file each (Core and
   Knowledge stay separate, :doc:`0005-knowledge-as-separate-service-with-mcp`).
 - SQL is written in the SQLite dialect, including FTS5 for full-text
-  search and the ``sqlite-vec`` extension for vectors.
+  search and the vector functions of ``sqlite-vec``
+  (``vec_f32``, ``vec_distance_cosine``) for vectors.
+- The Go driver is **modernc.org/sqlite** (pure Go, no cgo). Because it
+  cannot load C extensions, Ballet registers Go implementations of the
+  ``sqlite-vec`` functions it uses, with identical names and semantics
+  (little-endian ``float32`` blobs).
 - **rqlite** (distributed, Raft-replicated SQLite) is the planned
   production/high-availability backend. Because it executes the same SQL
   dialect and supports SQLite extensions, the schema and queries carry
@@ -89,21 +94,37 @@ Negative
 Risks
 ~~~~~
 
-- ``sqlite-vec`` and FTS5 availability in the chosen Go driver and in
-  rqlite must be verified.
+- The Go vector functions must stay semantically identical to
+  ``sqlite-vec``; cover them with tests against reference values.
 
 Follow-up
 ~~~~~~~~~
 
-- Choose the Go SQLite driver (cgo vs. pure Go/WASM) based on
-  ``sqlite-vec`` and FTS5 support.
 - Choose a migration tool.
+- When adding rqlite: load the ``sqlite-vec`` extension
+  (``-extensions-path``) and keep the Go functions in sync with it.
 
 Validation
 ----------
 
-Spike: FTS5 + ``sqlite-vec`` query through the chosen Go driver, and the
-same schema and queries executed on rqlite.
+Spike :issue:`28` (code in ``spikes/28-sqlite-search``), 2026-10-01:
+
+- **ncruces/go-sqlite3** (pure Go, WASM): the ``sqlite-vec`` Go bindings
+  are pinned to an old ncruces release and fail at runtime (WASM import
+  signature mismatch). Its newer ``vec1`` extension (sqlite.org/vec1) is
+  not available in rqlite. Rejected.
+- **mattn/go-sqlite3** (cgo) + ``sqlite-vec`` cgo bindings: builds only
+  with system SQLite headers installed (``sqlite-devel`` /
+  ``libsqlite3-dev``); adds cgo to every build. Rejected.
+- **modernc.org/sqlite** (pure Go, ``CGO_ENABLED=0``): SQLite 3.53.4 with
+  FTS5. Vector distance via a registered Go ``vec_distance_cosine``.
+  Hybrid FTS5 + vector query with reciprocal rank fusion works;
+  multi-statement atomic inserts work. **Chosen.**
+- **rqlite 10.4.0** with ``sqlite-vec`` 0.1.9 loadable extension: the
+  identical schema, atomic batch (``/db/execute?transaction``) and hybrid
+  query run unchanged and return identical rankings and scores. A
+  conditional ``UPDATE … WHERE version = ?`` reports affected rows, as
+  required for optimistic concurrency.
 
 References
 ----------

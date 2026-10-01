@@ -5,6 +5,7 @@ author = "Ballet contributors"
 copyright = "2026, Ballet contributors"
 
 extensions = [
+    "sphinx.ext.extlinks",
     "sphinx_design",
     "sphinxcontrib.mermaid",
 ]
@@ -17,3 +18,13 @@ html_title = "Ballet"
 html_static_path = ["_static"]
 
 nitpicky = True
+
+# :issue:`28` and :repo:`Makefile` roles.
+_github = "https://github.com/denyszorinets/ballet"
+extlinks = {
+    "issue": (f"{_github}/issues/%s", "#%s"),
+    "repo": (f"{_github}/blob/develop/%s", "%s"),
+}
+
+# The repository is private: anonymous link checks would get 404.
+linkcheck_ignore = [rf"{_github}/.*"]
