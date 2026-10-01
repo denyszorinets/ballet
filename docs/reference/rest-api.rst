@@ -5,6 +5,11 @@ Core's REST API serves stateless operations
 (:doc:`/architecture/decisions/0018-rest-for-stateless-websocket-json-rpc-msgpack-for-stateful`).
 Base path: ``/api/v1``.
 
+The machine-readable contract is the OpenAPI 3 document
+:repo:`core/api/openapi.yaml`, also served by Core (without
+authentication) at ``GET /api/openapi.yaml``. This page explains the
+API; the OpenAPI document is authoritative for exact schemas.
+
 Conventions
 -----------
 

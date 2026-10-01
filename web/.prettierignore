@@ -7,3 +7,6 @@ bun.lockb
 
 # Miscellaneous
 /static/
+
+# Generated from core/api/openapi.yaml
+src/lib/api/schema.d.ts

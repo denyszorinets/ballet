@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/denyszorinets/ballet/core/api"
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/kit/auth"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
@@ -26,21 +27,39 @@ type Deps struct {
 	Tracker      *app.Tracker
 }
 
-// Register mounts the REST API on mux. Every /api/ route requires an
-// authenticated caller. The run token JWKS is public.
-func Register(mux *http.ServeMux, d Deps) {
+// Register mounts the REST API on mux and returns the API routes it
+// registered ("METHOD /path" patterns), which must match the OpenAPI
+// specification. Every /api/ route requires an authenticated caller; the
+// run token JWKS and the OpenAPI document are public.
+func Register(mux *http.ServeMux, d Deps) []string {
 	mux.Handle("GET /.well-known/jwks.json", runtoken.JWKSHandler(d.TokenKeys))
+	mux.HandleFunc("GET /api/openapi.yaml", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/yaml")
+		_, _ = w.Write(api.OpenAPI)
+	})
 
-	api := http.NewServeMux()
-	api.HandleFunc("GET /api/v1/me", me(d.RBAC))
-	registerTenancy(api, d.Tenancy)
-	registerRBAC(api, d.RoleBindings)
-	registerTracker(api, d.Tracker)
-	registerDependencies(api, d.Tracker)
-	api.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
+	r := &router{mux: http.NewServeMux()}
+	r.handle("GET /api/v1/me", me(d.RBAC))
+	registerTenancy(r, d.Tenancy)
+	registerRBAC(r, d.RoleBindings)
+	registerTracker(r, d.Tracker)
+	registerDependencies(r, d.Tracker)
+	r.mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, fmt.Errorf("%w: no such endpoint", app.ErrNotFound))
 	})
-	mux.Handle("/api/", d.Authenticate(api))
+	mux.Handle("/api/", d.Authenticate(r.mux))
+	return r.routes
+}
+
+// router records the patterns it registers.
+type router struct {
+	mux    *http.ServeMux
+	routes []string
+}
+
+func (r *router) handle(pattern string, h http.HandlerFunc) {
+	r.mux.HandleFunc(pattern, h)
+	r.routes = append(r.routes, pattern)
 }
 
 type meResponse struct {

@@ -34,7 +34,9 @@ func testUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sub := r.Header.Get("X-Test-User")
 		if sub == "" {
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = w.Write([]byte(`{"error":"unauthenticated","message":"no test user"}`))
 			return
 		}
 		id := auth.Identity{Kind: auth.KindHuman, Subject: sub, Claims: map[string]any{"sub": sub, "groups": []any{"g1"}}}
@@ -61,7 +63,7 @@ func newAPI(t *testing.T, authn func(http.Handler) http.Handler, authz app.Autho
 		RoleBindings: &app.RoleBindings{RBAC: r, Tenancy: st, Now: time.Now, NewID: store.NewID},
 		Tracker:      &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 	})
-	return mux
+	return contract(t, mux)
 }
 
 func call(t *testing.T, h http.Handler, method, path, user, body string) (int, map[string]any) {
@@ -71,6 +73,9 @@ func call(t *testing.T, h http.Handler, method, path, user, body string) (int, m
 		rd = strings.NewReader(body)
 	}
 	req := httptest.NewRequest(method, path, rd)
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if user != "" {
 		req.Header.Set("X-Test-User", user)
 	}

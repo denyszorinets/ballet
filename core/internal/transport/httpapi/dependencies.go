@@ -26,8 +26,8 @@ func toDependencyJSON(d app.DependencyView) dependencyJSON {
 	}}
 }
 
-func registerDependencies(mux *http.ServeMux, t *app.Tracker) {
-	mux.HandleFunc("POST /api/v1/items/{item}/dependencies", func(w http.ResponseWriter, r *http.Request) {
+func registerDependencies(mux *router, t *app.Tracker) {
+	mux.handle("POST /api/v1/items/{item}/dependencies", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Type app.Direction `json:"type"`
 			Item string        `json:"item"`
@@ -44,7 +44,7 @@ func registerDependencies(mux *http.ServeMux, t *app.Tracker) {
 		writeJSON(w, http.StatusCreated, toDependencyJSON(d))
 	})
 
-	mux.HandleFunc("GET /api/v1/items/{item}/dependencies", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("GET /api/v1/items/{item}/dependencies", func(w http.ResponseWriter, r *http.Request) {
 		deps, err := t.Dependencies(r.Context(), r.PathValue("item"))
 		if err != nil {
 			writeError(w, err)
@@ -57,7 +57,7 @@ func registerDependencies(mux *http.ServeMux, t *app.Tracker) {
 		writeJSON(w, http.StatusOK, out)
 	})
 
-	mux.HandleFunc("DELETE /api/v1/dependencies/{id}", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("DELETE /api/v1/dependencies/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if err := t.RemoveDependency(r.Context(), r.PathValue("id")); err != nil {
 			writeError(w, err)
 			return
@@ -65,7 +65,7 @@ func registerDependencies(mux *http.ServeMux, t *app.Tracker) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	mux.HandleFunc("GET /api/v1/projects/{project}/runnable", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("GET /api/v1/projects/{project}/runnable", func(w http.ResponseWriter, r *http.Request) {
 		items, err := t.Runnable(r.Context(), r.PathValue("project"))
 		if err != nil {
 			writeError(w, err)

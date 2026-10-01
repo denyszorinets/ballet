@@ -55,8 +55,8 @@ type eventJSON struct {
 	Payload    json.RawMessage `json:"payload,omitempty"`
 }
 
-func registerTracker(mux *http.ServeMux, t *app.Tracker) {
-	mux.HandleFunc("POST /api/v1/projects/{project}/items", func(w http.ResponseWriter, r *http.Request) {
+func registerTracker(mux *router, t *app.Tracker) {
+	mux.handle("POST /api/v1/projects/{project}/items", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Kind               tracker.Kind       `json:"kind"`
 			Title              string             `json:"title"`
@@ -83,7 +83,7 @@ func registerTracker(mux *http.ServeMux, t *app.Tracker) {
 		writeJSON(w, http.StatusCreated, toItemJSON(v))
 	})
 
-	mux.HandleFunc("GET /api/v1/projects/{project}/items", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("GET /api/v1/projects/{project}/items", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		items, err := t.ListItems(r.Context(), r.PathValue("project"),
 			tracker.Kind(q.Get("kind")), tracker.State(q.Get("state")), q.Get("epic"), q.Get("milestone"))
@@ -98,7 +98,7 @@ func registerTracker(mux *http.ServeMux, t *app.Tracker) {
 		writeJSON(w, http.StatusOK, out)
 	})
 
-	mux.HandleFunc("GET /api/v1/items/{item}", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("GET /api/v1/items/{item}", func(w http.ResponseWriter, r *http.Request) {
 		v, err := t.GetItem(r.Context(), r.PathValue("item"))
 		if err != nil {
 			writeError(w, err)
@@ -107,7 +107,7 @@ func registerTracker(mux *http.ServeMux, t *app.Tracker) {
 		writeJSON(w, http.StatusOK, toItemJSON(v))
 	})
 
-	mux.HandleFunc("PATCH /api/v1/items/{item}", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("PATCH /api/v1/items/{item}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Version            int64               `json:"version"`
 			Title              *string             `json:"title"`
@@ -134,7 +134,7 @@ func registerTracker(mux *http.ServeMux, t *app.Tracker) {
 		writeJSON(w, http.StatusOK, toItemJSON(v))
 	})
 
-	mux.HandleFunc("POST /api/v1/items/{item}/transition", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("POST /api/v1/items/{item}/transition", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			State   tracker.State `json:"state"`
 			Version int64         `json:"version"`
@@ -151,7 +151,7 @@ func registerTracker(mux *http.ServeMux, t *app.Tracker) {
 		writeJSON(w, http.StatusOK, toItemJSON(v))
 	})
 
-	mux.HandleFunc("GET /api/v1/items/{item}/history", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("GET /api/v1/items/{item}/history", func(w http.ResponseWriter, r *http.Request) {
 		events, err := t.ItemHistory(r.Context(), r.PathValue("item"))
 		if err != nil {
 			writeError(w, err)

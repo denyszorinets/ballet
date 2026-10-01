@@ -8,6 +8,7 @@ Contributor workflow for Ballet itself.
 
    code-layout
    persistence
+   rest-api
    web
 
 Workflow
