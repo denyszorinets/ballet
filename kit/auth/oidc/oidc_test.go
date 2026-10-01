@@ -94,6 +94,7 @@ func TestMiddleware_RejectsMissingAndInvalidTokens(t *testing.T) {
 			var body map[string]string
 			require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 			assert.Equal(t, "unauthenticated", body["error"])
+			assert.NotEmpty(t, body["message"])
 		})
 	}
 }

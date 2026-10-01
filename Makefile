@@ -87,8 +87,17 @@ web-test: ## Run web unit tests (Vitest)
 web-e2e: ## Run web end-to-end tests (Playwright, Google Chrome)
 	cd $(WEB_DIR) && bun run test:e2e
 
+.PHONY: api-generate
+api-generate: ## Regenerate the web API types from core/api/openapi.yaml
+	cd $(WEB_DIR) && bun run generate:api
+
+.PHONY: api-check
+api-check: api-generate ## Fail if the generated web API types are out of date
+	@git diff --exit-code -- $(WEB_DIR)/src/lib/api/schema.d.ts || \
+		{ echo "web/src/lib/api/schema.d.ts is stale: run 'make api-generate' and commit"; exit 1; }
+
 .PHONY: web-check
-web-check: web-lint web-typecheck web-test ## Lint, type-check and unit-test the web UI
+web-check: api-check web-lint web-typecheck web-test ## Check API types, lint, type-check and unit-test the web UI
 
 ##@ Development dependencies
 

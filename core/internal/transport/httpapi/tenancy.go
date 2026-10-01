@@ -43,8 +43,8 @@ type listJSON[T any] struct {
 	Items []T `json:"items"`
 }
 
-func registerTenancy(mux *http.ServeMux, t *app.Tenancy) {
-	mux.HandleFunc("POST /api/v1/customers", func(w http.ResponseWriter, r *http.Request) {
+func registerTenancy(mux *router, t *app.Tenancy) {
+	mux.handle("POST /api/v1/customers", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Key  string `json:"key"`
 			Name string `json:"name"`
@@ -61,7 +61,7 @@ func registerTenancy(mux *http.ServeMux, t *app.Tenancy) {
 		writeJSON(w, http.StatusCreated, toCustomerJSON(c))
 	})
 
-	mux.HandleFunc("GET /api/v1/customers", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("GET /api/v1/customers", func(w http.ResponseWriter, r *http.Request) {
 		cs, err := t.ListCustomers(r.Context())
 		if err != nil {
 			writeError(w, err)
@@ -74,7 +74,7 @@ func registerTenancy(mux *http.ServeMux, t *app.Tenancy) {
 		writeJSON(w, http.StatusOK, out)
 	})
 
-	mux.HandleFunc("GET /api/v1/customers/{customer}", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("GET /api/v1/customers/{customer}", func(w http.ResponseWriter, r *http.Request) {
 		c, err := t.GetCustomer(r.Context(), r.PathValue("customer"))
 		if err != nil {
 			writeError(w, err)
@@ -83,7 +83,7 @@ func registerTenancy(mux *http.ServeMux, t *app.Tenancy) {
 		writeJSON(w, http.StatusOK, toCustomerJSON(c))
 	})
 
-	mux.HandleFunc("PATCH /api/v1/customers/{customer}", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("PATCH /api/v1/customers/{customer}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Name    string `json:"name"`
 			Version int64  `json:"version"`
@@ -102,7 +102,7 @@ func registerTenancy(mux *http.ServeMux, t *app.Tenancy) {
 		writeJSON(w, http.StatusOK, toCustomerJSON(c))
 	})
 
-	mux.HandleFunc("POST /api/v1/customers/{customer}/projects", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("POST /api/v1/customers/{customer}/projects", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Key         string `json:"key"`
 			Name        string `json:"name"`
@@ -123,7 +123,7 @@ func registerTenancy(mux *http.ServeMux, t *app.Tenancy) {
 		writeJSON(w, http.StatusCreated, toProjectJSON(app.ProjectView{Project: p, CustomerKey: customer}))
 	})
 
-	mux.HandleFunc("GET /api/v1/customers/{customer}/projects", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("GET /api/v1/customers/{customer}/projects", func(w http.ResponseWriter, r *http.Request) {
 		ps, err := t.ListProjects(r.Context(), r.PathValue("customer"))
 		if err != nil {
 			writeError(w, err)
@@ -136,7 +136,7 @@ func registerTenancy(mux *http.ServeMux, t *app.Tenancy) {
 		writeJSON(w, http.StatusOK, out)
 	})
 
-	mux.HandleFunc("GET /api/v1/projects/{project}", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("GET /api/v1/projects/{project}", func(w http.ResponseWriter, r *http.Request) {
 		p, err := t.GetProject(r.Context(), r.PathValue("project"))
 		if err != nil {
 			writeError(w, err)
@@ -145,7 +145,7 @@ func registerTenancy(mux *http.ServeMux, t *app.Tenancy) {
 		writeJSON(w, http.StatusOK, toProjectJSON(p))
 	})
 
-	mux.HandleFunc("PATCH /api/v1/projects/{project}", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("PATCH /api/v1/projects/{project}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Name        string `json:"name"`
 			Description string `json:"description"`

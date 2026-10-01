@@ -45,5 +45,8 @@ func unauthorized(w http.ResponseWriter) {
 	w.Header().Set("WWW-Authenticate", `Bearer realm="ballet"`)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": "unauthenticated"})
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"error":   "unauthenticated",
+		"message": "a valid bearer token is required",
+	})
 }

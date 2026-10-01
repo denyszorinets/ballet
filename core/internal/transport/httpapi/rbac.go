@@ -33,8 +33,8 @@ type roleJSON struct {
 	Actions []string `json:"actions"`
 }
 
-func registerRBAC(mux *http.ServeMux, rb *app.RoleBindings) {
-	mux.HandleFunc("GET /api/v1/roles", func(w http.ResponseWriter, _ *http.Request) {
+func registerRBAC(mux *router, rb *app.RoleBindings) {
+	mux.handle("GET /api/v1/roles", func(w http.ResponseWriter, _ *http.Request) {
 		out := listJSON[roleJSON]{}
 		for _, r := range rbac.AllRoles {
 			actions := []string{}
@@ -46,7 +46,7 @@ func registerRBAC(mux *http.ServeMux, rb *app.RoleBindings) {
 		writeJSON(w, http.StatusOK, out)
 	})
 
-	mux.HandleFunc("GET /api/v1/role-bindings", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("GET /api/v1/role-bindings", func(w http.ResponseWriter, r *http.Request) {
 		bs, err := rb.List(r.Context())
 		if err != nil {
 			writeError(w, err)
@@ -59,7 +59,7 @@ func registerRBAC(mux *http.ServeMux, rb *app.RoleBindings) {
 		writeJSON(w, http.StatusOK, out)
 	})
 
-	mux.HandleFunc("POST /api/v1/role-bindings", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("POST /api/v1/role-bindings", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Claim string `json:"claim"`
 			Value string `json:"value"`
@@ -78,7 +78,7 @@ func registerRBAC(mux *http.ServeMux, rb *app.RoleBindings) {
 		writeJSON(w, http.StatusCreated, toBindingJSON(b))
 	})
 
-	mux.HandleFunc("DELETE /api/v1/role-bindings/{id}", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("DELETE /api/v1/role-bindings/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if err := rb.Delete(r.Context(), r.PathValue("id")); err != nil {
 			writeError(w, err)
 			return

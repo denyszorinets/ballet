@@ -1,0 +1,496 @@
+openapi: 3.0.3
+info:
+  title: Ballet Core API
+  version: v1
+  description: |
+    Stateless REST API of Ballet Core. All operations require an OIDC access
+    token (`Authorization: Bearer …`) and are authorized through role
+    bindings. Errors use the `Error` schema. Updates use optimistic
+    concurrency through `version`.
+servers:
+  - url: /
+security:
+  - bearer: []
+
+paths:
+  /api/v1/me:
+    get:
+      operationId: getMe
+      tags: [identity]
+      summary: The caller and the role bindings that apply to them
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Me" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/roles:
+    get:
+      operationId: listRoles
+      tags: [access]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RoleList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/role-bindings:
+    get:
+      operationId: listRoleBindings
+      tags: [access]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RoleBindingList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createRoleBinding
+      tags: [access]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateRoleBinding" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/RoleBinding" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/role-bindings/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    delete:
+      operationId: deleteRoleBinding
+      tags: [access]
+      responses:
+        "204": { description: Deleted }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/customers:
+    get:
+      operationId: listCustomers
+      tags: [tenancy]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CustomerList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createCustomer
+      tags: [tenancy]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateCustomer" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Customer" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/customers/{customer}:
+    parameters: [{ $ref: "#/components/parameters/Customer" }]
+    get:
+      operationId: getCustomer
+      tags: [tenancy]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Customer" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateCustomer
+      tags: [tenancy]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateCustomer" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Customer" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/customers/{customer}/projects:
+    parameters: [{ $ref: "#/components/parameters/Customer" }]
+    get:
+      operationId: listProjects
+      tags: [tenancy]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ProjectList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createProject
+      tags: [tenancy]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateProject" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{project}:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: getProject
+      tags: [tenancy]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateProject
+      tags: [tenancy]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateProject" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Project" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{project}/items:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: listItems
+      tags: [tracker]
+      parameters:
+        - { name: kind, in: query, schema: { $ref: "#/components/schemas/ItemKind" } }
+        - { name: state, in: query, schema: { $ref: "#/components/schemas/ItemState" } }
+        - { name: epic, in: query, schema: { type: string }, description: Epic key }
+        - { name: milestone, in: query, schema: { type: string }, description: Milestone key }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ItemList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createItem
+      tags: [tracker]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateItem" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Item" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{project}/runnable:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: listRunnable
+      tags: [tracker]
+      summary: Ready tickets whose blockers are all resolved
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ItemList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/items/{item}:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    get:
+      operationId: getItem
+      tags: [tracker]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Item" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateItem
+      tags: [tracker]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateItem" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Item" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/items/{item}/transition:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    post:
+      operationId: transitionItem
+      tags: [tracker]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/Transition" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Item" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/items/{item}/history:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    get:
+      operationId: getItemHistory
+      tags: [tracker]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EventList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/items/{item}/dependencies:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    get:
+      operationId: listDependencies
+      tags: [tracker]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DependencyList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: addDependency
+      tags: [tracker]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AddDependency" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Dependency" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/dependencies/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string } }]
+    delete:
+      operationId: removeDependency
+      tags: [tracker]
+      responses:
+        "204": { description: Removed }
+        default: { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    bearer: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  parameters:
+    Customer: { name: customer, in: path, required: true, schema: { type: string }, description: Customer key }
+    Project: { name: project, in: path, required: true, schema: { type: string }, description: Project key }
+    Item: { name: item, in: path, required: true, schema: { type: string }, description: "Item key, e.g. WEB-42" }
+
+  responses:
+    Error:
+      description: Error
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          enum: [invalid_argument, unauthenticated, forbidden, not_found, already_exists, conflict, internal]
+        message: { type: string }
+
+    Me:
+      type: object
+      additionalProperties: false
+      required: [subject, email, name, groups, bindings]
+      properties:
+        subject: { type: string }
+        email: { type: string }
+        name: { type: string }
+        groups: { type: array, items: { type: string } }
+        bindings: { type: array, items: { $ref: "#/components/schemas/RoleBinding" } }
+
+    Role:
+      type: object
+      additionalProperties: false
+      required: [role, actions]
+      properties:
+        role: { type: string }
+        actions: { type: array, items: { type: string } }
+    RoleList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Role" } } }
+
+    RoleBinding:
+      type: object
+      additionalProperties: false
+      required: [id, claim, value, role, scope, bootstrap]
+      properties:
+        id: { type: string }
+        claim: { type: string }
+        value: { type: string }
+        role: { type: string, enum: [org-admin, customer-admin, engineer, approver, viewer] }
+        scope: { type: string, description: "organization, customer:<key> or project:<key>" }
+        bootstrap: { type: boolean }
+        created_at: { type: string, format: date-time }
+    RoleBindingList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/RoleBinding" } } }
+    CreateRoleBinding:
+      type: object
+      additionalProperties: false
+      required: [claim, value, role, scope]
+      properties:
+        claim: { type: string }
+        value: { type: string }
+        role: { type: string }
+        scope: { type: string }
+
+    Customer:
+      type: object
+      additionalProperties: false
+      required: [id, key, name, created_at, updated_at, version]
+      properties:
+        id: { type: string }
+        key: { type: string }
+        name: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+    CustomerList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Customer" } } }
+    CreateCustomer:
+      type: object
+      additionalProperties: false
+      required: [key, name]
+      properties:
+        key: { type: string }
+        name: { type: string }
+    UpdateCustomer:
+      type: object
+      additionalProperties: false
+      required: [name, version]
+      properties:
+        name: { type: string }
+        version: { type: integer, format: int64 }
+
+    Project:
+      type: object
+      additionalProperties: false
+      required: [id, key, customer, name, description, created_at, updated_at, version]
+      properties:
+        id: { type: string }
+        key: { type: string }
+        customer: { type: string, description: Customer key }
+        name: { type: string }
+        description: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+    ProjectList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Project" } } }
+    CreateProject:
+      type: object
+      additionalProperties: false
+      required: [key, name]
+      properties:
+        key: { type: string }
+        name: { type: string }
+        description: { type: string }
+    UpdateProject:
+      type: object
+      additionalProperties: false
+      required: [name, version]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        version: { type: integer, format: int64 }
+
+    ItemKind: { type: string, enum: [milestone, epic, ticket] }
+    ItemState:
+      type: string
+      enum: [open, backlog, ready, in_progress, waiting_for_answer, paused, done, cancelled]
+    TicketType: { type: string, enum: [feature, bug, tech_debt, docs, spike] }
+    Policy:
+      type: object
+      additionalProperties: false
+      required: [review_mode, merge_mode]
+      properties:
+        review_mode: { type: string, enum: [agent, agent+human] }
+        merge_mode: { type: string, enum: [auto, manual] }
+    Item:
+      type: object
+      additionalProperties: false
+      required: [id, key, project, kind, title, description, state, created_at, updated_at, version]
+      properties:
+        id: { type: string }
+        key: { type: string }
+        project: { type: string, description: Project key }
+        kind: { $ref: "#/components/schemas/ItemKind" }
+        title: { type: string }
+        description: { type: string }
+        state: { $ref: "#/components/schemas/ItemState" }
+        stage: { type: string, description: Current pipeline stage while in progress }
+        type: { $ref: "#/components/schemas/TicketType" }
+        acceptance_criteria: { type: array, items: { type: string } }
+        policy: { $ref: "#/components/schemas/Policy" }
+        epic: { type: string, description: Epic key }
+        milestone: { type: string, description: Milestone key }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+    ItemList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Item" } } }
+    CreateItem:
+      type: object
+      additionalProperties: false
+      required: [kind, title]
+      properties:
+        kind: { $ref: "#/components/schemas/ItemKind" }
+        title: { type: string }
+        description: { type: string }
+        type: { $ref: "#/components/schemas/TicketType" }
+        acceptance_criteria: { type: array, items: { type: string } }
+        policy: { $ref: "#/components/schemas/Policy" }
+        epic: { type: string }
+        milestone: { type: string }
+    UpdateItem:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, format: int64 }
+        title: { type: string }
+        description: { type: string }
+        type: { $ref: "#/components/schemas/TicketType" }
+        acceptance_criteria: { type: array, items: { type: string } }
+        policy: { $ref: "#/components/schemas/Policy" }
+        epic: { type: string, description: Epic key; empty string removes }
+        milestone: { type: string, description: Milestone key; empty string removes }
+    Transition:
+      type: object
+      additionalProperties: false
+      required: [state, version]
+      properties:
+        state: { $ref: "#/components/schemas/ItemState" }
+        version: { type: integer, format: int64 }
+
+    Actor:
+      type: object
+      additionalProperties: false
+      required: [kind, subject]
+      properties:
+        kind: { type: string, enum: [human, service, system] }
+        subject: { type: string }
+        acting_for: { type: string }
+    Event:
+      type: object
+      additionalProperties: false
+      required: [seq, type, occurred_at, actor]
+      properties:
+        seq: { type: integer, format: int64 }
+        type: { type: string }
+        occurred_at: { type: string, format: date-time }
+        actor: { $ref: "#/components/schemas/Actor" }
+        payload: { type: object, additionalProperties: true }
+    EventList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Event" } } }
+
+    ItemRef:
+      type: object
+      additionalProperties: false
+      required: [key, kind, title, state]
+      properties:
+        key: { type: string }
+        kind: { $ref: "#/components/schemas/ItemKind" }
+        title: { type: string }
+        state: { $ref: "#/components/schemas/ItemState" }
+    DependencyType: { type: string, enum: [blocks, blocked_by, relates] }
+    Dependency:
+      type: object
+      additionalProperties: false
+      required: [id, type, item]
+      properties:
+        id: { type: string }
+        type: { $ref: "#/components/schemas/DependencyType" }
+        item: { $ref: "#/components/schemas/ItemRef" }
+    DependencyList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Dependency" } } }
+    AddDependency:
+      type: object
+      additionalProperties: false
+      required: [type, item]
+      properties:
+        type: { $ref: "#/components/schemas/DependencyType" }
+        item: { type: string, description: Key of the other item }
