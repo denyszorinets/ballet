@@ -451,6 +451,20 @@ paths:
         "204": { description: Unpinned }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/search:
+    get:
+      operationId: search
+      tags: [search]
+      summary: Hybrid search over tickets, epics, milestones and skills the caller may read
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: kind, in: query, schema: { type: string, enum: [item, skill] } }
+        - { name: project, in: query, schema: { type: string }, description: "Project key: its items and its skill chain" }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SearchResult" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -923,3 +937,21 @@ components:
       properties:
         version: { type: integer, format: int64, minimum: 0, description: "0: always the latest published version" }
         disabled: { type: boolean, description: Exclude the skill from the project }
+    SearchHit:
+      type: object
+      additionalProperties: false
+      required: [kind, ref, title, snippet, score]
+      properties:
+        kind: { type: string, enum: [item, skill] }
+        ref: { type: string, description: Item key or skill name }
+        title: { type: string }
+        snippet: { type: string }
+        customer: { type: string }
+        project: { type: string }
+        scope: { type: string, description: Skills only }
+        score: { type: number }
+    SearchResult:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/SearchHit" } } }

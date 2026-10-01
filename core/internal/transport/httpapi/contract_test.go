@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/denyszorinets/ballet/core/api"
+	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/transport/httpapi"
 )
 
@@ -101,6 +102,7 @@ func TestContract_RegisteredRoutesMatchSpec(t *testing.T) {
 	}
 	routes := httpapi.Register(http.NewServeMux(), httpapi.Deps{
 		Authenticate: testUser, Knowledge: &httpapi.KnowledgeProxy{URL: &url.URL{Scheme: "http", Host: "knowledge"}},
+		Search: &app.Search{},
 	})
 	sort.Strings(inSpec)
 	sort.Strings(routes)
