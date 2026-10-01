@@ -13,10 +13,12 @@ import (
 	"time"
 
 	"github.com/denyszorinets/ballet/gateway/internal/core"
+	"github.com/denyszorinets/ballet/gateway/internal/embeddings"
 	"github.com/denyszorinets/ballet/gateway/internal/proxy"
 	"github.com/denyszorinets/ballet/gateway/internal/usage"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 	"github.com/denyszorinets/ballet/kit/config"
+	"github.com/denyszorinets/ballet/kit/embed"
 	"github.com/denyszorinets/ballet/kit/service"
 )
 
@@ -28,8 +30,20 @@ const (
 // serviceConfig is the complete gateway configuration.
 type serviceConfig struct {
 	service.Config
-	Core      coreConfig      `toml:"core"`
-	Anthropic anthropicConfig `toml:"anthropic"`
+	Core       coreConfig       `toml:"core"`
+	Anthropic  anthropicConfig  `toml:"anthropic"`
+	OpenAI     openAIConfig     `toml:"openai"`
+	Embeddings embeddingsConfig `toml:"embeddings"`
+}
+
+// openAIConfig configures the OpenAI-compatible upstream (embeddings).
+type openAIConfig struct {
+	URL string `toml:"url"` // used when a credential has no base URL
+}
+
+// embeddingsConfig configures the embeddings endpoint.
+type embeddingsConfig struct {
+	DefaultModel string `toml:"default_model"`
 }
 
 // coreConfig locates Core and the gateway's service token.
@@ -45,9 +59,11 @@ type anthropicConfig struct {
 
 func defaultConfig() serviceConfig {
 	return serviceConfig{
-		Config:    service.DefaultConfig(":8082"),
-		Core:      coreConfig{URL: "http://localhost:8080", TokenFile: "data/service-tokens/gateway.token"},
-		Anthropic: anthropicConfig{URL: "https://api.anthropic.com"},
+		Config:     service.DefaultConfig(":8082"),
+		Core:       coreConfig{URL: "http://localhost:8080", TokenFile: "data/service-tokens/gateway.token"},
+		Anthropic:  anthropicConfig{URL: "https://api.anthropic.com"},
+		OpenAI:     openAIConfig{URL: "https://api.openai.com"},
+		Embeddings: embeddingsConfig{DefaultModel: embed.HashModel},
 	}
 }
 
@@ -89,8 +105,13 @@ func run() error {
 	coreClient := &core.Client{BaseURL: cfg.Core.URL, Token: runtoken.FileSource(cfg.Core.TokenFile)}
 	reporter := usage.NewReporter(coreClient, svc.Metrics, 2*time.Second, svc.Logger)
 	go reporter.Run(ctx)
+	verifier := runtoken.NewRemoteVerifier(cfg.Core.URL+"/.well-known/jwks.json", http.DefaultClient, time.Now)
+	svc.Mux.Handle("/v1/embeddings", &embeddings.Handler{
+		Verifier: verifier, Core: coreClient, DefaultModel: cfg.Embeddings.DefaultModel, OpenAIURL: cfg.OpenAI.URL,
+		Sink: reporter.Sink, Logger: svc.Logger, Now: time.Now,
+	})
 	svc.Mux.Handle("/v1/", &proxy.Anthropic{
-		Verifier:   runtoken.NewRemoteVerifier(cfg.Core.URL+"/.well-known/jwks.json", http.DefaultClient, time.Now),
+		Verifier:   verifier,
 		Core:       coreClient,
 		DefaultURL: cfg.Anthropic.URL,
 		Logger:     svc.Logger,

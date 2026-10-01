@@ -274,6 +274,32 @@ Anthropic API base URL used when a credential has no ``base_url``.
 :Default: ``"https://api.anthropic.com"``
 :Environment: ``BALLET_GATEWAY_ANTHROPIC_URL``
 
+``[openai]`` (gateway)
+----------------------
+
+``url``
+~~~~~~~
+
+OpenAI-compatible API base URL used for embeddings when a credential has
+no ``base_url``.
+
+:Type: string (URL)
+:Default: ``"https://api.openai.com"``
+:Environment: ``BALLET_GATEWAY_OPENAI_URL``
+
+``[embeddings]`` (gateway)
+--------------------------
+
+``default_model``
+~~~~~~~~~~~~~~~~~
+
+Model used when an embeddings request names none. ``hash-256`` is
+computed locally without a provider.
+
+:Type: string
+:Default: ``"hash-256"``
+:Environment: ``BALLET_GATEWAY_EMBEDDINGS_DEFAULT_MODEL``
+
 Operational endpoints
 ---------------------
 
