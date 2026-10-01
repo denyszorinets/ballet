@@ -50,3 +50,9 @@ func unauthorized(w http.ResponseWriter) {
 		"message": "a valid bearer token is required",
 	})
 }
+
+// ContextWithClaims returns ctx carrying c, as Middleware does (tests and
+// in-process callers).
+func ContextWithClaims(ctx context.Context, c Claims) context.Context {
+	return context.WithValue(ctx, claimsKey{}, c)
+}

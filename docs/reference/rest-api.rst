@@ -172,6 +172,12 @@ the subjects of the humans (or agents) who wrote it.
 ``GET /api/v1/customers/{customer}/knowledge/entries/{entry}/versions`` → ``200``
    All versions, newest first.
 
+``GET /api/v1/customers/{customer}/knowledge/search?q=…`` → ``200``
+   Hybrid search: full-text (FTS5, BM25) and semantic similarity, fused
+   by reciprocal rank. Filters: ``kind``, ``project``; ``limit`` (default
+   20, max 50). Result: ``{"items": [{"entry": {…}, "score": 0.0328}]}``,
+   best first. Query text is treated as plain words (no search syntax).
+
 LLM usage
 ---------
 

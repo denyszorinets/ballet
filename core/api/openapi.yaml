@@ -308,6 +308,21 @@ paths:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeEntry" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/customers/{customer}/knowledge/search:
+    parameters: [{ $ref: "#/components/parameters/Customer" }]
+    get:
+      operationId: searchKnowledge
+      tags: [knowledge]
+      summary: Hybrid full-text and semantic search in the customer's knowledge space
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string } }
+        - { name: kind, in: query, schema: { $ref: "#/components/schemas/KnowledgeKind" } }
+        - { name: project, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchResult" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/customers/{customer}/knowledge/entries/{entry}:
     parameters: [{ $ref: "#/components/parameters/Customer" }, { $ref: "#/components/parameters/Entry" }]
     get:
@@ -707,3 +722,15 @@ components:
       additionalProperties: false
       required: [items]
       properties: { items: { type: array, items: { $ref: "#/components/schemas/KnowledgeVersion" } } }
+    KnowledgeSearchHit:
+      type: object
+      additionalProperties: false
+      required: [entry, score]
+      properties:
+        entry: { $ref: "#/components/schemas/KnowledgeEntry" }
+        score: { type: number, description: Fused rank score; higher is better }
+    KnowledgeSearchResult:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/KnowledgeSearchHit" } } }

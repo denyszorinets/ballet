@@ -66,4 +66,5 @@ func registerKnowledge(mux *router, kp *KnowledgeProxy) {
 	mux.handle("GET "+base+"/{entry}", forward)
 	mux.handle("PATCH "+base+"/{entry}", forward)
 	mux.handle("GET "+base+"/{entry}/versions", forward)
+	mux.handle("GET /api/v1/customers/{customer}/knowledge/search", forward)
 }

@@ -260,6 +260,22 @@ Base URL of the Knowledge service, to which Core forwards authorized
    Knowledge's SQLite database. Default ``"data/knowledge.db"``;
    ``BALLET_KNOWLEDGE_STORAGE_PATH``.
 
+``embeddings.mode`` / ``embeddings.model`` (knowledge)
+   ``local`` (default): the ``hash-256`` embedder in-process. ``gateway``:
+   embed through the LLM gateway (``embeddings.gateway_url``, default
+   ``http://localhost:8082``) with the knowledge service token
+   (``embeddings.token_file``, default
+   ``data/service-tokens/knowledge.token``), attributed to each entry's
+   customer; ``model`` names any model the gateway serves (default
+   ``hash-256``). Changing the model re-embeds all entries.
+   ``BALLET_KNOWLEDGE_EMBEDDINGS_MODE``, ``…_MODEL``, ``…_GATEWAY_URL``,
+   ``…_TOKEN_FILE``.
+
+``search.max_distance`` (knowledge)
+   Semantic matches farther than this cosine distance are ignored
+   (default ``0.85``, suited to ``hash-256``; real embedding models
+   usually need a lower value). ``BALLET_KNOWLEDGE_SEARCH_MAX_DISTANCE``.
+
 Knowledge accepts only Core-issued tokens with audience ``knowledge``
 whose customer matches the requested space.
 

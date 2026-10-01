@@ -377,6 +377,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customers/{customer}/knowledge/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+            };
+            cookie?: never;
+        };
+        /** Hybrid full-text and semantic search in the customer's knowledge space */
+        get: operations["searchKnowledge"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/customers/{customer}/knowledge/entries/{entry}": {
         parameters: {
             query?: never;
@@ -712,6 +732,14 @@ export interface components {
         };
         KnowledgeVersionList: {
             items: components["schemas"]["KnowledgeVersion"][];
+        };
+        KnowledgeSearchHit: {
+            entry: components["schemas"]["KnowledgeEntry"];
+            /** @description Fused rank score; higher is better */
+            score: number;
+        };
+        KnowledgeSearchResult: {
+            items: components["schemas"]["KnowledgeSearchHit"][];
         };
     };
     responses: {
@@ -1521,6 +1549,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KnowledgeEntry"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    searchKnowledge: {
+        parameters: {
+            query: {
+                q: string;
+                kind?: components["schemas"]["KnowledgeKind"];
+                project?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSearchResult"];
                 };
             };
             default: components["responses"]["Error"];

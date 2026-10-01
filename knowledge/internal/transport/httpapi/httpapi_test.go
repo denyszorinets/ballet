@@ -73,7 +73,7 @@ func setup(t *testing.T) env {
 	t.Cleanup(func() { _ = st.Close() })
 	ring, err := runtoken.LoadKeyRing(filepath.Join(t.TempDir(), "keys.json"), time.Now)
 	require.NoError(t, err)
-	svc := &app.Service{Store: st, Now: time.Now, NewID: func() string { return uuid.Must(uuid.NewV7()).String() }}
+	svc := &app.Service{Store: st, Searcher: st, Now: time.Now, NewID: func() string { return uuid.Must(uuid.NewV7()).String() }}
 	mux := http.NewServeMux()
 	httpapi.Register(mux, runtoken.NewStaticVerifier(ring.PublicKeys(), time.Now), svc)
 	issuer := runtoken.NewIssuer(ring, time.Now)
@@ -167,4 +167,21 @@ func TestKnowledgeAPI_TokenScopeIsEnforced(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, code)
 	code, _ = e.call(t, readOnly, "GET", base, "")
 	assert.Equal(t, http.StatusOK, code)
+}
+
+func TestKnowledgeAPI_Search(t *testing.T) {
+	e := setup(t)
+	rw := e.issue("acme", runtoken.CapKnowledgeRead, runtoken.CapKnowledgeWrite)
+	e.call(t, rw, "POST", base, `{"kind":"decision","title":"Invoice export","body":"CSV files"}`)
+	e.call(t, rw, "POST", base, `{"kind":"note","title":"Login"}`)
+
+	code, out := e.call(t, rw, "GET", "/v1/customers/acme/knowledge/search?q=csv+invoice", "")
+	require.Equal(t, http.StatusOK, code, out)
+	items := out["items"].([]any)
+	require.Len(t, items, 1)
+	assert.Equal(t, "Invoice export", items[0].(map[string]any)["entry"].(map[string]any)["title"])
+
+	globex := e.issue("globex", runtoken.CapKnowledgeRead)
+	code, _ = e.call(t, globex, "GET", "/v1/customers/acme/knowledge/search?q=csv", "")
+	assert.Equal(t, http.StatusForbidden, code)
 }

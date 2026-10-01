@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
@@ -141,6 +142,29 @@ func Register(mux *http.ServeMux, v *runtoken.Verifier, s *app.Service) {
 		}{Items: make([]versionJSON, 0, len(vs))}
 		for _, v := range vs {
 			out.Items = append(out.Items, versionJSON{Version: v.Version, Title: v.Title, Body: v.Body, Author: v.Author, CreatedAt: v.CreatedAt})
+		}
+		writeJSON(w, http.StatusOK, out)
+	})
+
+	api.HandleFunc("GET /v1/customers/{customer}/knowledge/search", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		limit, _ := strconv.Atoi(q.Get("limit"))
+		hits, err := s.Search(r.Context(), r.PathValue("customer"), app.SearchQuery{
+			Text: q.Get("q"), Kind: domain.Kind(q.Get("kind")), Project: q.Get("project"), Limit: limit,
+		})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		type hitJSON struct {
+			Entry entryJSON `json:"entry"`
+			Score float64   `json:"score"`
+		}
+		out := struct {
+			Items []hitJSON `json:"items"`
+		}{Items: make([]hitJSON, 0, len(hits))}
+		for _, h := range hits {
+			out.Items = append(out.Items, hitJSON{Entry: toJSON(h.Entry), Score: h.Score})
 		}
 		writeJSON(w, http.StatusOK, out)
 	})

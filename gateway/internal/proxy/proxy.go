@@ -13,6 +13,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"sync/atomic"
 
 	"github.com/denyszorinets/ballet/gateway/internal/core"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
@@ -42,9 +43,10 @@ type Anthropic struct {
 type ctxKey struct{}
 
 type target struct {
-	url    *url.URL
-	key    string
-	claims runtoken.Claims
+	url     *url.URL
+	key     string
+	claims  runtoken.Claims
+	started *atomic.Bool // set when the provider's response headers arrive
 }
 
 // ServeHTTP authenticates and forwards one request.
@@ -82,7 +84,26 @@ func (a *Anthropic) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadGateway, "api_error", "invalid provider URL")
 		return
 	}
-	ctx := context.WithValue(r.Context(), ctxKey{}, target{url: u, key: cred.APIKey, claims: claims})
+	// The upstream request is detached from the incoming request's context
+	// once the response has started: a healthy stream must not be cut by a
+	// cancellation of the incoming context (seen in CI as "use of closed
+	// network connection" mid-stream). A client that really disconnects is
+	// detected when writing to it fails, which ends this handler and
+	// cancels upstream. Before the response starts, a client disconnect
+	// still cancels upstream so no tokens are spent for nobody.
+	upstream, cancel := context.WithCancel(context.WithoutCancel(r.Context()))
+	defer cancel()
+	var started atomic.Bool
+	go func() {
+		select {
+		case <-r.Context().Done():
+			if !started.Load() {
+				cancel()
+			}
+		case <-upstream.Done():
+		}
+	}()
+	ctx := context.WithValue(upstream, ctxKey{}, target{url: u, key: cred.APIKey, claims: claims, started: &started})
 	a.reverseProxy().ServeHTTP(w, r.WithContext(ctx))
 }
 
@@ -98,10 +119,11 @@ func (a *Anthropic) reverseProxy() *httputil.ReverseProxy {
 		},
 		FlushInterval: -1, // stream server-sent events as they arrive
 		ModifyResponse: func(resp *http.Response) error {
+			t := resp.Request.Context().Value(ctxKey{}).(target)
+			t.started.Store(true)
 			if a.Observe == nil {
 				return nil
 			}
-			t := resp.Request.Context().Value(ctxKey{}).(target)
 			return a.Observe(t.claims, resp)
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
