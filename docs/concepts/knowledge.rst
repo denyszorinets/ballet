@@ -55,6 +55,14 @@ Hybrid search: full-text and vector (semantic) search combined, over all
 entries in the customer's space
 (:doc:`/architecture/decisions/0021-hybrid-vector-search-over-all-content`).
 
+- The full-text index is maintained by database triggers on every write.
+- Embeddings are computed asynchronously by an indexer that re-embeds
+  entries whose content or embedding model changed; a new entry is
+  searchable by text immediately and semantically within seconds.
+- Semantic candidates farther than a cosine distance threshold are
+  dropped, so unrelated entries do not surface.
+- If embedding a query fails, search degrades to full-text only.
+
 Write-back
 ----------
 

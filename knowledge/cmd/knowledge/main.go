@@ -17,6 +17,7 @@ import (
 
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 	"github.com/denyszorinets/ballet/kit/config"
+	"github.com/denyszorinets/ballet/kit/embed"
 	"github.com/denyszorinets/ballet/kit/health"
 	"github.com/denyszorinets/ballet/kit/service"
 	"github.com/denyszorinets/ballet/knowledge/internal/app"
@@ -32,8 +33,26 @@ const (
 // serviceConfig is the complete knowledge configuration.
 type serviceConfig struct {
 	service.Config
-	Core    coreConfig    `toml:"core"`
-	Storage storageConfig `toml:"storage"`
+	Core       coreConfig       `toml:"core"`
+	Storage    storageConfig    `toml:"storage"`
+	Embeddings embeddingsConfig `toml:"embeddings"`
+	Search     searchConfig     `toml:"search"`
+}
+
+// embeddingsConfig selects how entries are embedded for semantic search.
+type embeddingsConfig struct {
+	// Mode is "local" (hash embedder in-process) or "gateway" (LLM gateway
+	// with the knowledge service token, attributed to each customer).
+	Mode       string `toml:"mode"`
+	Model      string `toml:"model"`
+	GatewayURL string `toml:"gateway_url"`
+	TokenFile  string `toml:"token_file"`
+}
+
+// searchConfig tunes hybrid search.
+type searchConfig struct {
+	// MaxDistance drops semantic matches farther than this cosine distance.
+	MaxDistance float64 `toml:"max_distance"`
 }
 
 // coreConfig locates Core (JWKS of the tokens Knowledge accepts).
@@ -51,6 +70,11 @@ func defaultConfig() serviceConfig {
 		Config:  service.DefaultConfig(":8081"),
 		Core:    coreConfig{URL: "http://localhost:8080"},
 		Storage: storageConfig{Path: "data/knowledge.db"},
+		Embeddings: embeddingsConfig{
+			Mode: "local", Model: embed.HashModel, GatewayURL: "http://localhost:8082",
+			TokenFile: "data/service-tokens/knowledge.token",
+		},
+		Search: searchConfig{MaxDistance: app.DefaultMaxDistance},
 	}
 }
 
@@ -58,6 +82,15 @@ func (c serviceConfig) Validate() error {
 	var errs []error
 	if c.Core.URL == "" || c.Storage.Path == "" {
 		errs = append(errs, errors.New("core.url and storage.path must be set"))
+	}
+	if c.Embeddings.Mode != "local" && c.Embeddings.Mode != "gateway" {
+		errs = append(errs, errors.New(`embeddings.mode must be "local" or "gateway"`))
+	}
+	if c.Embeddings.Mode == "local" && c.Embeddings.Model != embed.HashModel {
+		errs = append(errs, errors.New("embeddings.mode local supports only model "+embed.HashModel))
+	}
+	if c.Search.MaxDistance <= 0 || c.Search.MaxDistance > 2 {
+		errs = append(errs, errors.New("search.max_distance must be in (0, 2]"))
 	}
 	return errors.Join(append(errs, c.Config.Validate())...)
 }
@@ -97,7 +130,18 @@ func run() error {
 	svc.AddReadinessCheck(health.Check{Name: "database", Func: st.DB().Ping})
 
 	verifier := runtoken.NewRemoteVerifier(cfg.Core.URL+"/.well-known/jwks.json", http.DefaultClient, time.Now)
-	knowledge := &app.Service{Store: st, Now: time.Now, NewID: func() string { return uuid.Must(uuid.NewV7()).String() }}
+	var embedders app.Embedders = app.LocalEmbedders{Embedder: embed.Hash{}}
+	if cfg.Embeddings.Mode == "gateway" {
+		embedders = app.GatewayEmbedders{
+			URL: cfg.Embeddings.GatewayURL, Token: runtoken.FileSource(cfg.Embeddings.TokenFile), Model: cfg.Embeddings.Model,
+		}
+	}
+	indexer := &app.Indexer{Store: st, Embedders: embedders, Model: cfg.Embeddings.Model, Logger: svc.Logger}
+	go indexer.Run(ctx)
+	knowledge := &app.Service{
+		Store: st, Searcher: st, Embedders: embedders, Indexer: indexer, MaxDistance: cfg.Search.MaxDistance,
+		Now: time.Now, NewID: func() string { return uuid.Must(uuid.NewV7()).String() },
+	}
 	httpapi.Register(svc.Mux, verifier, knowledge)
 	return svc.ListenAndServe(ctx)
 }

@@ -39,17 +39,21 @@ type Store interface {
 	Versions(ctx context.Context, customer, id string) ([]domain.Version, error)
 }
 
-// Indexer is notified of changed entries (search indexing); optional.
-type Indexer interface {
+// ChangeListener is notified of changed entries (search indexing); optional.
+type ChangeListener interface {
 	EntryChanged(e domain.Entry)
 }
 
 // Service implements knowledge use cases.
 type Service struct {
-	Store   Store
-	Indexer Indexer
-	Now     func() time.Time
-	NewID   func() string
+	Store     Store
+	Searcher  SearchStore
+	Embedders Embedders // nil: full-text search only
+	// MaxDistance for semantic matches (default DefaultMaxDistance).
+	MaxDistance float64
+	Indexer     ChangeListener
+	Now         func() time.Time
+	NewID       func() string
 }
 
 // authorize checks the token in ctx against customer and capability and
@@ -176,4 +180,27 @@ func (s *Service) changed(e domain.Entry) {
 	if s.Indexer != nil {
 		s.Indexer.EntryChanged(e)
 	}
+}
+
+// SearchQuery is a hybrid search request (the vector is filled by the
+// service).
+type SearchQuery struct {
+	Text    string
+	Kind    domain.Kind
+	Project string
+	Limit   int
+	Vector  []float32 // embedding of Text; nil: full-text only
+	Model   string    // embedding model of Vector
+	// MaxDistance drops semantic candidates farther than this cosine
+	// distance (0 same direction … 2 opposite).
+	MaxDistance float64
+}
+
+// DefaultMaxDistance suits the hash embedder; tune per embedding model.
+const DefaultMaxDistance = 0.85
+
+// SearchHit is a matching entry with its fused score.
+type SearchHit struct {
+	Entry domain.Entry
+	Score float64
 }

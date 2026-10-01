@@ -149,18 +149,16 @@ func (s *Store) Versions(ctx context.Context, customer, id string) ([]domain.Ver
 type scanner interface{ Scan(dest ...any) error }
 
 func scan(r scanner) (domain.Entry, error) {
-	var e domain.Entry
-	var kind, projects, items, created, updated string
-	if err := r.Scan(&e.ID, &e.Customer, &kind, &e.Title, &e.Body, &projects, &items, &e.Version,
-		&e.CreatedBy, &e.UpdatedBy, &created, &updated); err != nil {
-		return domain.Entry{}, err
-	}
+	return scanWith(r)
+}
+
+func fill(e domain.Entry, kind, projects, items, created, updated string) domain.Entry {
 	e.Kind = domain.Kind(kind)
 	_ = json.Unmarshal([]byte(projects), &e.Projects)
 	_ = json.Unmarshal([]byte(items), &e.Items)
 	e.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	e.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
-	return e, nil
+	return e
 }
 
 func jsonList(v []string) string {
