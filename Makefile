@@ -92,9 +92,11 @@ api-generate: ## Regenerate the web API types from core/api/openapi.yaml
 	cd $(WEB_DIR) && bun run generate:api
 
 .PHONY: api-check
-api-check: api-generate ## Fail if the generated web API types are out of date
-	@git diff --exit-code -- $(WEB_DIR)/src/lib/api/schema.d.ts || \
-		{ echo "web/src/lib/api/schema.d.ts is stale: run 'make api-generate' and commit"; exit 1; }
+api-check: ## Fail if the web API types differ from core/api/openapi.yaml
+	@tmp=$$(mktemp -d) && cd $(WEB_DIR) && \
+		bunx openapi-typescript ../core/api/openapi.yaml -o $$tmp/schema.d.ts >/dev/null && \
+		diff -q $$tmp/schema.d.ts src/lib/api/schema.d.ts >/dev/null || \
+		{ echo "web/src/lib/api/schema.d.ts is stale: run 'make api-generate'"; exit 1; }
 
 .PHONY: web-check
 web-check: api-check web-lint web-typecheck web-test ## Check API types, lint, type-check and unit-test the web UI
