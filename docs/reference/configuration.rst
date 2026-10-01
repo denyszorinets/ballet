@@ -236,6 +236,44 @@ Vite dev server).
 :Default: ``""``
 :Environment: ``BALLET_CORE_WEB_DIR``
 
+.. _reference-config-gateway:
+
+``[core]`` (gateway)
+--------------------
+
+``url``
+~~~~~~~
+
+Base URL of Core: JWKS for run tokens and the internal API for
+credentials.
+
+:Type: string (URL)
+:Default: ``"http://localhost:8080"``
+:Environment: ``BALLET_GATEWAY_CORE_URL``
+
+``token_file``
+~~~~~~~~~~~~~~
+
+The gateway's service token written by Core
+(:ref:`reference-config-services`).
+
+:Type: string (path)
+:Default: ``"data/service-tokens/gateway.token"``
+:Sensitive: yes
+:Environment: ``BALLET_GATEWAY_CORE_TOKEN_FILE``
+
+``[anthropic]`` (gateway)
+-------------------------
+
+``url``
+~~~~~~~
+
+Anthropic API base URL used when a credential has no ``base_url``.
+
+:Type: string (URL)
+:Default: ``"https://api.anthropic.com"``
+:Environment: ``BALLET_GATEWAY_ANTHROPIC_URL``
+
 Operational endpoints
 ---------------------
 
