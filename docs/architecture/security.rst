@@ -11,7 +11,14 @@ customer scope derived from the caller's identity — never from request
 parameters alone.
 
 Knowledge isolation is enforced in the Knowledge service itself, so a
-bug in Core or the UI cannot expose another customer's knowledge.
+bug in Core or the UI cannot expose another customer's knowledge. Its
+isolation test suite (``knowledge/internal/isolation``) runs in CI and
+covers REST, search and MCP with two customers holding near-identical
+content: foreign tokens on foreign spaces (403), foreign entry IDs inside
+the caller's own space (404, no content returned), cross-customer search
+results (none), and forged tokens — wrong audience, untrusted signing
+key, expired, missing customer or capability. Any new Knowledge endpoint
+or tool must be added to it.
 
 Human identity: OIDC
 --------------------
