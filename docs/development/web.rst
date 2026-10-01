@@ -21,8 +21,22 @@ Run locally
    go run ./core/cmd/core          # Core on :8080
    cd web && bun run dev           # UI on http://localhost:5173
 
-The dev server proxies ``/api`` (REST), ``/rpc`` (WebSocket) and
-``/healthz`` to Core on ``127.0.0.1:8080``.
+The dev server proxies ``/api`` (REST), ``/rpc`` (WebSocket),
+``/config.json`` and ``/healthz`` to Core on ``127.0.0.1:8080``. To sign
+in, run the development Keycloak and point Core at it
+(:doc:`/how-to/configure-oidc`), then open http://localhost:5173 (use
+``localhost``, not ``127.0.0.1``: it is a registered redirect URI).
+
+Authentication
+--------------
+
+The SPA reads the issuer and client ID from Core's ``/config.json`` and
+signs in with ``oidc-client-ts`` (authorization code flow with PKCE).
+Tokens are kept in ``sessionStorage`` and renewed silently with the
+refresh token. ``src/lib/session.ts`` creates the shared REST client
+(``api``) and realtime client (``realtime``) once; pages obtain them with
+``getSession()``. The realtime connection starts after sign-in; its state
+is shown in the header.
 
 Commands
 --------
@@ -43,7 +57,11 @@ Commands
    * - ``bun run test``
      - Unit tests (Vitest), ``src/**/*.spec.ts``
    * - ``bun run test:e2e``
-     - End-to-end tests (Playwright, Google Chrome), ``e2e/*.test.ts``
+     - End-to-end tests (Playwright, Google Chrome), ``e2e/*.test.ts``;
+       a fake OIDC provider (``e2e/fixtures/oidc.ts``) replaces Keycloak
+   * - ``bun run test:e2e:live``
+     - Live tests (``e2e-live/``) against a running Keycloak + Core + Vite
+       dev stack; not run in CI
 
 Conventions
 -----------

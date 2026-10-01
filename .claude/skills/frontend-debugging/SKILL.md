@@ -30,16 +30,21 @@ as a Playwright test in `web/e2e/` so it stays verified.
 
 ## Start the app
 
-Run Core and the Vite dev server in the background:
+The UI needs a login, so run Keycloak, Core and the Vite dev server in
+the background (see the keycloak skill):
 
 ```bash
-go run ./core/cmd/core                       # Core on :8080
-cd web && bun run dev --host 127.0.0.1 --port 5173
+nohup scripts/dev-keycloak.sh > /tmp/keycloak.log 2>&1 &
+BALLET_CORE_OIDC_ISSUER_URL=http://localhost:8180/realms/ballet \
+BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS=groups:ballet-admins \
+  go run ./core/cmd/core &                  # Core on :8080
+cd web && bun run dev --host localhost --port 5173 &
 ```
 
-Vite proxies `/api`, `/healthz` and `/rpc` (WebSocket) to Core on
-`127.0.0.1:8080` (see `web/vite.config.ts`). Without Core the UI still
-loads; API calls fail.
+Open **http://localhost:5173** (not 127.0.0.1 — the redirect URI is
+registered for localhost). Vite proxies `/api`, `/rpc` (WebSocket),
+`/config.json` and `/healthz` to Core (see `web/vite.config.ts`). Sign
+in as alice/alice (org admin), bob/bob or carol/carol.
 
 ## Look at the UI (Playwright MCP)
 
@@ -65,6 +70,15 @@ loads; API calls fail.
 3. Write a failing Playwright test reproducing the bug (`web/e2e/`).
 4. Fix, then re-run the test and re-check in the browser.
 
+## Live tests when the MCP browser is unavailable
+
+`web/e2e-live/` holds Playwright tests that drive the real dev stack,
+including the Keycloak login form (`bun run test:e2e:live`). Use them to
+verify behavior in a real browser when the MCP server cannot start
+Chrome: they collect console errors, and `page.screenshot()` output in
+`web/test-results/` can be inspected with the Read tool. Seed data
+through the API first (`scripts/dev-token.sh alice` + curl).
+
 ## End-to-end tests
 
 ```bash
@@ -81,6 +95,9 @@ Conventions:
 - Stub backend calls with `page.route()` unless the test is explicitly an
   integration test against a running Core; tests must not depend on
   external services.
+- Sign in with the fake OIDC provider: `await fakeOIDC(page)` from
+  `e2e/fixtures/oidc.ts`, then click "Sign in" — it routes
+  `/config.json`, discovery, authorize, token and logout.
 - Select elements by role and accessible name
   (`getByRole('button', { name: 'Save' })`); use `data-testid` only for
   elements without a meaningful role.

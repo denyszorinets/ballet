@@ -17,6 +17,7 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
 	"github.com/denyszorinets/ballet/core/internal/transport/httpapi"
 	"github.com/denyszorinets/ballet/core/internal/transport/realtime"
+	"github.com/denyszorinets/ballet/core/internal/transport/webui"
 	"github.com/denyszorinets/ballet/kit/auth/oidc"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 	"github.com/denyszorinets/ballet/kit/config"
@@ -37,6 +38,13 @@ type serviceConfig struct {
 	Tokens  tokensConfig  `toml:"tokens"`
 	Storage storageConfig `toml:"storage"`
 	RBAC    rbacConfig    `toml:"rbac"`
+	Web     webConfig     `toml:"web"`
+}
+
+// webConfig configures the web UI.
+type webConfig struct {
+	ClientID string `toml:"client_id"` // public OIDC client of the SPA
+	Dir      string `toml:"dir"`       // built SPA to serve; empty: not served
 }
 
 // rbacConfig configures authorization.
@@ -74,6 +82,7 @@ func defaultConfig() serviceConfig {
 		OIDC:    oidc.Config{Audience: "ballet"},
 		Tokens:  tokensConfig{KeyFile: "data/token-keys.json"},
 		Storage: storageConfig{Path: "data/core.db"},
+		Web:     webConfig{ClientID: "ballet-web"},
 	}
 }
 
@@ -161,6 +170,8 @@ func run() error {
 		Now:      time.Now,
 		Options:  rpc.Options{Logger: svc.Logger},
 	})
+
+	webui.Register(svc.Mux, webui.Config{OIDCIssuer: cfg.OIDC.IssuerURL, ClientID: cfg.Web.ClientID, Dir: cfg.Web.Dir})
 
 	return svc.ListenAndServe(ctx)
 }
