@@ -56,6 +56,8 @@ export interface FakeCore {
 	}[];
 	/** Runs the kill switch cancels per call. */
 	activeRuns: number;
+	/** Published pipeline versions by name, oldest first (API shape). */
+	pipelines: Record<string, Record<string, unknown>[]>;
 	/** Budgets by "customer:<key>" or "project:<key>" (API shape). */
 	budgets: Record<
 		string,
@@ -244,6 +246,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		pauses: [],
 		activeRuns: 0,
 		budgets: {},
+		pipelines: {},
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
@@ -707,6 +710,67 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				return r.fulfill({ json: core.budgets[k] });
 			}
 			return r.fulfill({ json: b });
+		}
+		if (path === '/pipelines/render')
+			return r.fulfill({ json: { yaml: JSON.stringify(body.definition, null, 2) } });
+		if (path === '/pipelines/parse') {
+			let def: { stages: { id: string }[]; max_iterations: number };
+			try {
+				def = JSON.parse(body.yaml);
+			} catch {
+				return r.fulfill({ json: { errors: ['not a pipeline'] } });
+			}
+			const errors: string[] = [];
+			const ids = def.stages.map((x) => x.id);
+			ids.forEach((id, i) => {
+				if (ids.indexOf(id) !== i) errors.push(`stage ${i + 1}: duplicate id ${id}`);
+			});
+			if (def.max_iterations < 1 || def.max_iterations > 20)
+				errors.push('max_iterations must be 1-20');
+			return r.fulfill({ json: { definition: def, errors } });
+		}
+		if ((m = path.match(/^\/projects\/([^/]+)\/pipelines(?:\/([^/]+))?(\/versions)?$/))) {
+			const template = {
+				project: m[1],
+				name: 'default',
+				version: 0,
+				created_by: 'ballet',
+				definition: {
+					max_iterations: 3,
+					stages: [
+						{ id: 'implement', kind: 'agent', name: 'Implement', instructions: 'Implement it.' },
+						{ id: 'review', kind: 'agent', name: 'Review', next: { failed: 'implement' } },
+						{ id: 'integrate', kind: 'platform', action: 'merge' }
+					]
+				}
+			};
+			const name = m[2];
+			if (!name) {
+				const items = Object.values(core.pipelines).map((v) => v[v.length - 1]);
+				if (!core.pipelines.default) items.unshift(template);
+				return r.fulfill({ json: { items } });
+			}
+			const versions = core.pipelines[name] ?? [];
+			if (m[3]) return r.fulfill({ json: { items: [...versions].reverse() } });
+			if (method === 'PUT') {
+				const latest = versions[versions.length - 1]?.version ?? 0;
+				if (body.version !== latest) return err(r, 409, 'conflict', 'a newer version exists');
+				const v = {
+					project: m[1],
+					name,
+					version: latest + 1,
+					definition: body.definition,
+					created_by: 'user-alice',
+					created_at: now
+				};
+				core.pipelines[name] = [...versions, v];
+				return r.fulfill({ json: v });
+			}
+			const want = Number(url.searchParams.get('version') ?? 0);
+			const v = want ? versions.find((x) => x.version === want) : versions[versions.length - 1];
+			if (v) return r.fulfill({ json: v });
+			if (name === 'default') return r.fulfill({ json: template });
+			return err(r, 404, 'not_found', 'pipeline not found');
 		}
 		if (path === '/pauses') return r.fulfill({ json: { items: core.pauses } });
 		if ((m = path.match(/^(?:\/projects\/([^/]+))?\/(pause|kill)$/))) {
