@@ -12,6 +12,7 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/domain/agent"
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
 	"github.com/denyszorinets/ballet/core/internal/domain/execution"
+	"github.com/denyszorinets/ballet/core/internal/domain/onboarding"
 	"github.com/denyszorinets/ballet/core/internal/domain/run"
 	"github.com/denyszorinets/ballet/core/internal/domain/tenancy"
 	"github.com/denyszorinets/ballet/core/internal/domain/tracker"
@@ -61,12 +62,15 @@ type Runs struct {
 	SessionSkills func(ctx context.Context, projectKey string) ([]agent.Skill, error)
 	MCP           []agent.MCPServer // MCP servers every session gets
 	Model         string            // agent model; "": the runtime's default
-	Items         ItemStore
-	Tenancy       TenancyStore
-	Authz         Authorizer
-	Dispatcher    *Dispatcher
-	Now           func() time.Time
-	NewID         func() string
+	// Deps and Knowledge feed the onboarding bundle; both optional.
+	Deps       DependencyStore
+	Knowledge  func(ctx context.Context, customer, project, ticket, query string, limit int) ([]onboarding.Knowledge, error)
+	Items      ItemStore
+	Tenancy    TenancyStore
+	Authz      Authorizer
+	Dispatcher *Dispatcher
+	Now        func() time.Time
+	NewID      func() string
 }
 
 // AgentInput describes an agent run.
@@ -84,7 +88,14 @@ func (rs *Runs) CreateAgent(ctx context.Context, ticketKey, stage string, in Age
 	if !ok {
 		return RunView{}, fmt.Errorf("%w: unknown agent adapter %q", ErrInvalid, in.Adapter)
 	}
+	if len(in.Prompt) > 20_000 {
+		return RunView{}, fmt.Errorf("%w: the prompt must be at most 20000 characters", ErrInvalid)
+	}
 	return rs.create(ctx, ticketKey, stage, func(it tracker.Item, p tenancy.Project) (run.Spec, string, error) {
+		bundle, err := rs.bundle(ctx, it, p, stage, in.Prompt)
+		if err != nil {
+			return run.Spec{}, "", err
+		}
 		var skills []agent.Skill
 		if rs.SessionSkills != nil {
 			var err error
@@ -93,16 +104,95 @@ func (rs *Runs) CreateAgent(ctx context.Context, ticketKey, stage string, in Age
 			}
 		}
 		built, err := a.Build(agent.Session{
-			Prompt: in.Prompt, Skills: skills, MCP: rs.MCP, Model: rs.Model,
-			Instructions: fmt.Sprintf("You are a coding agent of Ballet working on ticket %s (%s) of project %s, "+
-				"stage %q. Work in the current repository; commit and push your work to the current branch.",
-				it.Key, it.Title, p.Key, stage),
+			Prompt: bundle.Render(onboarding.DefaultMaxBytes), Skills: skills, MCP: rs.MCP, Model: rs.Model,
+			Instructions: sessionInstructions,
 		})
 		if err != nil {
 			return run.Spec{}, "", invalid(err)
 		}
 		return run.Spec{Command: built.Command, Files: built.Files, Env: built.Env, TimeoutSeconds: in.TimeoutSeconds}, a.Name(), nil
 	})
+}
+
+// sessionInstructions are the standing instructions of every agent session.
+const sessionInstructions = `You are a coding agent run by Ballet. You work unattended: nobody answers
+in this session. Your task, the ticket and its context are in the prompt.
+Use the knowledge tools to look up and record what the project knows.
+Work in the current repository on the current branch, commit and push.
+End with a short summary of what you did and what is left.`
+
+// bundle gathers a run's onboarding bundle (best effort: missing context
+// does not stop the run).
+func (rs *Runs) bundle(ctx context.Context, it tracker.Item, p tenancy.Project, stage, extra string) (onboarding.Bundle, error) {
+	b := onboarding.Bundle{
+		Project: p.Key, Stage: stage, StageInstructions: onboarding.DefaultStageInstructions(stage),
+		Ticket: onboarding.Item{Key: it.Key, Kind: string(it.Kind), Title: it.Title, State: string(it.State), Description: it.Description},
+		Type:   string(it.Type), AcceptanceCriteria: it.AcceptanceCriteria,
+		ReviewMode: string(it.Policy.ReviewMode), MergeMode: string(it.Policy.MergeMode), Extra: extra,
+	}
+	item := func(id string) *onboarding.Item {
+		if id == "" {
+			return nil
+		}
+		x, err := rs.Items.ItemByID(ctx, id)
+		if err != nil {
+			return nil
+		}
+		return &onboarding.Item{Key: x.Key, Kind: string(x.Kind), Title: x.Title, State: string(x.State), Description: x.Description}
+	}
+	b.Epic, b.Milestone = item(it.EpicID), item(it.MilestoneID)
+	if rs.Execution != nil {
+		if x, err := rs.Execution.ExecutionSettings(ctx, p.ID); err == nil && x.RepoURL != "" {
+			b.Branch, _ = execution.BranchName(x.BranchTemplate, it.Key, string(it.Type), it.Title)
+		}
+	}
+	if rs.Deps != nil {
+		deps, err := rs.Deps.ItemDependencies(ctx, it.ID)
+		if err != nil {
+			return onboarding.Bundle{}, err
+		}
+		for _, d := range deps {
+			otherID, relation := d.ToID, "blocks"
+			switch {
+			case d.Type == tracker.DepRelates:
+				relation = "relates"
+				if d.ToID == it.ID {
+					otherID = d.FromID
+				}
+			case d.ToID == it.ID:
+				otherID, relation = d.FromID, "blocked_by"
+			}
+			o := item(otherID)
+			if o == nil {
+				continue
+			}
+			b.Dependencies = append(b.Dependencies, onboarding.Dependency{Item: *o, Relation: relation, Report: rs.latestReport(ctx, otherID)})
+		}
+	}
+	if rs.Knowledge != nil {
+		c, err := rs.Tenancy.CustomerByID(ctx, p.CustomerID)
+		if err != nil {
+			return onboarding.Bundle{}, err
+		}
+		if k, err := rs.Knowledge(ctx, c.Key, p.Key, it.Key, it.Title, 5); err == nil {
+			b.Knowledge = k
+		}
+	}
+	return b, nil
+}
+
+// latestReport is the summary of the latest finished agent run of an item.
+func (rs *Runs) latestReport(ctx context.Context, itemID string) string {
+	runs, err := rs.Store.ListRuns(ctx, RunFilter{TicketID: itemID, Statuses: []run.Status{run.StatusSucceeded, run.StatusFailed}})
+	if err != nil {
+		return ""
+	}
+	for i := len(runs) - 1; i >= 0; i-- {
+		if runs[i].Result != nil && runs[i].Result.Summary != "" {
+			return fmt.Sprintf("%s run (%s): %s", runs[i].Stage, runs[i].Status, runs[i].Result.Summary)
+		}
+	}
+	return ""
 }
 
 // Create queues a run of stage for a ticket. Queuing by hand needs

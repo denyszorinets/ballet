@@ -355,9 +355,10 @@ func run() error {
 		Changesets: changesets,
 		Planner:    plannerSvc,
 		Runs: &app.Runs{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Dispatcher: dispatcher,
-			Agents: agents, SessionSkills: skills.SessionSkills, Model: cfg.Agents.Model,
-			MCP: []agent.MCPServer{{Name: "knowledge", URL: knowledgeMCP, TokenEnv: runTokenEnv}},
-			Now: time.Now, NewID: store.NewID},
+			Agents: agents, SessionSkills: skills.SessionSkills, Model: cfg.Agents.Model, Deps: st,
+			Knowledge: (&knowledge.Reader{URL: knowledgeURL, Tokens: tokenIssuer}).ForTicket,
+			MCP:       []agent.MCPServer{{Name: "knowledge", URL: knowledgeMCP, TokenEnv: runTokenEnv}},
+			Now:       time.Now, NewID: store.NewID},
 		Execution: &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 	})
 

@@ -14,6 +14,7 @@ import (
 
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/domain/agent"
+	"github.com/denyszorinets/ballet/core/internal/domain/onboarding"
 	"github.com/denyszorinets/ballet/core/internal/domain/run"
 	"github.com/denyszorinets/ballet/core/internal/domain/tracker"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
@@ -264,7 +265,7 @@ func TestRuns_AgentRunsAreBuiltByTheirAdapterAndJudgedByTheirResult(t *testing.T
 	r, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "echo", Prompt: "Do it", TimeoutSeconds: 60})
 	require.NoError(t, err)
 	assert.Equal(t, "echo", r.Adapter)
-	assert.Equal(t, "Do it", r.Spec.Files[".ballet/prompt"])
+	assert.Contains(t, r.Spec.Files[".ballet/prompt"], "## Additional instructions\n\nDo it")
 	assert.Equal(t, "1", r.Spec.Env["SKILLS"])
 	assert.Equal(t, "knowledge", r.Spec.Env["MCP"])
 	assert.Equal(t, 60, r.Spec.TimeoutSeconds)
@@ -295,4 +296,48 @@ func TestRuns_AgentRunsAreBuiltByTheirAdapterAndJudgedByTheirResult(t *testing.T
 	silent := finish("crashed\n", 0)
 	assert.Equal(t, run.StatusFailed, silent.Status)
 	assert.Equal(t, "the agent reported no result", silent.Error)
+}
+
+func TestRuns_AgentPromptIsTheOnboardingBundle(t *testing.T) {
+	e := newRuns(t, time.Minute)
+	e.runs.Agents = map[string]agent.Adapter{"echo": echoAgent{}}
+	e.runs.MCP = []agent.MCPServer{{Name: "knowledge"}}
+	e.runs.Deps = e.st
+	var asked []string
+	e.runs.Knowledge = func(_ context.Context, customer, project, ticket, query string, limit int) ([]onboarding.Knowledge, error) {
+		asked = append(asked, customer, project, ticket, query)
+		return []onboarding.Knowledge{{ID: "k1", Kind: "decision", Title: "Use OIDC", Body: "Keycloak.", Linked: true}}, nil
+	}
+	dave := user(t, "dave", "acme-admins")
+	epic := mk(t, e.tr, tracker.KindEpic, "Auth")
+	store := mk(t, e.tr, tracker.KindTicket, "Session store")
+	login, err := e.tr.CreateItem(dave, app.CreateItemInput{ProjectKey: "WEB", Kind: tracker.KindTicket, Title: "Login",
+		Description: "Sign in with OIDC.", AcceptanceCriteria: []string{"Works"}, EpicKey: epic.Key})
+	require.NoError(t, err)
+	_, err = e.tr.AddDependency(dave, store.Key, app.DirBlocks, login.Key)
+	require.NoError(t, err)
+
+	// The blocker was implemented by an earlier agent run.
+	e.d.Adapters = e.runs.Agents
+	fr := &fakeRunner{}
+	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 1}, fr))
+	prev, err := e.runs.CreateAgent(dave, store.Key, "implement", app.AgentInput{Adapter: "echo", Prompt: "p"})
+	require.NoError(t, err)
+	e.eventually(t, prev.ID, run.StatusStarting)
+	e.d.MaxLogBytes = 1 << 20
+	require.NoError(t, e.d.Log(t.Context(), "r1", prev.ID, "stdout", "RESULT ok Added a Redis session store.\n"))
+	require.NoError(t, e.d.Finished(t.Context(), "r1", prev.ID, 0, "", false))
+
+	r, err := e.runs.CreateAgent(dave, login.Key, "implement", app.AgentInput{Adapter: "echo", Prompt: "Keep it small."})
+	require.NoError(t, err)
+	prompt := r.Spec.Files[".ballet/prompt"]
+	for _, want := range []string{
+		"# " + login.Key + ": Login", "**implement** stage", "Sign in with OIDC.", "- [ ] Works",
+		"### Epic " + epic.Key + ": Auth", "## Depends on " + store.Key + ": Session store",
+		"implement run (succeeded): Added a Redis session store.", "## Knowledge (decision, linked to this ticket): Use OIDC",
+		"Keep it small.",
+	} {
+		assert.Contains(t, prompt, want)
+	}
+	assert.Equal(t, []string{"acme", "WEB", login.Key, "Login"}, asked[len(asked)-4:], "knowledge for the ticket")
 }

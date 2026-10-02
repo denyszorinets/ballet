@@ -100,6 +100,28 @@ repository, so agents cannot commit it:
   (:doc:`knowledge-mcp`), authenticated with the run's token
   (``Bearer ${BALLET_RUN_TOKEN}``, expanded by Claude Code).
 
+**Onboarding bundle.** The prompt is the run's onboarding bundle, built
+by Core when the run is queued (Markdown, at most 60 000 bytes):
+
+- the ticket — title, description, type, state, policy, acceptance
+  criteria — the stage and what it asks for (neutral defaults for
+  ``implement``, ``review``, ``verify`` and ``integrate``; projects add
+  their process through skills), and the ticket branch;
+- its epic and milestone;
+- its dependencies, each with the summary of its latest finished agent
+  run;
+- knowledge: entries linked to the ticket, then up to five more found by
+  searching the ticket's title in the project (read with a short-lived
+  Core token limited to reading the customer's knowledge);
+- the prompt given when queuing, as additional instructions.
+
+Within the size limit the ticket and the additional instructions always
+fit; the plan, dependencies and knowledge are shortened or left out, in
+that order of importance, with a note saying so. The standing
+instructions in ``CLAUDE.md`` tell the agent that it works unattended,
+should use the knowledge tools, and must commit, push and end with a
+summary.
+
 Each run gets its own **run token** (kind ``run``, the run's customer,
 project and ticket; audiences ``gateway``, ``knowledge``, ``core``;
 ``llm.invoke``, ``knowledge.read``/``write``, ``tracker.read``/``report``;
