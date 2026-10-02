@@ -29,6 +29,7 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/infra/forge/gitforge"
 	"github.com/denyszorinets/ballet/core/internal/infra/forge/github"
 	"github.com/denyszorinets/ballet/core/internal/infra/knowledge"
+	coremetrics "github.com/denyszorinets/ballet/core/internal/infra/metrics"
 	"github.com/denyszorinets/ballet/core/internal/infra/secrets"
 	"github.com/denyszorinets/ballet/core/internal/infra/servicetokens"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
@@ -300,7 +301,8 @@ func run() error {
 	}
 	credentials := &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID}
 	internalapi.RegisterCredentials(internalAPI, credentials)
-	usage := &app.Usage{Store: st, Tenancy: st, Authz: authz}
+	delivery := coremetrics.NewDelivery(svc.Metrics, st)
+	usage := &app.Usage{Store: st, Tenancy: st, Authz: authz, Observe: delivery.Usage}
 	internalapi.RegisterUsage(internalAPI, usage)
 	budgets := &app.Budgets{Store: st, Tenancy: st, Authz: authz, Now: time.Now}
 	internalapi.RegisterBudgets(internalAPI, budgets)
@@ -445,6 +447,8 @@ func run() error {
 	}
 	reconciler := &app.Reconciler{Flows: flows, Jobs: st, Interval: cfg.Reconciler.Interval, Slack: cfg.Reconciler.Slack}
 	go reconciler.Run(ctx)
+	go (&app.Delivery{Log: st, Flows: st, Runs: st, Reports: st, Tenancy: st, Observer: delivery,
+		Logger: svc.Logger}).Run(ctx)
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,

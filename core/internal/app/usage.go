@@ -42,6 +42,8 @@ type Usage struct {
 	Store   UsageStore
 	Tenancy TenancyStore
 	Authz   Authorizer
+	// Observe, when set, sees every stored record (metrics).
+	Observe func(r UsageInput)
 }
 
 // UsageInput is a record as reported by the gateway, with customer and
@@ -59,6 +61,7 @@ type UsageInput struct {
 func (u *Usage) Ingest(ctx context.Context, in []UsageInput) (stored, skipped int, err error) {
 	resolved := map[string]*usageScope{}
 	var out []UsageRecord
+	var kept []UsageInput
 	for _, r := range in {
 		key := r.Customer + "/" + r.Project
 		id, ok := resolved[key]
@@ -70,6 +73,7 @@ func (u *Usage) Ingest(ctx context.Context, in []UsageInput) (stored, skipped in
 			skipped++
 			continue
 		}
+		kept = append(kept, r)
 		out = append(out, UsageRecord{
 			OccurredAt: r.OccurredAt, CustomerID: id.customer, ProjectID: id.project, Ticket: r.Ticket, Run: r.Run,
 			Model: r.Model, Status: r.Status, InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
@@ -79,6 +83,11 @@ func (u *Usage) Ingest(ctx context.Context, in []UsageInput) (stored, skipped in
 	if len(out) > 0 {
 		if err := u.Store.InsertUsage(ctx, out); err != nil {
 			return 0, 0, err
+		}
+	}
+	if u.Observe != nil {
+		for _, r := range kept {
+			u.Observe(r)
 		}
 	}
 	return len(out), skipped, nil

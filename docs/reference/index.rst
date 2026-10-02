@@ -13,6 +13,7 @@ Exact, exhaustive descriptions of configuration and interfaces.
    pipelines
    runners
    llm-gateway
+   metrics
    knowledge-mcp
    tracker-mcp
    run-tokens
