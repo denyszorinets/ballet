@@ -37,6 +37,14 @@ jobs:
       # GitHub-hosted runners have Docker: test the Docker backend for real.
       - run: make runner-docker-test
 
+  images:
+    name: Images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: make images
+      - run: docker compose -f deploy/compose.yaml config --quiet
+
   web:
     name: Web
     runs-on: ubuntu-latest

@@ -83,6 +83,16 @@ bundle: web-deps ## Build all binaries into bin/, with the web UI embedded in co
 run: bundle ## Build everything and run Ballet on http://localhost:8080 (Ctrl-C stops)
 	scripts/run.sh
 
+##@ Containers
+
+IMAGE_TARGETS := core gateway knowledge runner
+
+.PHONY: images
+images: ## Build the service images (ballet-<service>) and the agent image (ballet-agent)
+	@set -e; for t in $(IMAGE_TARGETS); do echo "==> image ballet-$$t"; \
+		docker build -f deploy/Containerfile --target $$t -t ballet-$$t .; done
+	docker build -f deploy/agent/Containerfile -t ballet-agent deploy/agent
+
 ##@ Web
 
 .PHONY: web-deps

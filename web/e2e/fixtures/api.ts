@@ -32,6 +32,8 @@ export interface FakeCore {
 	changesets: FakeChangeset[];
 	/** Execution settings by project key. */
 	execution: Record<string, Record<string, unknown>>;
+	/** Customer LLM credentials by "customer/provider" (the keys as received). */
+	llmKeys: Record<string, string>;
 	/** Git tokens by project key (as the fake received them). */
 	gitTokens: Record<string, string>;
 	/** Agent activity by item key: runs, reports, questions (API shapes). */
@@ -249,6 +251,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		changesets: [],
 		execution: {},
 		gitTokens: {},
+		llmKeys: {},
 		activity: {},
 		pullRequests: {},
 		flows: {},
@@ -806,6 +809,28 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 						cache_write_tokens: 0
 					}
 				}
+			});
+		}
+		if ((m = path.match(/^\/customers\/([^/]+)\/credentials(?:\/([a-z]+))?$/))) {
+			const [, cust, provider] = m;
+			if (!provider) {
+				const items = Object.keys(core.llmKeys)
+					.filter((k) => k.startsWith(cust + '/'))
+					.map((k) => ({
+						provider: k.split('/')[1],
+						base_url: '',
+						fingerprint: 'sha256:' + core.llmKeys[k].slice(-4),
+						updated_at: now
+					}));
+				return r.fulfill({ json: { items } });
+			}
+			if (method === 'DELETE') {
+				delete core.llmKeys[`${cust}/${provider}`];
+				return r.fulfill({ status: 204 });
+			}
+			core.llmKeys[`${cust}/${provider}`] = body.api_key;
+			return r.fulfill({
+				json: { provider, base_url: '', fingerprint: 'sha256:x', updated_at: now }
 			});
 		}
 		if (path === '/pauses') return r.fulfill({ json: { items: core.pauses } });
