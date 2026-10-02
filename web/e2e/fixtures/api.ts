@@ -38,6 +38,8 @@ export interface FakeCore {
 	activity: Record<string, { runs?: unknown[]; reports?: unknown[]; questions?: unknown[] }>;
 	/** Pull requests by ticket key (API shape). */
 	pullRequests: Record<string, Record<string, unknown>>;
+	/** Flows by ticket key (API shape). */
+	flows: Record<string, Record<string, unknown>>;
 }
 
 export interface FakePlannerSession {
@@ -214,6 +216,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		gitTokens: {},
 		activity: {},
 		pullRequests: {},
+		flows: {},
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
@@ -359,6 +362,39 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 					core.deps.every((d) => d.to !== i.key || d.type !== 'blocks' || resolved(d.from))
 			);
 			return r.fulfill({ json: { items: run.map(itemJSON) } });
+		}
+		if ((m = path.match(/^\/items\/([^/]+)\/flow(\/start|\/approve|\/reject)?$/))) {
+			const key = m[1];
+			const f = core.flows[key];
+			if (m[2] === '/start') {
+				const it = core.items.find((i) => i.key === key);
+				if (!it || it.state !== 'ready') return err(r, 409, 'conflict', 'only ready tickets start');
+				it.state = 'in_progress';
+				core.flows[key] = {
+					ticket: key,
+					pipeline: 'default',
+					pipeline_version: 0,
+					stages: [
+						{ id: 'implement', kind: 'agent', name: 'Implement' },
+						{ id: 'approve', kind: 'human' }
+					],
+					stage: 'implement',
+					iteration: 0,
+					max_iterations: 3,
+					status: 'running',
+					started_at: now,
+					updated_at: now,
+					version: 1
+				};
+				return r.fulfill({ json: core.flows[key] });
+			}
+			if (!f) return err(r, 404, 'not_found', 'flow not found');
+			if (m[2]) {
+				if (f.waiting !== 'approval') return err(r, 409, 'conflict', 'not waiting');
+				f.status = m[2] === '/approve' ? 'done' : 'failed';
+				f.waiting = undefined;
+			}
+			return r.fulfill({ json: f });
 		}
 		if ((m = path.match(/^\/items\/([^/]+)\/pull-request(\/refresh|\/merge)?$/))) {
 			const key = m[1];

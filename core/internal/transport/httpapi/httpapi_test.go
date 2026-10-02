@@ -99,6 +99,7 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		Execution:    &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 		AgentTracker: &app.AgentTracker{Reports: st, RunStore: st, Items: st, Tenancy: st, Authz: authz,
 			Now: time.Now, NewID: store.NewID},
+		Flows:     &app.Flows{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		Pipelines: &app.Pipelines{Store: st, Tenancy: st, Authz: authz, Adapters: []string{"claude-code"}, Now: time.Now},
 		PullRequests: &app.PullRequests{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now,
 			Token: func(context.Context, string, string) (string, error) { return "", nil }},
@@ -687,4 +688,17 @@ func toJSON(t *testing.T, v any) string {
 	b, err := json.Marshal(v)
 	require.NoError(t, err)
 	return string(b)
+}
+
+func TestFlowAPI_NoFlowYet(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"t"}`)
+	code, _ := call(t, api, "GET", "/api/v1/items/WEB-1/flow", "alice", "")
+	assert.Equal(t, http.StatusNotFound, code)
+	code, out := call(t, api, "POST", "/api/v1/items/WEB-1/flow/start", "alice", "")
+	assert.Equal(t, http.StatusConflict, code, "only ready tickets start: %v", out)
+	code, _ = call(t, api, "POST", "/api/v1/items/WEB-1/flow/approve", "alice", `{"comment":"ok"}`)
+	assert.Equal(t, http.StatusNotFound, code)
 }

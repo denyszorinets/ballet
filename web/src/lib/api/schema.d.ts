@@ -543,6 +543,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/{item}/flow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        /** The ticket's way through its pipeline (404 before it started) */
+        get: operations["getFlow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item}/flow/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a ready ticket's pipeline by hand (run.manage) */
+        post: operations["startFlow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item}/flow/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve the human stage the ticket waits in (humans, tracker.write) */
+        post: operations["approveFlowStage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item}/flow/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject the human stage the ticket waits in (humans, tracker.write) */
+        post: operations["rejectFlowStage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run}": {
         parameters: {
             query?: never;
@@ -1344,6 +1424,40 @@ export interface components {
             review: "none" | "approved" | "changes_requested" | "commented";
             /** Format: date-time */
             updated_at: string;
+        };
+        Flow: {
+            ticket: string;
+            pipeline: string;
+            /** Format: int64 */
+            pipeline_version: number;
+            stages: {
+                id: string;
+                /** @enum {string} */
+                kind: "agent" | "human" | "platform";
+                name?: string;
+            }[];
+            stage: string;
+            iteration: number;
+            max_iterations: number;
+            /** @enum {string} */
+            status: "running" | "waiting" | "done" | "failed" | "stopped";
+            /** @description question, approval, checks, review or merge */
+            waiting?: string;
+            /** @description The current stage's agent run */
+            run?: string;
+            /** @description Of the previous stage */
+            outcome?: string;
+            /** @description The previous stage's report, handed to the next */
+            report?: string;
+            /** Format: date-time */
+            started_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: int64 */
+            version: number;
+        };
+        FlowDecision: {
+            comment?: string;
         };
         PipelineStage: {
             id: string;
@@ -2893,6 +3007,110 @@ export interface operations {
                     "application/json": {
                         yaml: string;
                     };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFlow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Flow"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    startFlow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Flow"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    approveFlowStage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["FlowDecision"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Flow"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    rejectFlowStage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["FlowDecision"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Flow"];
                 };
             };
             default: components["responses"]["Error"];

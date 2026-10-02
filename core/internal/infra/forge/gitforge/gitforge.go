@@ -76,7 +76,7 @@ func (a Adapter) Get(ctx context.Context, r forge.Repo, pr forge.PullRequest) (f
 	headSHA, pushed := shas[pr.Head]
 	if !pushed {
 		if pr.HeadSHA == "" {
-			return forge.PullRequest{}, fmt.Errorf("branch %s is not pushed", pr.Head)
+			return forge.PullRequest{}, fmt.Errorf("%w: %s is not pushed", forge.ErrNoBranch, pr.Head)
 		}
 		headSHA = pr.HeadSHA // deleted after merging, perhaps
 	}

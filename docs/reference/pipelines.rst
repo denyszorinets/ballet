@@ -71,6 +71,53 @@ after its type, else ``default``, else Ballet's template above. Saving a
 pipeline creates a new immutable version; a ticket runs on the version it
 started with.
 
+.. _reference-pipelines-running:
+
+Running tickets
+---------------
+
+Starting a ticket's pipeline (a ``ready`` ticket only) moves the ticket to
+``in_progress`` and records a *flow*: the pipeline version, the current
+stage, the loop iteration and a status (``running``, ``waiting``,
+``done``, ``failed`` or ``stopped``). Flows advance through durable jobs,
+so a restart of Core resumes them where they were.
+
+Agent stages
+   Each agent stage is a separate run (a fresh agent session) with the
+   stage's instructions, skills and model. The previous stage's report is
+   handed over as an artifact in the prompt. The run's reported outcome
+   (``done``, ``failed``, ``blocked``, …) picks the next stage.
+
+Human stages
+   The flow waits for ``approval``; a project member with
+   ``tracker.write`` approves (outcome ``done``) or rejects (outcome
+   ``failed``) with an optional comment, which becomes the stage report.
+
+Platform ``merge`` stages
+   Core opens or finds the ticket's pull request and then waits, polling
+   the forge, according to the project's merge policy: for checks while
+   they are pending, for a human review when the policy asks for one, and
+   for a human to merge when the policy is ``manual`` or the forge cannot
+   merge (plain git). A merged pull request ends the stage ``done``. A
+   closed pull request, failing checks, requested changes or a branch that
+   was never pushed end it ``failed``, with a report saying why, which
+   the next agent stage receives.
+
+Targets and limits
+   ``$done`` finishes the ticket (``done``). ``$failed`` fails the flow and
+   pauses the ticket. Going back to an earlier stage starts a new
+   iteration; when ``max_iterations`` is exceeded, or a stage targets
+   ``$question``, Core asks a blocking question on the ticket and the flow
+   waits for an ``answer`` (the ticket is ``waiting_for_answer``).
+
+Stopping
+   Pausing or cancelling the ticket stops the flow and cancels its active
+   run.
+
+Every transition is recorded in the ticket history (``flow.started``,
+``flow.stage_started``, ``flow.stage_finished``, ``flow.waiting``, ``flow.done``,
+``flow.failed``, ``flow.stopped``).
+
 REST
 ----
 
@@ -93,3 +140,17 @@ REST
    Parses YAML (unknown fields are errors) and validates it.
 
 ``POST /api/v1/pipelines/render`` — ``{"definition"}`` → ``200`` ``{"yaml"}``
+
+``GET /api/v1/items/{item}/flow`` → ``200``
+   The ticket's flow: ``{"ticket", "pipeline", "pipeline_version",
+   "stages", "stage", "iteration", "max_iterations", "status",
+   "waiting"?, "run"?, "outcome"?, "report"?, "started_at",
+   "updated_at", "version"}``. ``404`` before it started. ``tracker.read``.
+
+``POST /api/v1/items/{item}/flow/start`` → ``200``
+   Starts the pipeline of a ``ready`` ticket. Needs ``run.manage``;
+   ``409`` when the ticket is not ready or its flow is still active.
+
+``POST /api/v1/items/{item}/flow/approve`` and ``.../flow/reject`` — ``{"comment"?}`` → ``200``
+   Decides the human stage the flow waits on. Needs ``tracker.write``;
+   ``409`` when the flow does not wait for an approval.

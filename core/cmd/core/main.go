@@ -287,7 +287,6 @@ func run() error {
 	svc.Metrics.MustRegister(jobResults)
 	orchestrator := &app.Orchestrator{Store: st, Now: time.Now, Logger: svc.Logger,
 		OnFinished: func(kind, result string) { jobResults.WithLabelValues(kind, result).Inc() }}
-	go orchestrator.Run(ctx)
 	compactions := prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "ballet_planner_compactions_total",
 		Help: "Planner conversations compacted (older messages summarized for the model).",
@@ -357,7 +356,6 @@ func run() error {
 			return secrets, nil
 		},
 	}
-	go dispatcher.Run(ctx)
 	runnerapi.Register(svc.Mux, runnerapi.Deps{
 		Verifier: runtoken.NewRingVerifier(tokenKeys, time.Now), Dispatcher: dispatcher,
 		Options: rpc.Options{Logger: svc.Logger},
@@ -391,6 +389,15 @@ func run() error {
 		adapterNames = append(adapterNames, name)
 	}
 	pipelines := &app.Pipelines{Store: st, Tenancy: st, Authz: authz, Adapters: adapterNames, Now: time.Now}
+	flows := &app.Flows{Store: st, Items: st, Tenancy: st, Authz: authz, Pipelines: pipelines, Runs: runs, RunStore: st,
+		Reports: st, PullRequests: pullRequests, Orchestrator: orchestrator, Now: time.Now, NewID: store.NewID,
+		Logger: svc.Logger}
+	flows.Register(orchestrator)
+	dispatcher.OnFinished = flows.RunFinished
+	// Start once every job kind has its handler: a job claimed without one
+	// would be marked dead.
+	go orchestrator.Run(ctx)
+	go dispatcher.Run(ctx)
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,
@@ -412,6 +419,7 @@ func run() error {
 		AgentTracker: agentTracker,
 		PullRequests: pullRequests,
 		Pipelines:    pipelines,
+		Flows:        flows,
 	})
 
 	searchIndexer := &app.SearchIndexer{

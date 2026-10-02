@@ -39,7 +39,7 @@ func TestGitForge_PushedThenMerged(t *testing.T) {
 	g := gitforge.Adapter{LinkTemplate: "https://git.example.com/web/compare/{base}...{branch}"}
 	repo := forge.Repo{URL: "file://" + bare}
 	_, err := g.Ensure(t.Context(), repo, "ballet/WEB-1-x", "main", "t", "")
-	assert.ErrorContains(t, err, "not pushed")
+	assert.ErrorIs(t, err, forge.ErrNoBranch)
 
 	run(t, wc, "checkout", "--quiet", "-b", "ballet/WEB-1-x")
 	require.NoError(t, os.WriteFile(filepath.Join(wc, "b"), []byte("b"), 0o644))

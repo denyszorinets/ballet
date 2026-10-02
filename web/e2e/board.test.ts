@@ -192,3 +192,20 @@ test('engineers open and merge the pull request of a ticket', async ({ page }) =
 	await expect(page.getByRole('button', { name: 'Merge' })).toHaveCount(0);
 	expect(core.pullRequests['WEB-2'].state).toBe('merged');
 });
+
+test('admins start a pipeline and humans decide human stages', async ({ page }) => {
+	const core = await open(page, 'customer-admin', '/items/WEB-1');
+	await expect(page.getByText('Not started.')).toBeVisible();
+	await page.getByRole('button', { name: 'Start pipeline' }).click();
+	const stages = page.getByRole('list', { name: 'Pipeline stages' });
+	await expect(stages.getByRole('listitem')).toHaveCount(2);
+	await expect(page.getByTestId('flow-status')).toContainText('running');
+
+	core.flows['WEB-1'].stage = 'approve';
+	core.flows['WEB-1'].status = 'waiting';
+	core.flows['WEB-1'].waiting = 'approval';
+	await page.reload();
+	await expect(page.getByTestId('flow-status')).toContainText('waiting for approval');
+	await page.getByRole('button', { name: 'Approve stage' }).click();
+	await expect(page.getByTestId('flow-status')).toContainText('done');
+});

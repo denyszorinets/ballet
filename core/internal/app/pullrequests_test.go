@@ -3,6 +3,7 @@ package app_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -19,12 +20,14 @@ import (
 
 // memForge is an in-memory forge.
 type memForge struct {
-	mu      sync.Mutex
-	prs     map[string]forge.PullRequest // by head
-	opened  int
-	merged  []int
-	repos   []forge.Repo
-	failGet bool
+	mu       sync.Mutex
+	prs      map[string]forge.PullRequest // by head
+	opened   int
+	merged   []int
+	repos    []forge.Repo
+	failGet  bool
+	checks   forge.Checks // of new pull requests; "": pending
+	noBranch bool         // the ticket branch was never pushed
 }
 
 func (m *memForge) Name() string { return "github" }
@@ -36,9 +39,16 @@ func (m *memForge) Ensure(_ context.Context, r forge.Repo, head, base, title, _ 
 	if pr, ok := m.prs[head]; ok {
 		return pr, nil
 	}
+	if m.noBranch {
+		return forge.PullRequest{}, fmt.Errorf("%w: %s", forge.ErrNoBranch, head)
+	}
 	m.opened++
+	checks := m.checks
+	if checks == "" {
+		checks = forge.ChecksPending
+	}
 	pr := forge.PullRequest{Number: m.opened, URL: "https://forge/pr", Title: title, Head: head, Base: base, HeadSHA: "a",
-		State: forge.StateOpen, Checks: forge.ChecksPending, Review: forge.ReviewNone}
+		State: forge.StateOpen, Checks: checks, Review: forge.ReviewNone}
 	m.prs[head] = pr
 	return pr, nil
 }

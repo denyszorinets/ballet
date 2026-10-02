@@ -21,6 +21,8 @@
 	let reports = $state<Schemas['Report'][]>([]);
 	let questions = $state<Schemas['Question'][]>([]);
 	let pr = $state<Schemas['PullRequest']>();
+	let flow = $state<Schemas['Flow']>();
+	let flowError = $state<string>();
 	let prError = $state<string>();
 	let prBusy = $state(false);
 	const itemQuery = $derived(`?item=${encodeURIComponent(key)}`);
@@ -44,6 +46,20 @@
 		!!item && !!session?.permissions.can('tracker.write', { customer, project: item.project })
 	);
 
+	async function flowAction(action: 'start' | 'approve' | 'reject') {
+		if (!session) return;
+		flowError = undefined;
+		const path = { params: { path: { item: key } } };
+		const res =
+			action === 'start'
+				? await session.api.POST('/api/v1/items/{item}/flow/start', path)
+				: action === 'approve'
+					? await session.api.POST('/api/v1/items/{item}/flow/approve', { ...path, body: {} })
+					: await session.api.POST('/api/v1/items/{item}/flow/reject', { ...path, body: {} });
+		if (res.data) flow = res.data;
+		else flowError = apiError(res.error);
+	}
+
 	async function prAction(action: 'open' | 'refresh' | 'merge') {
 		if (!session) return;
 		prBusy = true;
@@ -65,14 +81,15 @@
 
 	async function load(s: Session, k: string) {
 		const path = { params: { path: { item: k } } };
-		const [it, d, h, rn, rp, q, pp] = await Promise.all([
+		const [it, d, h, rn, rp, q, pp, fw] = await Promise.all([
 			s.api.GET('/api/v1/items/{item}', path),
 			s.api.GET('/api/v1/items/{item}/dependencies', path),
 			s.api.GET('/api/v1/items/{item}/history', path),
 			s.api.GET('/api/v1/items/{item}/runs', path),
 			s.api.GET('/api/v1/items/{item}/reports', path),
 			s.api.GET('/api/v1/items/{item}/questions', path),
-			s.api.GET('/api/v1/items/{item}/pull-request', path)
+			s.api.GET('/api/v1/items/{item}/pull-request', path),
+			s.api.GET('/api/v1/items/{item}/flow', path)
 		]);
 		if (!it.data) {
 			error = apiError(it.error);
@@ -85,6 +102,7 @@
 		reports = rp.data?.items ?? [];
 		questions = q.data?.items ?? [];
 		pr = pp.data;
+		flow = fw.data;
 		if (!customer || containers.length === 0) {
 			const pp = { params: { path: { project: it.data.project } } };
 			const [p, list] = await Promise.all([
@@ -381,6 +399,43 @@
 	{/if}
 
 	{#if item.kind === 'ticket'}
+		<h2>Pipeline</h2>
+		{#if flow}
+			<ol class="stages" aria-label="Pipeline stages">
+				{#each flow.stages as st (st.id)}
+					<li class:current={st.id === flow.stage}>
+						{st.name || st.id}<span class="muted small"> · {st.kind}</span>
+					</li>
+				{/each}
+			</ol>
+			<p data-testid="flow-status">
+				<span class="badge">{flow.status}</span>
+				{#if flow.waiting}<span class="muted">waiting for {flow.waiting}</span>{/if}
+				{#if flow.iteration}<span class="muted small"
+						>iteration {flow.iteration} of {flow.max_iterations}</span
+					>{/if}
+				<span class="muted small">pipeline {flow.pipeline} v{flow.pipeline_version}</span>
+			</p>
+			{#if flow.waiting === 'approval' && canWrite}
+				<div class="actions">
+					<button class="primary" onclick={() => flowAction('approve')}>Approve stage</button>
+					<button onclick={() => flowAction('reject')}>Reject stage</button>
+				</div>
+			{/if}
+			{#if flow.report}
+				<details>
+					<summary class="muted small">Last stage report</summary>
+					<div class="markdown">{flow.report}</div>
+				</details>
+			{/if}
+		{:else}
+			<p class="muted">Not started.</p>
+		{/if}
+		{#if item.state === 'ready' && (!flow || ['done', 'failed', 'stopped'].includes(flow.status)) && session?.permissions.can( 'run.manage', { customer, project: item.project } )}
+			<button onclick={() => flowAction('start')}>Start pipeline</button>
+		{/if}
+		{#if flowError}<p class="error" role="alert">{flowError}</p>{/if}
+
 		<h2>Pull request</h2>
 		{#if pr}
 			<p class="pr" data-testid="pull-request">
@@ -471,6 +526,22 @@
 {/if}
 
 <style>
+	.stages {
+		display: flex;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+		padding: 0;
+		list-style: none;
+	}
+	.stages li {
+		border: 1px solid var(--border);
+		border-radius: var(--radius);
+		padding: 0.2rem 0.6rem;
+	}
+	.stages li.current {
+		border-color: var(--accent);
+		font-weight: 600;
+	}
 	.pr {
 		display: flex;
 		gap: 0.5rem;
