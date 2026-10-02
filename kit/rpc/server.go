@@ -24,8 +24,9 @@ type ServerOptions struct {
 	AuthTimeout time.Duration
 	// OriginPatterns allowed for cross-origin browsers (same origin always is).
 	OriginPatterns []string
-	// OnConnect is called for every authenticated connection; the
-	// connection is served until it closes.
+	// OnConnect is called for every authenticated connection before its
+	// first request is handled; it must not block for long. The connection
+	// is then served until it closes.
 	OnConnect func(*Conn)
 }
 
@@ -49,14 +50,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return // Accept has answered or closed
 	}
-	if s.opts.OnConnect != nil {
-		s.opts.OnConnect(conn)
-	}
 	<-conn.Done()
 }
 
-// Accept upgrades the request, negotiates the codec and authenticates the
-// connection with its first message.
+// Accept upgrades the request, negotiates the codec, authenticates the
+// connection with its first message and calls OnConnect.
 func (s *Server) Accept(w http.ResponseWriter, r *http.Request) (*Conn, error) {
 	ws, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		Subprotocols: Subprotocols, OriginPatterns: s.opts.OriginPatterns,
@@ -75,6 +73,11 @@ func (s *Server) Accept(w http.ResponseWriter, r *http.Request) (*Conn, error) {
 		return nil, err
 	}
 	conn.intercept = s.interceptor(conn)
+	// Before reading further messages: the client may send its next request
+	// right after the auth response.
+	if s.opts.OnConnect != nil {
+		s.opts.OnConnect(conn)
+	}
 	conn.start()
 	return conn, nil
 }
