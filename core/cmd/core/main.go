@@ -280,6 +280,14 @@ func run() error {
 		Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 	}
 	skills := &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID}
+	jobResults := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "ballet_jobs_total",
+		Help: "Durable jobs executed, by kind and result (done, retry, dead).",
+	}, []string{"kind", "result"})
+	svc.Metrics.MustRegister(jobResults)
+	orchestrator := &app.Orchestrator{Store: st, Now: time.Now, Logger: svc.Logger,
+		OnFinished: func(kind, result string) { jobResults.WithLabelValues(kind, result).Inc() }}
+	go orchestrator.Run(ctx)
 	compactions := prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "ballet_planner_compactions_total",
 		Help: "Planner conversations compacted (older messages summarized for the model).",
