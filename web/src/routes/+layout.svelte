@@ -12,6 +12,8 @@
 	let loadError = $state<string>();
 	let status = $state<Status>('idle');
 	let theme = $state<Theme>('light');
+	/** Open questions waiting for a human. */
+	let inbox = $state(0);
 
 	const onCallback = $derived(page.url.pathname === '/auth/callback');
 	const authenticated = $derived(session?.auth.authenticated ?? false);
@@ -47,6 +49,18 @@
 		if (!session || !authenticated) return;
 		session.realtime.connect();
 		return session.realtime.onStatus((s) => (status = s));
+	});
+
+	$effect(() => {
+		if (!session || !authenticated) return;
+		const s = session;
+		void page.url.pathname; // recount on navigation
+		s.api
+			.GET('/api/v1/inbox')
+			.then(({ data }) => {
+				if (data) inbox = data.items.filter((q) => q.route !== 'planner').length;
+			})
+			.catch(() => {});
 	});
 
 	function toggleTheme() {
@@ -88,6 +102,11 @@
 				aria-current={page.url.pathname === '/' || page.url.pathname.startsWith('/customers')
 					? 'page'
 					: undefined}>Customers</a
+			>
+			<a
+				href={resolve('/inbox')}
+				aria-current={page.url.pathname.startsWith('/inbox') ? 'page' : undefined}
+				>Inbox{#if inbox > 0}<span class="count" aria-label="{inbox} open">{inbox}</span>{/if}</a
 			>
 			<a
 				href={resolve('/skills')}
@@ -160,6 +179,15 @@
 	nav a {
 		color: var(--muted);
 		text-decoration: none;
+	}
+	.count {
+		margin-left: 0.3rem;
+		padding: 0 0.4rem;
+		border-radius: 999px;
+		background: var(--accent);
+		color: var(--bg);
+		font-size: 0.75rem;
+		font-weight: 600;
 	}
 	nav a[aria-current='page'] {
 		color: var(--text);

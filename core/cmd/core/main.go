@@ -398,6 +398,7 @@ func run() error {
 		Now: time.Now, NewID: store.NewID}
 	questions := &app.Questions{Store: st, Items: st, Tenancy: st, Authz: authz, Orchestrator: orchestrator,
 		Knowledge: knowledgeReader, LLM: llm, Model: cfg.Planner.Model, MaxTokens: cfg.Planner.MaxTokens,
+		Inbox: st, Reports: st, Planner: plannerSvc,
 		Now: time.Now, NewID: store.NewID, Logger: svc.Logger}
 	questions.Register(orchestrator)
 	agentTracker := &app.AgentTracker{Reports: st, RunStore: st, Runs: runs, Items: st, Tenancy: st, Authz: authz,

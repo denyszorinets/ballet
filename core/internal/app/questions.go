@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -39,6 +40,14 @@ type QuestionKnowledge interface {
 	RecordAnswer(ctx context.Context, customer, project, ticketKey, author string, q report.Question) error
 }
 
+// InboxStore finds what the humans' inbox shows.
+type InboxStore interface {
+	OpenQuestions(ctx context.Context) ([]report.Question, error)
+	// BlockedBehind counts the unresolved items an item blocks, directly
+	// or transitively.
+	BlockedBehind(ctx context.Context, itemID string) (int, error)
+}
+
 // JobQuestionRoute routes a raised question: the planner tries to answer
 // it, else it goes to the humans.
 const JobQuestionRoute = "question.route"
@@ -54,6 +63,9 @@ type Questions struct {
 	Orchestrator *Orchestrator
 	Knowledge    QuestionKnowledge // nil: no knowledge search, answers not recorded
 	LLM          LLM               // nil: every question goes to the humans
+	Inbox        InboxStore        // nil: no inbox
+	Reports      ReportStore       // stage reports for sub-chats; optional
+	Planner      *Planner          // sub-chats; nil: none
 	Model        string
 	MaxTokens    int
 	MaxRounds    int // tool rounds of an answer attempt; default 8
@@ -328,6 +340,134 @@ func questionTools(knowledge bool) []ToolSpec {
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}`)})
 	}
 	return tools
+}
+
+// InboxEntry is an open question as the inbox shows it.
+type InboxEntry struct {
+	QuestionView
+	CustomerKey   string
+	ProjectKey    string
+	TicketTitle   string
+	TicketState   tracker.State
+	BlockedBehind int    // unresolved items waiting behind the ticket
+	Chat          string // the question's sub-chat session, if any
+}
+
+// ListInbox returns the open questions of every project the caller can
+// read, most impactful first: those waiting for a human before those the
+// planner works on, blocking ones first, then by how much work waits
+// behind the ticket, then the oldest.
+func (qs *Questions) ListInbox(ctx context.Context) ([]InboxEntry, error) {
+	id, err := caller(ctx)
+	if err != nil {
+		return nil, err
+	}
+	open, err := qs.Inbox.OpenQuestions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	allowed := map[string]bool{}
+	out := []InboxEntry{}
+	for _, q := range open {
+		ok, seen := allowed[q.ProjectID]
+		it, p, c, err := qs.scope(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		if !seen {
+			ok = qs.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: c.Key, Project: p.Key}) == nil
+			allowed[q.ProjectID] = ok
+		}
+		if !ok {
+			continue
+		}
+		n, err := qs.Inbox.BlockedBehind(ctx, it.ID)
+		if err != nil {
+			return nil, err
+		}
+		e := InboxEntry{QuestionView: QuestionView{Question: q, TicketKey: it.Key}, CustomerKey: c.Key, ProjectKey: p.Key,
+			TicketTitle: it.Title, TicketState: it.State, BlockedBehind: n}
+		if qs.Planner != nil {
+			if s, err := qs.Planner.Store.QuestionSession(ctx, q.ID); err == nil {
+				e.Chat = s.ID
+			}
+		}
+		out = append(out, e)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if (a.Route == report.RouteHuman) != (b.Route == report.RouteHuman) {
+			return a.Route == report.RouteHuman
+		}
+		if a.Blocking != b.Blocking {
+			return a.Blocking
+		}
+		if a.BlockedBehind != b.BlockedBehind {
+			return a.BlockedBehind > b.BlockedBehind
+		}
+		return a.CreatedAt.Before(b.CreatedAt)
+	})
+	return out, nil
+}
+
+// QuestionChatInstructions start a question's sub-chat.
+const QuestionChatInstructions = `This conversation is the sub-chat of a question an AI agent (or Ballet)
+asked while working on a ticket. Help the human decide the answer: explain
+the question, research the knowledge base and the plan, lay out the
+options and their consequences, and suggest an answer. You cannot answer
+for the human: they record the answer in the inbox, which resumes the
+ticket. Propose changesets only when the human asks for plan changes.`
+
+// Chat returns the question's sub-chat with the planner, starting it with
+// the question's context (tracker.write).
+func (qs *Questions) Chat(ctx context.Context, questionID string) (SessionView, error) {
+	if qs.Planner == nil {
+		return SessionView{}, fmt.Errorf("%w: no planner", ErrUnavailable)
+	}
+	if _, err := caller(ctx); err != nil {
+		return SessionView{}, err
+	}
+	q, err := qs.Store.Question(ctx, questionID)
+	if err != nil {
+		return SessionView{}, err
+	}
+	it, p, _, err := qs.scope(ctx, q)
+	if err != nil {
+		return SessionView{}, err
+	}
+	var b strings.Builder
+	b.WriteString(QuestionChatInstructions)
+	fmt.Fprintf(&b, "\n\n# Ticket %s: %s (%s)\n\n%s\n", it.Key, it.Title, it.State, strings.TrimSpace(it.Description))
+	for _, ac := range it.AcceptanceCriteria {
+		b.WriteString("- [ ] " + ac + "\n")
+	}
+	fmt.Fprintf(&b, "\n# Question (%s)\n\n%s\n", map[bool]string{true: "blocking", false: "not blocking"}[q.Blocking], q.Text)
+	if strings.TrimSpace(q.Context) != "" {
+		fmt.Fprintf(&b, "\n# Context given with it\n\n%s\n", q.Context)
+	}
+	if qs.Reports != nil {
+		reports, err := qs.Reports.Reports(ctx, it.ID, "")
+		if err != nil {
+			return SessionView{}, err
+		}
+		var stage []report.Report
+		for _, r := range reports {
+			if r.Kind == report.KindStageReport {
+				stage = append(stage, r)
+			}
+		}
+		if len(stage) > 3 {
+			stage = stage[len(stage)-3:]
+		}
+		if len(stage) > 0 {
+			b.WriteString("\n# Latest stage reports\n")
+			for _, r := range stage {
+				fmt.Fprintf(&b, "\n- (%s) %s\n", r.Outcome, oneLine(r.Text, 600))
+			}
+		}
+	}
+	title := fmt.Sprintf("Question on %s: %s", it.Key, oneLine(q.Text, 120))
+	return qs.Planner.QuestionChat(ctx, p.Key, q.ID, title, b.String())
 }
 
 func (qs *Questions) logger() *slog.Logger {

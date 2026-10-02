@@ -16,6 +16,7 @@ type plannerSessionJSON struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Running   bool      `json:"running"`
+	Question  string    `json:"question,omitempty"` // a question's sub-chat
 }
 
 type plannerMessageJSON struct {
@@ -35,7 +36,7 @@ type plannerTranscriptJSON struct {
 
 func toSessionJSON(v app.SessionView) plannerSessionJSON {
 	return plannerSessionJSON{ID: v.ID, Project: v.ProjectKey, Title: v.Title, CreatedBy: v.CreatedBy,
-		CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt, Running: v.Running}
+		CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt, Running: v.Running, Question: v.QuestionID}
 }
 
 func registerPlanner(mux *router, pl *app.Planner) {

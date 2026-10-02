@@ -112,3 +112,19 @@ func scanDep(r scanner) (tracker.Dependency, error) {
 	d.CreatedAt, err = parseTime(created)
 	return d, err
 }
+
+// BlockedBehind counts the unresolved items an item blocks, directly or
+// through other items.
+func (s *Store) BlockedBehind(ctx context.Context, itemID string) (int, error) {
+	var n int
+	err := s.db.QueryRow(ctx, `WITH RECURSIVE behind(id) AS (
+			SELECT to_id FROM dependencies WHERE from_id = ? AND type = 'blocks'
+			UNION
+			SELECT d.to_id FROM dependencies d JOIN behind b ON d.from_id = b.id WHERE d.type = 'blocks')
+		SELECT COUNT(*) FROM behind JOIN items i ON i.id = behind.id WHERE i.state NOT IN ('done', 'cancelled')`,
+		itemID).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("blocked behind: %w", err)
+	}
+	return n, nil
+}

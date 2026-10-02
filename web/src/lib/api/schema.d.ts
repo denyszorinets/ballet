@@ -408,6 +408,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/questions/{question}/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The question's sub-chat with the planner, started on first use
+         * @description Needs tracker.write. The session's planner knows the ticket, the question and the latest stage reports; talk to it with planner.send.
+         */
+        post: operations["questionChat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Open questions of every project the caller can read, most impactful first */
+        get: operations["listInbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{item}/pull-request": {
         parameters: {
             query?: never;
@@ -1430,6 +1469,35 @@ export interface components {
             /** Format: date-time */
             answered_at?: string;
         };
+        InboxEntry: {
+            id: string;
+            ticket: string;
+            run?: string;
+            text: string;
+            context?: string;
+            blocking: boolean;
+            /** @enum {string} */
+            status: "open" | "answered";
+            /** @enum {string} */
+            route?: "planner" | "human";
+            answer?: string;
+            answered_by?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            answered_at?: string;
+            customer: string;
+            project: string;
+            ticket_title: string;
+            ticket_state: components["schemas"]["ItemState"];
+            /** @description Unresolved items waiting behind the ticket */
+            blocked_behind: number;
+            /** @description The question's sub-chat session, if started */
+            chat?: string;
+        };
+        InboxList: {
+            items: components["schemas"]["InboxEntry"][];
+        };
         QuestionAnswer: {
             answer: string;
         };
@@ -1636,6 +1704,8 @@ export interface components {
             updated_at: string;
             /** @description The planner is answering */
             running: boolean;
+            /** @description Set for a question's sub-chat */
+            question?: string;
         };
         PlannerSessionList: {
             items: components["schemas"]["PlannerSession"][];
@@ -1693,6 +1763,8 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
             running: boolean;
+            /** @description Set for a question's sub-chat */
+            question?: string;
             messages: components["schemas"]["PlannerMessage"][];
         };
         /** @enum {string} */
@@ -2807,6 +2879,50 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Question"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    questionChat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlannerSession"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listInbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxList"];
                 };
             };
             default: components["responses"]["Error"];

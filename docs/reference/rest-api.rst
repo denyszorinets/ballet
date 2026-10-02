@@ -487,6 +487,17 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
    "answered_at"?}``. ``answered_by`` is ``planner`` or the human's
    subject.
 
+``GET /api/v1/inbox`` → ``200``
+   Open questions of every project the caller can read, in inbox order
+   (:doc:`/concepts/questions`): the question fields plus ``"customer",
+   "project", "ticket_title", "ticket_state", "blocked_behind"`` (unresolved
+   items waiting behind the ticket) and ``"chat"?`` (its sub-chat).
+
+``POST /api/v1/questions/{question}/chat`` → ``200`` a planner session
+   The question's sub-chat, started on first use (``"question"`` is set
+   on it). Talk to it with ``planner.send`` like any planner session.
+   Needs ``tracker.write``.
+
 ``POST /api/v1/questions/{question}/answer`` — ``{"answer"}`` → ``200`` the question
    Answers an open question (see :ref:`concepts-questions-routing`).
    Needs ``tracker.write``; ``400`` for an empty answer, ``409`` when it

@@ -25,6 +25,8 @@ type PlannerStore interface {
 	AppendPlannerMessage(ctx context.Context, m planner.Message, e event.Event) (planner.Message, error)
 	PlannerMessages(ctx context.Context, sessionID string) ([]planner.Message, error)
 	SetPlannerSummary(ctx context.Context, sessionID, summary string, upTo int64, e event.Event) error
+	// QuestionSession returns a question's sub-chat (ErrNotFound if none).
+	QuestionSession(ctx context.Context, questionID string) (planner.Session, error)
 }
 
 // LLM streams one model response (the Anthropic Messages API through the
@@ -172,6 +174,30 @@ func (pl *Planner) CreateSession(ctx context.Context, projectKey, title string) 
 	s := planner.Session{ID: pl.NewID(), ProjectID: p.ID, Title: title, CreatedBy: id.Subject, CreatedAt: now, UpdatedAt: now}
 	e := event.Event{Customer: c.ID, Project: p.ID, EntityType: "planner_session", EntityID: s.ID,
 		Type: "planner.session_created", Actor: actorOf(id), OccurredAt: now, Payload: mustJSON(map[string]any{"title": title})}
+	if err := pl.Store.CreatePlannerSession(ctx, s, e); err != nil {
+		return SessionView{}, err
+	}
+	return SessionView{Session: s, ProjectKey: p.Key}, nil
+}
+
+// QuestionChat returns the sub-chat of a question in a project, starting
+// it with context when there is none yet. Requires tracker.write.
+func (pl *Planner) QuestionChat(ctx context.Context, projectKey, questionID, title, context string) (SessionView, error) {
+	id, p, c, err := pl.authorizeProject(ctx, projectKey, ActTrackerWrite)
+	if err != nil {
+		return SessionView{}, err
+	}
+	if s, err := pl.Store.QuestionSession(ctx, questionID); err == nil {
+		return SessionView{Session: s, ProjectKey: p.Key, Running: pl.running(s.ID)}, nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return SessionView{}, err
+	}
+	now := pl.Now()
+	s := planner.Session{ID: pl.NewID(), ProjectID: p.ID, Title: title, CreatedBy: id.Subject, CreatedAt: now,
+		UpdatedAt: now, QuestionID: questionID, Context: context}
+	e := event.Event{Customer: c.ID, Project: p.ID, EntityType: "planner_session", EntityID: s.ID,
+		Type: "planner.session_created", Actor: actorOf(id), OccurredAt: now,
+		Payload: mustJSON(map[string]any{"title": title, "question": questionID})}
 	if err := pl.Store.CreatePlannerSession(ctx, s, e); err != nil {
 		return SessionView{}, err
 	}
@@ -374,6 +400,9 @@ func (pl *Planner) turn(ctx context.Context, s planner.Session, p tenancy.Projec
 	}
 
 	system := DefaultPlannerInstructions + fmt.Sprintf("\n\nProject: %s (%s), customer %s.", p.Name, p.Key, c.Key)
+	if s.Context != "" {
+		system += "\n\n" + s.Context
+	}
 	if pl.Instructions != nil {
 		extra, err := pl.Instructions(ctx, p.Key)
 		if err != nil {
