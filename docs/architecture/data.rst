@@ -69,6 +69,33 @@ They are the source for entity history, the realtime API's change streams
 (:doc:`decisions/0018-rest-for-stateless-websocket-json-rpc-msgpack-for-stateful`),
 timelines and the digest.
 
+Durable jobs
+------------
+
+Work that must survive restarts — starting a pipeline stage, checking a
+pull request later, enforcing a timeout — is a **job** in Core's database
+(:doc:`decisions/0016-durable-orchestration-in-the-database`). A job has a
+kind, a JSON payload, a time to run at, attempts and an optional
+**dedupe key**: at most one pending or running job exists per key, so
+"check X later" can be enqueued idempotently.
+
+Jobs are inserted in the same atomic batch as the transition that causes
+them. The **orchestrator** polls for due jobs (every second, and at once
+when work is enqueued), **claims** each with an optimistic update
+(``status = running``, a 5-minute lease) and runs the handler of its kind,
+at most 8 at a time:
+
+- success → ``done``;
+- an error → ``pending`` again after a backoff (2, 4, 8 … seconds, at most
+  10 minutes), until ``max_attempts`` is reached → ``dead``;
+- a permanent error (or no handler for the kind) → ``dead`` at once;
+- a crash or restart mid-job → the lease expires and the job is claimed
+  again; handlers must therefore be idempotent.
+
+Claims are optimistic, so several orchestrators never run the same claim
+twice. Results are counted in ``ballet_jobs_total{kind, result}``
+(``done``, ``retry``, ``dead``); dead jobs keep their last error.
+
 Identifiers
 -----------
 
