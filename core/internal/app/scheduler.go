@@ -21,8 +21,11 @@ type SchedulerStore interface {
 // Scheduler starts the pipelines of runnable tickets without human action,
 // within global and per-project concurrency limits.
 type Scheduler struct {
-	Store  SchedulerStore
-	Start  func(ctx context.Context, it tracker.Item) error // Flows.StartTicket
+	Store SchedulerStore
+	Start func(ctx context.Context, it tracker.Item) error // Flows.StartTicket
+	// Paused reports whether a project's autonomous work is paused
+	// (Control.Paused); optional.
+	Paused func(ctx context.Context, projectID string) bool
 	Logger *slog.Logger
 	// MaxActive and MaxActivePerProject limit the flows occupying a slot
 	// (running, or waiting for checks); flows waiting for a human do not.
@@ -57,7 +60,7 @@ func (s *Scheduler) Tick(ctx context.Context) (int, error) {
 		if total >= s.MaxActive {
 			break
 		}
-		if busy[it.ProjectID] >= s.MaxActivePerProject {
+		if busy[it.ProjectID] >= s.MaxActivePerProject || (s.Paused != nil && s.Paused(ctx, it.ProjectID)) {
 			continue
 		}
 		if err := s.Start(ctx, it); err != nil {

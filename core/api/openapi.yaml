@@ -342,6 +342,79 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Report" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/pauses:
+    get:
+      operationId: listPauses
+      tags: [runs]
+      summary: Pauses of autonomous work the caller can see
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PauseList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/pause:
+    put:
+      operationId: pauseOrganization
+      tags: [runs]
+      summary: Pause all autonomous work (run.manage at organization scope)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PauseInput" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Pause" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: resumeOrganization
+      tags: [runs]
+      summary: Resume all autonomous work
+      responses:
+        "204": { description: Resumed }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/kill:
+    post:
+      operationId: killOrganization
+      tags: [runs]
+      summary: Kill switch — pause everything and cancel every run in progress
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PauseInput" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KillResult" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{project}/pause:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    put:
+      operationId: pauseProject
+      tags: [runs]
+      summary: Pause the project's autonomous work (run.manage)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PauseInput" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Pause" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: resumeProject
+      tags: [runs]
+      summary: Resume the project's autonomous work
+      responses:
+        "204": { description: Resumed }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{project}/kill:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    post:
+      operationId: killProject
+      tags: [runs]
+      summary: Kill switch — pause the project and cancel its runs in progress
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/PauseInput" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KillResult" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/questions/{question}/answer:
     parameters: [{ name: question, in: path, required: true, schema: { type: string } }]
     post:
@@ -1264,6 +1337,32 @@ components:
       additionalProperties: false
       required: [items]
       properties: { items: { type: array, items: { $ref: "#/components/schemas/InboxEntry" } } }
+    Pause:
+      type: object
+      additionalProperties: false
+      required: [scope, paused_by, paused_at]
+      properties:
+        scope: { type: string, enum: [organization, project] }
+        project: { type: string }
+        reason: { type: string }
+        paused_by: { type: string }
+        paused_at: { type: string, format: date-time }
+    PauseList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Pause" } } }
+    PauseInput:
+      type: object
+      additionalProperties: false
+      properties: { reason: { type: string } }
+    KillResult:
+      type: object
+      additionalProperties: false
+      required: [pause, cancelled]
+      properties:
+        pause: { $ref: "#/components/schemas/Pause" }
+        cancelled: { type: integer, description: Runs cancelled }
     QuestionAnswer:
       type: object
       additionalProperties: false

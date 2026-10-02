@@ -46,6 +46,16 @@ export interface FakeCore {
 	answers: Record<string, string>;
 	/** Assumption register (API shape: reports of kind assumption). */
 	assumptions: Record<string, unknown>[];
+	/** Pauses (API shape). */
+	pauses: {
+		scope: string;
+		project?: string;
+		reason?: string;
+		paused_by: string;
+		paused_at: string;
+	}[];
+	/** Runs the kill switch cancels per call. */
+	activeRuns: number;
 }
 
 export interface FakePlannerSession {
@@ -226,6 +236,8 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		inbox: [],
 		answers: {},
 		assumptions: [],
+		pauses: [],
+		activeRuns: 0,
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
@@ -674,6 +686,31 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			a.review_comment = body.comment || undefined;
 			if (m[2] === 'reject') a.follow_up = 'changeset:cs9';
 			return r.fulfill({ json: a });
+		}
+		if (path === '/pauses') return r.fulfill({ json: { items: core.pauses } });
+		if ((m = path.match(/^(?:\/projects\/([^/]+))?\/(pause|kill)$/))) {
+			const project = m[1];
+			const scope = project ? 'project' : 'organization';
+			const same = (p: FakeCore['pauses'][number]) => p.scope === scope && p.project === project;
+			if (method === 'DELETE') {
+				if (!core.pauses.some(same)) return err(r, 404, 'not_found', 'not paused');
+				core.pauses = core.pauses.filter((p) => !same(p));
+				return r.fulfill({ status: 204 });
+			}
+			const pause = {
+				scope,
+				project,
+				reason: body.reason || undefined,
+				paused_by: 'user-alice',
+				paused_at: now
+			};
+			core.pauses = [...core.pauses.filter((p) => !same(p)), pause];
+			if (m[2] === 'kill') {
+				const cancelled = core.activeRuns;
+				core.activeRuns = 0;
+				return r.fulfill({ json: { pause, cancelled } });
+			}
+			return r.fulfill({ json: pause });
 		}
 		if (path === '/inbox') return r.fulfill({ json: { items: core.inbox } });
 		if ((m = path.match(/^\/questions\/([^/]+)\/(answer|chat)$/))) {
