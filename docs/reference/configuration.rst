@@ -300,6 +300,32 @@ Read at start-up; changes need a restart.
    How often Core refreshes open pull requests from their forge (at
    least ``10s``). Default ``1m``; ``BALLET_CORE_FORGE_POLL_INTERVAL``.
 
+.. _reference-config-scheduler:
+
+``[scheduler]`` (core)
+----------------------
+
+The scheduler starts the pipelines of runnable tickets on its own (see
+:ref:`reference-pipelines-scheduling`).
+
+``enabled``
+   Start runnable tickets automatically. Default ``true``;
+   ``BALLET_CORE_SCHEDULER_ENABLED``. With ``false`` pipelines only start
+   by hand.
+
+``max_active``
+   Flows occupying a slot at once, across all projects (at least 1).
+   Default ``4``; ``BALLET_CORE_SCHEDULER_MAX_ACTIVE``.
+
+``max_active_per_project``
+   The same limit per project (at least 1). Default ``2``;
+   ``BALLET_CORE_SCHEDULER_MAX_ACTIVE_PER_PROJECT``.
+
+``interval``
+   How often the scheduler looks for runnable tickets (at least ``1s``);
+   it also looks whenever a flow moves on. Default ``10s``;
+   ``BALLET_CORE_SCHEDULER_INTERVAL``.
+
 ``[agents]`` (core)
 -------------------
 

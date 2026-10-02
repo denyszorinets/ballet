@@ -114,6 +114,21 @@ Stopping
    Pausing or cancelling the ticket stops the flow and cancels its active
    run.
 
+.. _reference-pipelines-scheduling:
+
+Scheduling
+~~~~~~~~~~
+
+Core's scheduler starts pipelines without human action. A ticket is
+*runnable* when it is ``ready``, its project has a repository configured,
+and every item that blocks it — or blocks its epic — is ``done`` or
+``cancelled``. Runnable tickets start oldest first, as long as the
+:ref:`concurrency limits <reference-config-scheduler>` allow: a flow
+occupies a slot while it runs a stage or waits for checks, not while it
+waits for a human (an approval, a review, a merge or an answer). So
+resolving a blocker, moving a ticket to ``ready`` or finishing a flow
+starts the next tickets within seconds.
+
 Every transition is recorded in the ticket history (``flow.started``,
 ``flow.stage_started``, ``flow.stage_finished``, ``flow.waiting``, ``flow.done``,
 ``flow.failed``, ``flow.stopped``).
