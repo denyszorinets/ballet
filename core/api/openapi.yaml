@@ -455,6 +455,19 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Budget" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/projects/{project}/digest:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: getProjectDigest
+      tags: [usage]
+      summary: What happened in the project over a period (default the last 24 hours)
+      parameters:
+        - { name: since, in: query, schema: { type: string, format: date-time }, description: "Default: until minus 24 hours" }
+        - { name: until, in: query, schema: { type: string, format: date-time }, description: "Default: now" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Digest" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/questions/{question}/answer:
     parameters: [{ name: question, in: path, required: true, schema: { type: string } }]
     post:
@@ -1426,6 +1439,50 @@ components:
         ticket_tokens: { type: integer, format: int64, minimum: 0 }
         daily_tokens: { type: integer, format: int64, minimum: 0 }
         version: { type: integer, format: int64, description: The version read; 0 for the first }
+    DigestTicket:
+      type: object
+      additionalProperties: false
+      required: [key, at]
+      properties:
+        key: { type: string }
+        title: { type: string }
+        at: { type: string, format: date-time }
+        detail: { type: string }
+    Digest:
+      type: object
+      additionalProperties: false
+      required: [project, since, until, done, failed, started, merged, waiting, questions_raised, answered_by_planner,
+        answered_by_human, open_questions, assumptions, proposals, runs, tokens, interventions, markdown]
+      properties:
+        project: { type: string }
+        since: { type: string, format: date-time }
+        until: { type: string, format: date-time }
+        done: { type: array, items: { $ref: "#/components/schemas/DigestTicket" } }
+        failed: { type: array, items: { $ref: "#/components/schemas/DigestTicket" } }
+        started: { type: array, items: { $ref: "#/components/schemas/DigestTicket" } }
+        merged: { type: array, items: { $ref: "#/components/schemas/DigestTicket" } }
+        waiting: { type: array, items: { $ref: "#/components/schemas/DigestTicket" }, description: "Now: pipelines waiting; detail says for what" }
+        questions_raised: { type: integer }
+        answered_by_planner: { type: integer }
+        answered_by_human: { type: integer }
+        open_questions:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [ticket, text, blocking, since]
+            properties:
+              ticket: { type: string }
+              text: { type: string }
+              blocking: { type: boolean }
+              route: { type: string }
+              since: { type: string, format: date-time }
+        assumptions: { type: array, items: { $ref: "#/components/schemas/DigestTicket" }, description: "detail: the assumption" }
+        proposals: { type: integer, description: Changesets proposed }
+        runs: { type: object, additionalProperties: { type: integer }, description: Agent sessions finished by status }
+        tokens: { type: integer, format: int64, description: Counted tokens used in the period }
+        interventions: { type: array, items: { type: string } }
+        markdown: { type: string, description: The digest as Markdown }
     QuestionAnswer:
       type: object
       additionalProperties: false

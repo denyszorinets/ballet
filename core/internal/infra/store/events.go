@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
@@ -40,6 +41,9 @@ type EventFilter struct {
 	AfterSeq   int64 // only events with a greater seq
 	UpToSeq    int64 // only events with a smaller or equal seq (0: no bound)
 	Limit      int   // default and maximum 1000
+	// Since narrows to events at or after it, to the second (callers
+	// filter exactly); zero: no bound.
+	Since time.Time
 }
 
 const maxEvents = 1000
@@ -69,6 +73,11 @@ func (s *Store) ListEvents(ctx context.Context, f EventFilter) ([]event.Event, e
 	}
 	if f.UpToSeq > 0 {
 		add("seq <= ?", f.UpToSeq)
+	}
+	if !f.Since.IsZero() {
+		// occurred_at is RFC 3339 text with variable fractions, which only
+		// compares safely across whole seconds: start a second early.
+		add("occurred_at >= ?", f.Since.UTC().Truncate(time.Second).Add(-time.Second).Format(time.RFC3339))
 	}
 	limit := f.Limit
 	if limit <= 0 || limit > maxEvents {
@@ -137,6 +146,6 @@ func (s *Store) EntityHistory(ctx context.Context, entityType, entityID string) 
 func (s *Store) QueryEvents(ctx context.Context, q app.EventQuery) ([]event.Event, error) {
 	return s.ListEvents(ctx, EventFilter{
 		Project: q.Project, EntityType: q.EntityType, EntityID: q.EntityID,
-		AfterSeq: q.AfterSeq, UpToSeq: q.UpToSeq, Limit: q.Limit,
+		AfterSeq: q.AfterSeq, UpToSeq: q.UpToSeq, Limit: q.Limit, Since: q.Since,
 	})
 }

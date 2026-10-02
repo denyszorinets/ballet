@@ -65,6 +65,9 @@ export interface FakeCore {
 	}[];
 	/** Runs the kill switch cancels per call. */
 	activeRuns: number;
+	/** Digest returned for any period (API shape); the last query is kept. */
+	digest?: Record<string, unknown>;
+	digestQueries: string[];
 	/** Published pipeline versions by name, oldest first (API shape). */
 	pipelines: Record<string, Record<string, unknown>[]>;
 	/** Budgets by "customer:<key>" or "project:<key>" (API shape). */
@@ -256,6 +259,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		activeRuns: 0,
 		budgets: {},
 		pipelines: {},
+		digestQueries: [],
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
@@ -720,6 +724,11 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				return r.fulfill({ json: core.budgets[k] });
 			}
 			return r.fulfill({ json: b });
+		}
+		if ((m = path.match(/^\/projects\/([^/]+)\/digest$/))) {
+			core.digestQueries.push(url.searchParams.get('since') ?? '');
+			if (!core.digest) return err(r, 404, 'not_found', 'no digest');
+			return r.fulfill({ json: core.digest });
 		}
 		if (path === '/pipelines/render')
 			return r.fulfill({ json: { yaml: JSON.stringify(body.definition, null, 2) } });

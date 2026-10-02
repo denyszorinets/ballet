@@ -579,6 +579,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project}/digest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        /** What happened in the project over a period (default the last 24 hours) */
+        get: operations["getProjectDigest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/questions/{question}/answer": {
         parameters: {
             query?: never;
@@ -1768,6 +1788,53 @@ export interface components {
              * @description The version read; 0 for the first
              */
             version: number;
+        };
+        DigestTicket: {
+            key: string;
+            title?: string;
+            /** Format: date-time */
+            at: string;
+            detail?: string;
+        };
+        Digest: {
+            project: string;
+            /** Format: date-time */
+            since: string;
+            /** Format: date-time */
+            until: string;
+            done: components["schemas"]["DigestTicket"][];
+            failed: components["schemas"]["DigestTicket"][];
+            started: components["schemas"]["DigestTicket"][];
+            merged: components["schemas"]["DigestTicket"][];
+            /** @description Now: pipelines waiting; detail says for what */
+            waiting: components["schemas"]["DigestTicket"][];
+            questions_raised: number;
+            answered_by_planner: number;
+            answered_by_human: number;
+            open_questions: {
+                ticket: string;
+                text: string;
+                blocking: boolean;
+                route?: string;
+                /** Format: date-time */
+                since: string;
+            }[];
+            /** @description detail: the assumption */
+            assumptions: components["schemas"]["DigestTicket"][];
+            /** @description Changesets proposed */
+            proposals: number;
+            /** @description Agent sessions finished by status */
+            runs: {
+                [key: string]: number;
+            };
+            /**
+             * Format: int64
+             * @description Counted tokens used in the period
+             */
+            tokens: number;
+            interventions: string[];
+            /** @description The digest as Markdown */
+            markdown: string;
         };
         QuestionAnswer: {
             answer: string;
@@ -3475,6 +3542,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Budget"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getProjectDigest: {
+        parameters: {
+            query?: {
+                /** @description Default: until minus 24 hours */
+                since?: string;
+                /** @description Default: now */
+                until?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Digest"];
                 };
             };
             default: components["responses"]["Error"];

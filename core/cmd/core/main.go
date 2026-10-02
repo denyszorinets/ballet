@@ -474,6 +474,7 @@ func run() error {
 		Questions:    questions,
 		Control:      control,
 		Budgets:      budgets,
+		Digests:      &app.Digests{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 		Assumptions: &app.Assumptions{Store: st, Questions: st, Reports: st, Items: st, Tenancy: st, Authz: authz,
 			Changesets: changesets, Now: time.Now, NewID: store.NewID},
 	})

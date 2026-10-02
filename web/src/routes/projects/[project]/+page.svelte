@@ -111,6 +111,7 @@
 		<a href={resolve('/projects/[project]/changesets', { project: project.key })}>Changesets</a>
 		<a href={resolve('/projects/[project]/assumptions', { project: project.key })}>Assumptions</a>
 		<a href={resolve('/projects/[project]/pipelines', { project: project.key })}>Pipelines</a>
+		<a href={resolve('/projects/[project]/digest', { project: project.key })}>Digest</a>
 		<a href={resolve('/projects/[project]/skills', { project: project.key })}>Skills</a>
 		<a href={resolve('/projects/[project]/settings', { project: project.key })}>Settings</a>
 	</div>
