@@ -62,6 +62,28 @@ Validation rejects unknown kinds, adapters, actions and targets, duplicate
 ids, stages that can never be reached, and pipelines that can never reach
 ``$done``.
 
+Editing in the UI
+-----------------
+
+Project page → **Pipelines** edits a project's pipelines (needs
+``project.update``; everyone else reads them):
+
+- choose ``default`` or the pipeline of a ticket type (a type without its
+  own pipeline starts from ``default``);
+- **Stages**: the ordered stage list — ID, name, kind (agent session,
+  human approval, platform merge), an agent stage's instructions, model,
+  skills and timeout, and per outcome (*done*, *failed*, *blocked*) where
+  it leads: the default (*done* → the next stage, else ``$done``; the
+  others → ``$question``), another stage, ``$done``, ``$failed`` or
+  ``$question``; plus the loop limit;
+- **YAML**: the same pipeline as YAML, editable; **Export YAML** downloads
+  it and **Import YAML** loads a file;
+- problems (unknown targets, duplicate IDs, unreachable stages, …) are
+  shown as you edit; **Publish** saves a new version, refused while there
+  are problems or when someone published meanwhile;
+- **History** lists the versions; *Load* puts an older version into the
+  editor, to publish it again as the newest.
+
 Versions and ticket types
 -------------------------
 
