@@ -43,8 +43,11 @@ Tools
        confirmation
    * - ``raise_question``
      - ``question``, ``context``?, ``blocking``?
-     - Records a question for the planner and the humans (routing and
-       answering come with the questions feature)
+     - Records a question; the planner tries to answer it from the
+       knowledge base, else the humans do (:doc:`/concepts/questions`).
+       Returns ``{"id", "next"}``: after a **blocking** question the
+       agent pushes its work, submits its stage report and ends the
+       session; a new session of the stage continues with the answer
    * - ``propose_work``
      - ``title``, ``description``, ``type``?, ``reason``
      - Proposes a new ticket, related to the run's ticket, as a **plan

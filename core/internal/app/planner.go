@@ -49,6 +49,7 @@ type LLMCaller struct {
 	ProjectKey  string
 	SessionID   string
 	ActingFor   string // subject of the human
+	TicketKey   string // the ticket the call is for (metering), if any
 }
 
 // LLMResponse is a complete model response.

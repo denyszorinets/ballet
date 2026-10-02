@@ -240,3 +240,22 @@ func TestRemoteVerifier_ThrottlesRepeatedUnknownKey(t *testing.T) {
 
 	assert.Equal(t, 2, fetches, "initial fetch + one refetch for the unknown key, then throttled")
 }
+
+func TestIssue_PlannerActsForAHumanOrOnATicket(t *testing.T) {
+	clock := &fakeClock{now: time.Now()}
+	issuer := runtoken.NewIssuer(newRing(t, clock), clock.Now)
+	planner := runtoken.Claims{Kind: runtoken.KindPlanner, Subject: "planner:s-1", Audience: []string{"gateway"},
+		Customer: "acme", Project: "ACME", Session: "s-1"}
+	_, err := issuer.Issue(planner, time.Hour)
+	assert.Error(t, err, "neither a human nor a ticket")
+
+	onTicket := planner
+	onTicket.Ticket = "ACME-1"
+	_, err = issuer.Issue(onTicket, time.Hour)
+	assert.NoError(t, err)
+
+	noSession := onTicket
+	noSession.Session = ""
+	_, err = issuer.Issue(noSession, time.Hour)
+	assert.Error(t, err)
+}

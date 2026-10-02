@@ -62,6 +62,7 @@ const (
 	JobFlowEnter    = "flow.enter"    // start the current stage
 	JobFlowFinished = "flow.finished" // the current stage's run ended
 	JobFlowMerge    = "flow.merge"    // check and merge the pull request
+	JobFlowResume   = "flow.resume"   // questions were answered: continue
 )
 
 type flowJob struct {
@@ -105,6 +106,7 @@ func (fl *Flows) Register(o *Orchestrator) {
 	o.Handle(JobFlowEnter, fl.handleEnter)
 	o.Handle(JobFlowFinished, fl.handleFinished)
 	o.Handle(JobFlowMerge, fl.handleMerge)
+	o.Handle(JobFlowResume, fl.handleResume)
 }
 
 func (fl *Flows) job(kind, dedupe string, p flowJob, at time.Time) Job {
@@ -452,8 +454,92 @@ func (fl *Flows) handleFinished(ctx context.Context, j Job) error {
 		return err
 	}
 	outcome, text := fl.stageOutcome(ctx, r)
+	asked, err := fl.blockingQuestions(ctx, it.ID, r.ID)
+	if err != nil {
+		return err
+	}
+	if len(asked) > 0 {
+		// The session ended to wait for answers (ADR-0015): the stage
+		// continues in a new session once they are answered.
+		return fl.awaitAnswers(ctx, f, it, c, r, text)
+	}
 	_, err = fl.transition(ctx, f, it, c, outcome, text, event.System)
 	return err
+}
+
+// blockingQuestions returns the blocking questions a run asked.
+func (fl *Flows) blockingQuestions(ctx context.Context, ticketID, runID string) ([]report.Question, error) {
+	qs, err := fl.Reports.Questions(ctx, ticketID)
+	if err != nil {
+		return nil, err
+	}
+	var out []report.Question
+	for _, q := range qs {
+		if q.Blocking && q.RunID == runID {
+			out = append(out, q)
+		}
+	}
+	return out, nil
+}
+
+// awaitAnswers makes the flow wait for the answers to the questions its
+// stage's run asked; when they are answered already, it resumes at once.
+func (fl *Flows) awaitAnswers(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer, r run.Run, text string) error {
+	next := f
+	next.Status, next.Waiting, next.RunID, next.Outcome = FlowWaiting, "question", "", ""
+	next.Report = fmt.Sprintf("Report of the %s stage so far (it asked questions):\n\n%s", f.Stage, strings.TrimSpace(text))
+	next.UpdatedAt, next.Version = fl.Now(), f.Version+1
+	e := fl.itemEvent(it, c.ID, "flow.waiting", event.System, map[string]any{"stage": f.Stage, "for": "answer", "run": r.ID})
+	jobs := []Job{fl.job(JobFlowResume, "", flowJob{TicketID: it.ID}, fl.Now())}
+	if err := fl.Store.SaveFlow(ctx, next, f.Version, fl.ticketWrite(it, tracker.StateWaitingForAnswer, f.Stage), jobs,
+		[]event.Event{e}); err != nil {
+		return err
+	}
+	fl.kick()
+	return nil
+}
+
+// handleResume continues a flow waiting for answers once no blocking
+// question of its ticket is open: the stage starts again in a new session
+// with the questions and answers handed over.
+func (fl *Flows) handleResume(ctx context.Context, j Job) error {
+	p, err := decode(j)
+	if err != nil {
+		return err
+	}
+	f, it, c, ok, err := fl.current(ctx, flowJob{TicketID: p.TicketID})
+	if err != nil || !ok || f.Status != FlowWaiting || f.Waiting != "question" {
+		return err
+	}
+	qs, err := fl.Reports.Questions(ctx, it.ID)
+	if err != nil {
+		return err
+	}
+	var answered strings.Builder
+	for _, q := range qs {
+		if q.Status == report.QuestionOpen && q.Blocking {
+			return nil // a later answer resumes
+		}
+		if q.Status == report.QuestionAnswered && !q.AnsweredAt.Before(f.StartedAt) {
+			fmt.Fprintf(&answered, "\n\n**Question:** %s\n\n**Answer** (%s): %s", q.Text, q.AnsweredBy, q.Answer)
+		}
+	}
+	next := f
+	next.Status, next.Waiting, next.RunID, next.UpdatedAt, next.Version = FlowRunning, "", "", fl.Now(), f.Version+1
+	if answered.Len() > 0 {
+		next.Report = strings.TrimSpace(f.Report + "\n\n## Answered questions" + answered.String())
+	}
+	if next.Iteration > next.Definition.MaxIterations {
+		next.Iteration = 0 // a human decided how to go on: a fresh loop budget
+	}
+	e := fl.itemEvent(it, c.ID, "flow.resumed", event.System, map[string]any{"stage": f.Stage})
+	jobs := []Job{fl.job(JobFlowEnter, "", flowJob{TicketID: it.ID, FlowVersion: next.Version}, fl.Now())}
+	if err := fl.Store.SaveFlow(ctx, next, f.Version, fl.ticketWrite(it, tracker.StateInProgress, f.Stage), jobs,
+		[]event.Event{e}); err != nil {
+		return err
+	}
+	fl.kick()
+	return nil
 }
 
 // stageOutcome is the outcome of a stage run: the agent's stage report,
@@ -492,6 +578,8 @@ func (fl *Flows) transition(ctx context.Context, f Flow, it tracker.Item, c tena
 	if !strings.HasPrefix(target, "$") && f.Definition.IsLoop(f.Stage, target) {
 		next.Iteration++
 		if next.Iteration > f.Definition.MaxIterations {
+			// After the answer the flow goes on where the loop went.
+			next.Stage = target
 			target, reason = pipeline.TargetQuestion,
 				fmt.Sprintf("The pipeline went back %d times, more than its limit of %d.", next.Iteration, f.Definition.MaxIterations)
 		}
@@ -511,10 +599,12 @@ func (fl *Flows) transition(ctx context.Context, f Flow, it tracker.Item, c tena
 		events = append(events, fl.itemEvent(it, c.ID, "flow.failed", actor, map[string]any{"stage": f.Stage}))
 	case pipeline.TargetQuestion:
 		next.Status, next.Waiting = FlowWaiting, "question"
-		ticket = fl.ticketWrite(it, tracker.StateWaitingForAnswer, f.Stage)
+		ticket = fl.ticketWrite(it, tracker.StateWaitingForAnswer, next.Stage)
+		// Questions about the process go to the humans directly.
 		q := report.Question{ID: fl.NewID(), ProjectID: it.ProjectID, TicketID: it.ID,
 			Text:    fmt.Sprintf("The %s stage of %s ended %s. How should it continue?", f.Stage, it.Key, outcome),
-			Context: strings.TrimSpace(reason + "\n\n" + next.Report), Blocking: true, Status: report.QuestionOpen, CreatedAt: fl.Now()}
+			Context: strings.TrimSpace(reason + "\n\n" + next.Report), Blocking: true, Status: report.QuestionOpen,
+			Route: report.RouteHuman, CreatedAt: fl.Now()}
 		qe := fl.itemEvent(it, c.ID, "item.question_raised", event.System, map[string]any{"question": q.ID, "blocking": true})
 		if err := fl.Reports.CreateQuestion(ctx, q, qe); err != nil {
 			return Flow{}, err

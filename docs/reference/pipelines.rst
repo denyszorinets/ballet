@@ -110,6 +110,13 @@ Targets and limits
    ``$question``, Core asks a blocking question on the ticket and the flow
    waits for an ``answer`` (the ticket is ``waiting_for_answer``).
 
+Questions
+   When a stage's run raised a blocking question, the stage ends without
+   an outcome and the flow waits for the answer. Once no blocking
+   question of the ticket is open, the flow resumes (``flow.resumed``):
+   the same stage runs again in a new session, with the answered
+   questions handed over (:doc:`/concepts/questions`).
+
 Stopping
    Pausing or cancelling the ticket stops the flow and cancels its active
    run (when the stage's next step runs, at the latest at the reconciler's
@@ -157,7 +164,7 @@ question on the ticket and makes the flow wait for an ``answer`` (the
 ticket is ``waiting_for_answer``).
 
 Every transition is recorded in the ticket history (``flow.started``,
-``flow.stage_started``, ``flow.stage_finished``, ``flow.waiting``, ``flow.stuck``, ``flow.done``,
+``flow.stage_started``, ``flow.stage_finished``, ``flow.waiting``, ``flow.resumed``, ``flow.stuck``, ``flow.done``,
 ``flow.failed``, ``flow.stopped``).
 
 REST

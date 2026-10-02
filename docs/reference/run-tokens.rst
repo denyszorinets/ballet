@@ -29,12 +29,13 @@ signing key, ``iss: "ballet-core"``.
    * - ``cust``, ``proj``
      - Customer and project scope (required for ``run`` and ``planner``)
    * - ``tkt``
-     - Ticket (required for ``run``)
+     - Ticket (required for ``run``; for ``planner`` when it acts for no
+       human, e.g. answering an agent's question)
    * - ``sess``
      - Planner session (required for ``planner``)
    * - ``act.sub``
      - Human a planner acts for (RFC 8693 actor claim; required for
-       ``planner``)
+       ``planner`` without ``tkt``)
    * - ``caps``
      - Capabilities, see below
 

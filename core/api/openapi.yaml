@@ -304,6 +304,20 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/QuestionList" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/questions/{question}/answer:
+    parameters: [{ name: question, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: answerQuestion
+      tags: [runs]
+      summary: Answer an open question; a blocking question resumes the ticket's pipeline
+      description: Needs tracker.write on the project. The answer is written to the knowledge base.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/QuestionAnswer" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Question" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/items/{item}/pull-request:
     parameters: [{ $ref: "#/components/parameters/Item" }]
     get:
@@ -1135,15 +1149,25 @@ components:
       required: [id, text, blocking, status, created_at]
       properties:
         id: { type: string }
-        run: { type: string }
+        ticket: { type: string, description: Key of the ticket }
+        run: { type: string, description: The run that asked; absent for questions Ballet raised about the pipeline }
         text: { type: string }
         context: { type: string }
         blocking: { type: boolean }
         status: { type: string, enum: [open, answered] }
+        route:
+          type: string
+          enum: [planner, human]
+          description: Where an open question is being answered; absent before it is routed
         answer: { type: string }
         answered_by: { type: string }
         created_at: { type: string, format: date-time }
         answered_at: { type: string, format: date-time }
+    QuestionAnswer:
+      type: object
+      additionalProperties: false
+      required: [answer]
+      properties: { answer: { type: string } }
     QuestionList:
       type: object
       additionalProperties: false

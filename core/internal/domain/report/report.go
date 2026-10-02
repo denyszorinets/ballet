@@ -77,6 +77,12 @@ const (
 	QuestionAnswered QuestionStatus = "answered"
 )
 
+// Routes of an open question (ADR-0015).
+const (
+	RoutePlanner = "planner" // the planner tries to answer from sources
+	RouteHuman   = "human"   // in the humans' inbox
+)
+
 // Question is something a run could not decide on its own.
 type Question struct {
 	ID         string
@@ -87,6 +93,7 @@ type Question struct {
 	Context    string // what the agent knows, options considered
 	Blocking   bool   // the ticket cannot proceed without an answer
 	Status     QuestionStatus
+	Route      string // RoutePlanner, RouteHuman or "" (not routed yet)
 	Answer     string
 	AnsweredBy string
 	CreatedAt  time.Time

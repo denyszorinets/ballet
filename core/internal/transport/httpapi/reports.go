@@ -20,11 +20,13 @@ type reportJSON struct {
 
 type questionJSON struct {
 	ID         string                `json:"id"`
+	Ticket     string                `json:"ticket,omitempty"`
 	Run        string                `json:"run,omitempty"`
 	Text       string                `json:"text"`
 	Context    string                `json:"context,omitempty"`
 	Blocking   bool                  `json:"blocking"`
 	Status     report.QuestionStatus `json:"status"`
+	Route      string                `json:"route,omitempty"`
 	Answer     string                `json:"answer,omitempty"`
 	AnsweredBy string                `json:"answered_by,omitempty"`
 	CreatedAt  time.Time             `json:"created_at"`
@@ -54,10 +56,14 @@ func registerReports(mux *router, at *app.AgentTracker) {
 		}
 		out := listJSON[questionJSON]{Items: make([]questionJSON, 0, len(questions))}
 		for _, q := range questions {
-			out.Items = append(out.Items, questionJSON{ID: q.ID, Run: q.RunID, Text: q.Text, Context: q.Context,
-				Blocking: q.Blocking, Status: q.Status, Answer: q.Answer, AnsweredBy: q.AnsweredBy, CreatedAt: q.CreatedAt,
-				AnsweredAt: timePtr(q.AnsweredAt)})
+			out.Items = append(out.Items, toQuestionJSON(q, r.PathValue("item")))
 		}
 		writeJSON(w, http.StatusOK, out)
 	})
+}
+
+func toQuestionJSON(q report.Question, ticketKey string) questionJSON {
+	return questionJSON{ID: q.ID, Ticket: ticketKey, Run: q.RunID, Text: q.Text, Context: q.Context, Blocking: q.Blocking,
+		Status: q.Status, Route: q.Route, Answer: q.Answer, AnsweredBy: q.AnsweredBy, CreatedAt: q.CreatedAt,
+		AnsweredAt: timePtr(q.AnsweredAt)}
 }
