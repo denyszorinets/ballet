@@ -5,9 +5,11 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -22,6 +24,10 @@ import (
 
 // Audience of run tokens accepted by the gateway.
 const Audience = "gateway"
+
+// maxRequestBytes bounds a request forwarded to the provider (the
+// provider's own limit is of the same order).
+const maxRequestBytes = 32 << 20
 
 // upstreamTimeout bounds one provider request, including streaming.
 const upstreamTimeout = 10 * time.Minute
@@ -79,6 +85,24 @@ func (a *Anthropic) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		apiError(w, http.StatusBadGateway, "api_error", "credential lookup failed")
 		return
 	}
+	// Read the whole request before forwarding it. Streamed through, the
+	// provider may answer before the body is forwarded; the HTTP server then
+	// discards the unread request body once the response starts, the
+	// transport's write fails and it closes the upstream connection,
+	// cutting the response stream (#88).
+	body, err := io.ReadAll(io.LimitReader(r.Body, maxRequestBytes+1))
+	if err != nil {
+		apiError(w, http.StatusBadRequest, "invalid_request_error", "could not read the request")
+		return
+	}
+	if len(body) > maxRequestBytes {
+		apiError(w, http.StatusRequestEntityTooLarge, "request_too_large", "the request exceeds 32 MiB")
+		return
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	r.ContentLength = int64(len(body))
+	r.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(body)), nil }
+
 	base := cred.BaseURL
 	if base == "" {
 		base = a.DefaultURL
@@ -89,11 +113,9 @@ func (a *Anthropic) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// The upstream request is detached from the incoming request's
-	// context. In CI, healthy streams were cut ("use of closed network
-	// connection") by a cancellation of the incoming context that never
-	// reproduced locally; a client that really disconnects is still
-	// detected when writing to it fails, which ends this handler and
-	// cancels upstream. upstreamTimeout bounds every upstream request.
+	// context and bounded by upstreamTimeout instead; a client that
+	// disconnects is still detected when writing to it fails, which ends
+	// this handler and cancels upstream.
 	upstream, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), upstreamTimeout)
 	defer cancel()
 	var started atomic.Bool
