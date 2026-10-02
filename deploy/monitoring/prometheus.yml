@@ -1,0 +1,15 @@
+# Prometheus for the single-host installation (deploy/compose.yaml):
+# every Ballet service on the host network serves /metrics.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: core
+    static_configs: [{ targets: ["localhost:8080"] }]
+  - job_name: knowledge
+    static_configs: [{ targets: ["localhost:8081"] }]
+  - job_name: gateway
+    static_configs: [{ targets: ["localhost:8082"] }]
+  - job_name: runner
+    static_configs: [{ targets: ["localhost:8083"] }]

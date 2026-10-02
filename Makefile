@@ -93,6 +93,10 @@ images: ## Build the service images (ballet-<service>) and the agent image (ball
 		docker build -f deploy/Containerfile --target $$t -t ballet-$$t .; done
 	docker build -f deploy/agent/Containerfile -t ballet-agent deploy/agent
 
+.PHONY: dashboards
+dashboards: ## Regenerate the Grafana dashboards (deploy/monitoring/dashboards.py)
+	python3 deploy/monitoring/dashboards.py
+
 ##@ Web
 
 .PHONY: web-deps
