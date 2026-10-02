@@ -188,9 +188,11 @@ func TestRuns_RefusedRunsAreRequeued(t *testing.T) {
 	fr.mu.Lock()
 	fr.refuse = false
 	fr.mu.Unlock()
-	e.eventually(t, r.ID, run.StatusStarting)
+	require.Eventually(t, func() bool { return len(fr.starts()) == 1 }, 5*time.Second, 5*time.Millisecond)
 	assert.Equal(t, []string{r.ID}, fr.starts())
-	assert.Equal(t, "r1", e.status(t, r.ID).Runner)
+	got := e.status(t, r.ID)
+	assert.Equal(t, run.StatusStarting, got.Status, "accepted runs stay with their runner")
+	assert.Equal(t, "r1", got.Runner)
 }
 
 func TestRuns_ReconnectAndDisconnect(t *testing.T) {
