@@ -96,6 +96,8 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		Tracker:      tracker,
 		Changesets:   &app.Changesets{Store: st, Tracker: tracker},
 		Planner:      pl,
+		Runs: &app.Runs{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID,
+			Dispatcher: &app.Dispatcher{Store: st, Tenancy: st, Now: time.Now}},
 	})
 	return contract(t, mux), pl
 }
@@ -554,5 +556,40 @@ func TestPlannerAPI_SessionsAndTranscript(t *testing.T) {
 	require.Equal(t, http.StatusOK, code, list)
 	assert.Len(t, list["items"], 1)
 	code, _ = call(t, api, "GET", "/api/v1/planner/sessions/nope", "alice", "")
+	assert.Equal(t, http.StatusNotFound, code)
+}
+
+func TestRunAPI_QueueInspectCancel(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"t"}`)
+
+	code, r := call(t, api, "POST", "/api/v1/items/WEB-1/runs", "alice",
+		`{"stage":"implement","spec":{"command":["make","test"],"env":{"CI":"1"},"timeout_seconds":60}}`)
+	require.Equal(t, http.StatusCreated, code, r)
+	assert.Equal(t, "queued", r["status"])
+	assert.Equal(t, "WEB-1", r["ticket"])
+	id := r["id"].(string)
+
+	code, list := call(t, api, "GET", "/api/v1/items/WEB-1/runs", "alice", "")
+	require.Equal(t, http.StatusOK, code, list)
+	assert.Len(t, list["items"], 1)
+	code, logs := call(t, api, "GET", "/api/v1/runs/"+id+"/logs?after=0&limit=10", "alice", "")
+	require.Equal(t, http.StatusOK, code, logs)
+	assert.Empty(t, logs["items"])
+	code, _ = call(t, api, "GET", "/api/v1/runs/"+id+"/logs?after=x", "alice", "")
+	assert.Equal(t, http.StatusBadRequest, code)
+
+	code, c := call(t, api, "POST", "/api/v1/runs/"+id+"/cancel", "alice", "")
+	require.Equal(t, http.StatusOK, code, c)
+	assert.Equal(t, "cancelled", c["status"])
+	assert.NotEmpty(t, c["finished_at"])
+	code, _ = call(t, api, "POST", "/api/v1/runs/"+id+"/cancel", "alice", "")
+	assert.Equal(t, http.StatusConflict, code)
+
+	code, _ = call(t, api, "POST", "/api/v1/items/WEB-1/runs", "alice", `{"stage":"implement","spec":{"command":[]}}`)
+	assert.Equal(t, http.StatusBadRequest, code)
+	code, _ = call(t, api, "GET", "/api/v1/runs/nope", "alice", "")
 	assert.Equal(t, http.StatusNotFound, code)
 }

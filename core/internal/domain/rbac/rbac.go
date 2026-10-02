@@ -31,6 +31,7 @@ const (
 	ActKnowledgeWrite    Action = "knowledge.write"
 	ActSkillRead         Action = "skill.read"  // agent skills (process)
 	ActSkillWrite        Action = "skill.write" // edit and publish skills
+	ActRunManage         Action = "run.manage"  // queue and cancel agent runs by hand
 )
 
 // AllActions lists every action, for documentation and exhaustive tests.
@@ -39,7 +40,7 @@ var AllActions = []Action{
 	ActProjectCreate, ActProjectRead, ActProjectUpdate,
 	ActRoleBindingManage, ActRoleBindingRead,
 	ActTrackerRead, ActTrackerWrite,
-	ActCredentialManage, ActKnowledgeRead, ActKnowledgeWrite, ActSkillRead, ActSkillWrite,
+	ActCredentialManage, ActKnowledgeRead, ActKnowledgeWrite, ActSkillRead, ActSkillWrite, ActRunManage,
 }
 
 // Role is a named set of actions.
@@ -64,7 +65,7 @@ var grants = map[Role][]Action{
 	RoleCustomerAdmin: {
 		ActCustomerRead, ActCustomerUpdate, ActProjectCreate, ActProjectRead, ActProjectUpdate,
 		ActRoleBindingManage, ActRoleBindingRead, ActTrackerRead, ActTrackerWrite, ActCredentialManage,
-		ActKnowledgeRead, ActKnowledgeWrite, ActSkillRead, ActSkillWrite,
+		ActKnowledgeRead, ActKnowledgeWrite, ActSkillRead, ActSkillWrite, ActRunManage,
 	},
 	RoleEngineer: append(slices.Clone(readActions), ActTrackerWrite, ActKnowledgeWrite),
 	RoleApprover: readActions,

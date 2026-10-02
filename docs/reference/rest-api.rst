@@ -439,6 +439,36 @@ Representation: ``{"id", "type", "item": {"key", "kind", "title", "state"}}``.
    Tickets in state ``ready`` whose blockers are all resolved (``done``
    or ``cancelled``) — what the scheduler may start.
 
+.. _reference-rest-runs:
+
+Runs
+----
+
+Agent sessions executed by Runners (:doc:`/reference/runners`).
+Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
+"runner"?, "exit_code"?, "error"?, "created_by", "created_at",
+"started_at"?, "finished_at"?, "version"}``.
+
+``POST /api/v1/items/{item}/runs`` — ``{"stage", "spec": {"command", "env"?, "image"?, "workdir"?, "timeout_seconds"?}}`` → ``201``
+   Queues a run of a ticket by hand. Needs ``run.manage`` on the project
+   (organization and customer admins). ``400`` for non-tickets, an empty
+   command, a stage not matching ``[a-z][a-z0-9_-]{0,31}`` or invalid
+   environment variable names.
+
+``GET /api/v1/items/{item}/runs`` → ``200`` list, oldest first (``tracker.read``)
+
+``GET /api/v1/runs/{run}`` → ``200``
+
+``GET /api/v1/runs/{run}/logs?after=<seq>&limit=<n>`` → ``200``
+   ``{"items": [{"seq", "stream", "text", "at"}]}``: output after
+   ``seq`` (default 0), at most ``limit`` (default and maximum 1000)
+   chunks. Poll with the last ``seq`` to follow a running run.
+
+``POST /api/v1/runs/{run}/cancel`` → ``200``
+   Cancels a queued run at once; an active run is cancelled on its Runner
+   (its status changes when the Runner reports). ``409`` if the run has
+   ended. Needs ``run.manage``.
+
 Planner sessions
 ----------------
 

@@ -332,3 +332,23 @@ func TestRPC_NotificationsAreHandledInArrivalOrder(t *testing.T) {
 		require.Equal(t, i, v, "notification %d arrived out of order", i)
 	}
 }
+
+func TestRPC_OnConnectRunsBeforeTheFirstRequest(t *testing.T) {
+	var registered sync.Map
+	srv := httptest.NewServer(rpc.NewServer(rpc.ServerOptions{
+		Authenticate: authenticate,
+		Options: rpc.Options{Handler: func(_ context.Context, req *rpc.Request) (any, error) {
+			_, ok := registered.Load(req.Conn)
+			return ok, nil
+		}},
+		OnConnect: func(c *rpc.Conn) {
+			time.Sleep(50 * time.Millisecond) // a slow registration
+			registered.Store(c, true)
+		},
+	}))
+	t.Cleanup(srv.Close)
+	c := dial(t, "ws"+strings.TrimPrefix(srv.URL, "http"), rpc.DialOptions{})
+	var ok bool
+	require.NoError(t, c.Call(t.Context(), "anything", nil, &ok))
+	assert.True(t, ok, "requests are handled only after OnConnect returned")
+}

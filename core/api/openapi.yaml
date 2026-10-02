@@ -244,6 +244,58 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PlannerTranscript" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/items/{item}/runs:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    get:
+      operationId: listRuns
+      tags: [runs]
+      summary: The ticket's runs, oldest first
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createRun
+      tags: [runs]
+      summary: Queue a run of the ticket by hand (run.manage)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateRun" } } }
+      responses:
+        "201": { description: Queued, content: { application/json: { schema: { $ref: "#/components/schemas/Run" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/runs/{run}:
+    parameters: [{ $ref: "#/components/parameters/Run" }]
+    get:
+      operationId: getRun
+      tags: [runs]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Run" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/runs/{run}/logs:
+    parameters: [{ $ref: "#/components/parameters/Run" }]
+    get:
+      operationId: getRunLogs
+      tags: [runs]
+      summary: The run's output after a sequence number
+      parameters:
+        - { name: after, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 1000, default: 1000 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunLogList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/runs/{run}/cancel:
+    parameters: [{ $ref: "#/components/parameters/Run" }]
+    post:
+      operationId: cancelRun
+      tags: [runs]
+      summary: Cancel a queued or active run (run.manage)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Run" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/items/{item}:
     parameters: [{ $ref: "#/components/parameters/Item" }]
     get:
@@ -567,6 +619,7 @@ components:
     Customer: { name: customer, in: path, required: true, schema: { type: string }, description: Customer key }
     Project: { name: project, in: path, required: true, schema: { type: string }, description: Project key }
     Skill: { name: skill, in: path, required: true, schema: { type: string }, description: Skill ID }
+    Run: { name: run, in: path, required: true, schema: { type: string }, description: Run ID }
     PlannerSession: { name: session, in: path, required: true, schema: { type: string }, description: Planner session ID }
     Changeset: { name: changeset, in: path, required: true, schema: { type: string }, description: Changeset ID }
     Entry: { name: entry, in: path, required: true, schema: { type: string }, description: Knowledge entry ID }
@@ -833,6 +886,62 @@ components:
         type: { $ref: "#/components/schemas/DependencyType" }
         item: { type: string, description: Key of the other item }
 
+    RunStatus: { type: string, enum: [queued, starting, running, succeeded, failed, cancelled] }
+    RunSpec:
+      type: object
+      additionalProperties: false
+      required: [command]
+      properties:
+        image: { type: string, description: Container image (container backends) }
+        command: { type: array, items: { type: string }, minItems: 1 }
+        env: { type: object, additionalProperties: { type: string } }
+        workdir: { type: string }
+        timeout_seconds: { type: integer, minimum: 0, description: "0: the Runner's default" }
+    Run:
+      type: object
+      additionalProperties: false
+      required: [id, project, ticket, stage, status, spec, created_by, created_at, version]
+      properties:
+        id: { type: string }
+        project: { type: string }
+        ticket: { type: string }
+        stage: { type: string }
+        status: { $ref: "#/components/schemas/RunStatus" }
+        spec: { $ref: "#/components/schemas/RunSpec" }
+        runner: { type: string }
+        exit_code: { type: integer }
+        error: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+        started_at: { type: string, format: date-time }
+        finished_at: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+    RunList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Run" } } }
+    CreateRun:
+      type: object
+      additionalProperties: false
+      required: [stage, spec]
+      properties:
+        stage: { type: string, description: "Pipeline stage, e.g. implement" }
+        spec: { $ref: "#/components/schemas/RunSpec" }
+    RunLog:
+      type: object
+      additionalProperties: false
+      required: [seq, stream, text, at]
+      properties:
+        seq: { type: integer, format: int64 }
+        stream: { type: string, enum: [stdout, stderr, system] }
+        text: { type: string }
+        at: { type: string, format: date-time }
+    RunLogList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/RunLog" } } }
     PlannerSession:
       type: object
       additionalProperties: false

@@ -304,6 +304,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/{item}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        /** The ticket's runs, oldest first */
+        get: operations["listRuns"];
+        put?: never;
+        /** Queue a run of the ticket by hand (run.manage) */
+        post: operations["createRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run ID */
+                run: components["parameters"]["Run"];
+            };
+            cookie?: never;
+        };
+        get: operations["getRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run}/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run ID */
+                run: components["parameters"]["Run"];
+            };
+            cookie?: never;
+        };
+        /** The run's output after a sequence number */
+        get: operations["getRunLogs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{run}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run ID */
+                run: components["parameters"]["Run"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a queued or active run (run.manage) */
+        post: operations["cancelRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{item}": {
         parameters: {
             query?: never;
@@ -936,6 +1016,59 @@ export interface components {
             /** @description Key of the other item */
             item: string;
         };
+        /** @enum {string} */
+        RunStatus: "queued" | "starting" | "running" | "succeeded" | "failed" | "cancelled";
+        RunSpec: {
+            /** @description Container image (container backends) */
+            image?: string;
+            command: string[];
+            env?: {
+                [key: string]: string;
+            };
+            workdir?: string;
+            /** @description 0: the Runner's default */
+            timeout_seconds?: number;
+        };
+        Run: {
+            id: string;
+            project: string;
+            ticket: string;
+            stage: string;
+            status: components["schemas"]["RunStatus"];
+            spec: components["schemas"]["RunSpec"];
+            runner?: string;
+            exit_code?: number;
+            error?: string;
+            created_by: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            started_at?: string;
+            /** Format: date-time */
+            finished_at?: string;
+            /** Format: int64 */
+            version: number;
+        };
+        RunList: {
+            items: components["schemas"]["Run"][];
+        };
+        CreateRun: {
+            /** @description Pipeline stage, e.g. implement */
+            stage: string;
+            spec: components["schemas"]["RunSpec"];
+        };
+        RunLog: {
+            /** Format: int64 */
+            seq: number;
+            /** @enum {string} */
+            stream: "stdout" | "stderr" | "system";
+            text: string;
+            /** Format: date-time */
+            at: string;
+        };
+        RunLogList: {
+            items: components["schemas"]["RunLog"][];
+        };
         PlannerSession: {
             id: string;
             project: string;
@@ -1326,6 +1459,8 @@ export interface components {
         Project: string;
         /** @description Skill ID */
         Skill: string;
+        /** @description Run ID */
+        Run: string;
         /** @description Planner session ID */
         PlannerSession: string;
         /** @description Changeset ID */
@@ -1937,6 +2072,133 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlannerTranscript"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRun"];
+            };
+        };
+        responses: {
+            /** @description Queued */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run ID */
+                run: components["parameters"]["Run"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getRunLogs: {
+        parameters: {
+            query?: {
+                after?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Run ID */
+                run: components["parameters"]["Run"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunLogList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    cancelRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run ID */
+                run: components["parameters"]["Run"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
                 };
             };
             default: components["responses"]["Error"];

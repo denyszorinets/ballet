@@ -26,6 +26,7 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/transport/httpapi"
 	"github.com/denyszorinets/ballet/core/internal/transport/internalapi"
 	"github.com/denyszorinets/ballet/core/internal/transport/realtime"
+	"github.com/denyszorinets/ballet/core/internal/transport/runnerapi"
 	"github.com/denyszorinets/ballet/core/internal/transport/webui"
 	"github.com/denyszorinets/ballet/kit/auth/oidc"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
@@ -259,6 +260,12 @@ func run() error {
 		CompactAt: cfg.Planner.CompactAtTokens, OnCompact: compactions.Inc,
 		Now: time.Now, NewID: store.NewID, Logger: svc.Logger, Context: ctx,
 	}
+	dispatcher := &app.Dispatcher{Store: st, Tenancy: st, Now: time.Now, Logger: svc.Logger}
+	go dispatcher.Run(ctx)
+	runnerapi.Register(svc.Mux, runnerapi.Deps{
+		Verifier: runtoken.NewRingVerifier(tokenKeys, time.Now), Dispatcher: dispatcher,
+		Options: rpc.Options{Logger: svc.Logger},
+	})
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,
@@ -275,6 +282,8 @@ func run() error {
 		Tracker:    tracker,
 		Changesets: changesets,
 		Planner:    plannerSvc,
+		Runs: &app.Runs{Store: st, Items: st, Tenancy: st, Authz: authz, Dispatcher: dispatcher,
+			Now: time.Now, NewID: store.NewID},
 	})
 
 	searchIndexer := &app.SearchIndexer{
