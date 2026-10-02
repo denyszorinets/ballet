@@ -78,12 +78,12 @@ func (p *Provider) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	model, _ := body["model"].(string)
 	if stream, _ := body["stream"].(bool); stream {
-		if name, input, ok := toolCommand(body); ok {
-			p.streamToolUse(w, model, name, input)
+		switch step := script(body); {
+		case step.result != nil:
+			p.streamText(w, model, "Tool result: "+*step.result)
 			return
-		}
-		if result, ok := lastToolResult(body); ok {
-			p.streamText(w, model, "Tool result: "+result)
+		case step.tool != "":
+			p.streamToolUse(w, model, step.tool, step.input)
 			return
 		}
 		p.stream(w, model)
@@ -121,14 +121,9 @@ func (p *Provider) stream(w http.ResponseWriter, model string) {
 	send("message_stop", map[string]any{"type": "message_stop"})
 }
 
-// lastContent returns the content blocks of the last message.
-func lastContent(body map[string]any) []map[string]any {
-	msgs, _ := body["messages"].([]any)
-	if len(msgs) == 0 {
-		return nil
-	}
-	last, _ := msgs[len(msgs)-1].(map[string]any)
-	switch c := last["content"].(type) {
+// blocks normalises message content to blocks.
+func blocks(content any) []map[string]any {
+	switch c := content.(type) {
 	case string:
 		return []map[string]any{{"type": "text", "text": c}}
 	case []any:
@@ -143,40 +138,58 @@ func lastContent(body map[string]any) []map[string]any {
 	return nil
 }
 
-// toolCommand recognises a last user text "/tool <name> <json input>" in a
-// request that offers tools: the fake then calls that tool.
-func toolCommand(body map[string]any) (string, string, bool) {
-	if tools, _ := body["tools"].([]any); len(tools) == 0 {
-		return "", "", false
-	}
-	blocks := lastContent(body)
-	if len(blocks) == 0 {
-		return "", "", false
-	}
-	text, _ := blocks[len(blocks)-1]["text"].(string)
-	rest, ok := strings.CutPrefix(strings.TrimSpace(text), "/tool ")
-	if !ok {
-		return "", "", false
-	}
-	name, input, _ := strings.Cut(strings.TrimSpace(rest), " ")
-	if input = strings.TrimSpace(input); input == "" {
-		input = "{}"
-	}
-	return name, input, json.Valid([]byte(input))
+// step is what a scripted conversation does next.
+type step struct {
+	tool, input string  // call this tool
+	result      *string // answer with this tool result
 }
 
-// lastToolResult returns the content of a tool result in the last message.
-func lastToolResult(body map[string]any) (string, bool) {
-	for _, b := range lastContent(body) {
-		if b["type"] == "tool_result" {
-			content, _ := b["content"].(string)
-			if len(content) > 200 {
-				content = content[:200]
+// script follows a scripted conversation: the last "/tool <name> <json>"
+// line in the user messages (agents add their own context around and after
+// the human's text) calls that tool if tools are offered; once a tool
+// result follows that line, the fake answers with it.
+func script(body map[string]any) step {
+	if tools, _ := body["tools"].([]any); len(tools) == 0 {
+		return step{}
+	}
+	var next step
+	msgs, _ := body["messages"].([]any)
+	for _, m := range msgs {
+		msg, _ := m.(map[string]any)
+		if msg["role"] != "user" {
+			continue
+		}
+		for _, b := range blocks(msg["content"]) {
+			if b["type"] == "tool_result" {
+				content, _ := b["content"].(string)
+				if list, ok := b["content"].([]any); ok && len(list) > 0 {
+					if first, ok := list[0].(map[string]any); ok {
+						content, _ = first["text"].(string)
+					}
+				}
+				if len(content) > 200 {
+					content = content[:200]
+				}
+				next.result = &content
+				continue
 			}
-			return content, true
+			text, _ := b["text"].(string)
+			for _, line := range strings.Split(text, "\n") {
+				rest, ok := strings.CutPrefix(strings.TrimSpace(line), "/tool ")
+				if !ok {
+					continue
+				}
+				name, input, _ := strings.Cut(strings.TrimSpace(rest), " ")
+				if input = strings.TrimSpace(input); input == "" {
+					input = "{}"
+				}
+				if json.Valid([]byte(input)) {
+					next = step{tool: name, input: input}
+				}
+			}
 		}
 	}
-	return "", false
+	return next
 }
 
 func (p *Provider) sse(w http.ResponseWriter) func(event string, data any) {

@@ -473,6 +473,17 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
    ``seq`` (default 0), at most ``limit`` (default and maximum 1000)
    chunks. Poll with the last ``seq`` to follow a running run.
 
+``GET /api/v1/items/{item}/reports`` → ``200``
+   What the ticket's runs reported through the tracker MCP
+   (:doc:`/reference/tracker-mcp`), oldest first: ``{"id", "run", "kind":
+   "progress"|"stage_report"|"assumption", "outcome"?, "text", "detail"?,
+   "created_at"}``. Needs ``tracker.read``.
+
+``GET /api/v1/items/{item}/questions`` → ``200``
+   Questions the ticket's runs raised: ``{"id", "run"?, "text",
+   "context"?, "blocking", "status": "open"|"answered", "answer"?,
+   "answered_by"?, "created_at", "answered_at"?}``.
+
 ``POST /api/v1/runs/{run}/cancel`` → ``200``
    Cancels a queued run at once; an active run is cancelled on its Runner
    (its status changes when the Runner reports). ``409`` if the run has

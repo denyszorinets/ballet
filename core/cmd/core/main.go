@@ -33,6 +33,7 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/transport/internalapi"
 	"github.com/denyszorinets/ballet/core/internal/transport/realtime"
 	"github.com/denyszorinets/ballet/core/internal/transport/runnerapi"
+	"github.com/denyszorinets/ballet/core/internal/transport/trackermcp"
 	"github.com/denyszorinets/ballet/core/internal/transport/webui"
 	"github.com/denyszorinets/ballet/kit/auth/oidc"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
@@ -90,6 +91,7 @@ type agentsConfig struct {
 	// knowledge.url + "/mcp".
 	GatewayURL      string        `toml:"gateway_url"`
 	KnowledgeMCPURL string        `toml:"knowledge_mcp_url"`
+	TrackerMCPURL   string        `toml:"tracker_mcp_url"`
 	ClaudeCommand   string        `toml:"claude_command"`
 	Model           string        `toml:"model"`
 	RunTokenTTL     time.Duration `toml:"run_token_ttl"`
@@ -157,7 +159,8 @@ func defaultConfig() serviceConfig {
 		Secrets:   secretsConfig{KeyFile: "data/secrets.key"},
 		Knowledge: knowledgeConfig{URL: "http://localhost:8081"},
 		Gateway:   gatewayConfig{URL: "http://localhost:8082"},
-		Agents:    agentsConfig{ClaudeCommand: "claude", RunTokenTTL: 3 * time.Hour},
+		Agents: agentsConfig{ClaudeCommand: "claude", RunTokenTTL: 3 * time.Hour,
+			TrackerMCPURL: "http://localhost:8080" + trackermcp.Path},
 		Planner: plannerConfig{
 			Model: "claude-sonnet-5-5", MaxTokens: 8192, MaxRounds: 20, Skill: "planner", CompactAtTokens: 100_000,
 		},
@@ -338,6 +341,17 @@ func run() error {
 		Verifier: runtoken.NewRingVerifier(tokenKeys, time.Now), Dispatcher: dispatcher,
 		Options: rpc.Options{Logger: svc.Logger},
 	})
+	runs := &app.Runs{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Dispatcher: dispatcher,
+		Agents: agents, SessionSkills: skills.SessionSkills, Model: cfg.Agents.Model, Deps: st,
+		Knowledge: (&knowledge.Reader{URL: knowledgeURL, Tokens: tokenIssuer}).ForTicket,
+		MCP: []agent.MCPServer{
+			{Name: "tracker", URL: cfg.Agents.TrackerMCPURL, TokenEnv: runTokenEnv},
+			{Name: "knowledge", URL: knowledgeMCP, TokenEnv: runTokenEnv},
+		},
+		Now: time.Now, NewID: store.NewID}
+	agentTracker := &app.AgentTracker{Reports: st, RunStore: st, Runs: runs, Items: st, Tenancy: st, Authz: authz,
+		Changesets: changesets, Now: time.Now, NewID: store.NewID}
+	trackermcp.Register(svc.Mux, runtoken.NewRingVerifier(tokenKeys, time.Now), agentTracker, "v1")
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,
@@ -351,15 +365,12 @@ func run() error {
 		Knowledge: &httpapi.KnowledgeProxy{
 			URL: knowledgeURL, Access: knowledgeAccess, Tokens: tokenIssuer,
 		},
-		Tracker:    tracker,
-		Changesets: changesets,
-		Planner:    plannerSvc,
-		Runs: &app.Runs{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Dispatcher: dispatcher,
-			Agents: agents, SessionSkills: skills.SessionSkills, Model: cfg.Agents.Model, Deps: st,
-			Knowledge: (&knowledge.Reader{URL: knowledgeURL, Tokens: tokenIssuer}).ForTicket,
-			MCP:       []agent.MCPServer{{Name: "knowledge", URL: knowledgeMCP, TokenEnv: runTokenEnv}},
-			Now:       time.Now, NewID: store.NewID},
-		Execution: &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
+		Tracker:      tracker,
+		Changesets:   changesets,
+		Planner:      plannerSvc,
+		Runs:         runs,
+		Execution:    &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
+		AgentTracker: agentTracker,
 	})
 
 	searchIndexer := &app.SearchIndexer{

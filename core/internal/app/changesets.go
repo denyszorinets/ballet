@@ -81,10 +81,20 @@ func (cs *Changesets) Propose(ctx context.Context, in ProposeInput) (ChangesetVi
 	if err != nil {
 		return ChangesetView{}, err
 	}
+	return cs.propose(ctx, p, c, in, actorIn(ctx, id))
+}
+
+// proposeAs proposes on behalf of a workload (an agent run proposing
+// work); the caller has checked that the actor may.
+func (cs *Changesets) proposeAs(ctx context.Context, p tenancy.Project, c tenancy.Customer, in ProposeInput, actor event.Actor) (ChangesetView, error) {
+	return cs.propose(ctx, p, c, in, actor)
+}
+
+func (cs *Changesets) propose(ctx context.Context, p tenancy.Project, c tenancy.Customer, in ProposeInput, actor event.Actor) (ChangesetView, error) {
 	now := cs.Tracker.Now()
 	ch := changeset.Changeset{
 		ID: cs.Tracker.NewID(), ProjectID: p.ID, Title: in.Title, Summary: in.Summary, Ops: in.Ops,
-		Status: changeset.StatusProposed, ProposedBy: actorIn(ctx, id), CreatedAt: now, Version: 1,
+		Status: changeset.StatusProposed, ProposedBy: actor, CreatedAt: now, Version: 1,
 	}
 	if err := ch.Validate(); err != nil {
 		return ChangesetView{}, invalid(err)
@@ -93,7 +103,7 @@ func (cs *Changesets) Propose(ctx context.Context, in ProposeInput) (ChangesetVi
 	for i := range all {
 		all[i] = i
 	}
-	if _, _, err := cs.build(ctx, ch, all, p, c, id); err != nil {
+	if _, _, err := cs.build(ctx, ch, all, p, c, auth.Identity{Kind: auth.KindService, Subject: actor.Subject}); err != nil {
 		return ChangesetView{}, err
 	}
 	e := changesetEvent(ch, c.ID, "changeset.proposed", ch.ProposedBy, map[string]any{"title": ch.Title, "operations": len(ch.Ops)})
