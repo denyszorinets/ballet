@@ -39,7 +39,7 @@ func (e flowEnv) events(t *testing.T, key string) []string {
 func TestReconciler_RequeuesLostFollowUps(t *testing.T) {
 	// Core stopped between finishing a run and queuing the flow's next
 	// step: the run ended, nobody told the flow.
-	e := newFlows(t, always(report.OutcomeDone), func(_ *app.Orchestrator, d *app.Dispatcher) { d.OnFinished = nil })
+	e := newFlows(t, always(report.OutcomeDone), func(_ *app.Orchestrator, d *app.Dispatcher, _ *app.Flows) { d.OnFinished = nil })
 	tk := e.ticket(t, auto)
 	_, err := e.flows.Start(user(t, "dave", "acme-admins"), tk.Key)
 	require.NoError(t, err)
@@ -87,7 +87,7 @@ func TestReconciler_FlagsStuckRuns(t *testing.T) {
 }
 
 func TestReconciler_FlagsStepsThatFailedForGood(t *testing.T) {
-	e := newFlows(t, always(report.OutcomeDone), func(o *app.Orchestrator, _ *app.Dispatcher) {
+	e := newFlows(t, always(report.OutcomeDone), func(o *app.Orchestrator, _ *app.Dispatcher, _ *app.Flows) {
 		o.Handle(app.JobFlowEnter, func(context.Context, app.Job) error { return app.ErrPermanent })
 	})
 	tk := e.ticket(t, auto)

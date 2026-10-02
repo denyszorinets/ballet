@@ -125,6 +125,12 @@ func (rc *Reconciler) flow(ctx context.Context, f Flow) error {
 	if f.Status == FlowWaiting && f.Waiting == "question" {
 		return rc.resumeIfAnswered(ctx, f)
 	}
+	if f.Status == FlowWaiting && f.Waiting == "pause" {
+		if fl.paused(ctx, f.ProjectID) {
+			return nil
+		}
+		return fl.unpause(ctx, f) // its resumption was missed
+	}
 	want, ok := rc.expected(f)
 	if !ok {
 		return nil

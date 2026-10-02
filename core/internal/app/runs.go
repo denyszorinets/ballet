@@ -485,6 +485,9 @@ type Dispatcher struct {
 	// OnFinished is called after a run ended (the pipeline continues);
 	// optional.
 	OnFinished func(ctx context.Context, r run.Run)
+	// Held, when set, keeps queued runs from starting (a paused project:
+	// Control.Paused).
+	Held func(ctx context.Context, projectID string) bool
 
 	mu      sync.Mutex
 	runners map[string]*runnerState
@@ -620,6 +623,9 @@ func (d *Dispatcher) dispatch(ctx context.Context) {
 		return
 	}
 	for _, r := range queued {
+		if d.Held != nil && d.Held(ctx, r.ProjectID) {
+			continue
+		}
 		st := d.pick()
 		if st == nil {
 			return

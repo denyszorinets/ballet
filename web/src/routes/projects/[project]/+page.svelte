@@ -1,4 +1,5 @@
 <script lang="ts">
+	import WorkControl from '$lib/components/WorkControl.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { apiError, type Schemas } from '$lib/api/client';
@@ -112,6 +113,7 @@
 		<a href={resolve('/projects/[project]/skills', { project: project.key })}>Skills</a>
 		<a href={resolve('/projects/[project]/settings', { project: project.key })}>Settings</a>
 	</div>
+	<WorkControl project={project.key} customer={project.customer} />
 
 	{#if canWrite}
 		<form class="form" onsubmit={createTicket} aria-label="Add ticket">

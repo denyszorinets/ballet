@@ -427,7 +427,10 @@ func run() error {
 		Logger: svc.Logger}
 	flows.Register(orchestrator)
 	dispatcher.OnFinished = flows.RunFinished
-	scheduler := &app.Scheduler{Store: st, Start: flows.StartTicket, Logger: svc.Logger, MaxActive: cfg.Scheduler.MaxActive,
+	control := &app.Control{Store: st, Tenancy: st, Authz: authz, RunStore: st, Dispatcher: dispatcher, Flows: flows,
+		Now: time.Now, Logger: svc.Logger}
+	flows.Paused, dispatcher.Held = control.Paused, control.Paused
+	scheduler := &app.Scheduler{Store: st, Start: flows.StartTicket, Paused: control.Paused, Logger: svc.Logger, MaxActive: cfg.Scheduler.MaxActive,
 		MaxActivePerProject: cfg.Scheduler.MaxActivePerProject, Interval: cfg.Scheduler.Interval}
 	flows.Changed = scheduler.Kick
 	// Start once every job kind has its handler: a job claimed without one
@@ -462,6 +465,7 @@ func run() error {
 		Pipelines:    pipelines,
 		Flows:        flows,
 		Questions:    questions,
+		Control:      control,
 		Assumptions: &app.Assumptions{Store: st, Questions: st, Reports: st, Items: st, Tenancy: st, Authz: authz,
 			Changesets: changesets, Now: time.Now, NewID: store.NewID},
 	})

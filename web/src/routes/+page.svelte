@@ -1,4 +1,5 @@
 <script lang="ts">
+	import WorkControl from '$lib/components/WorkControl.svelte';
 	import { resolve } from '$app/paths';
 	import { apiError, type Schemas } from '$lib/api/client';
 	import { getSession, type Session } from '$lib/session';
@@ -44,6 +45,9 @@
 <svelte:head><title>Customers · Ballet</title></svelte:head>
 
 <h1>Customers</h1>
+{#if session?.permissions.can('run.manage')}
+	<WorkControl />
+{/if}
 
 {#if session?.permissions.can('customer.create')}
 	<form class="form card" onsubmit={create} aria-label="New customer">

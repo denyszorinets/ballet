@@ -90,6 +90,9 @@ type Flows struct {
 	// CheckInterval between checks of a pull request waiting for checks,
 	// approval or merge; default 30 s.
 	CheckInterval time.Duration
+	// Paused, when set, reports whether autonomous work in a project is
+	// paused (Control.Paused): flows then wait before their next stage.
+	Paused func(ctx context.Context, projectID string) bool
 	// Changed, when set, is called after flows move on, which may free a
 	// scheduler slot or unblock tickets (Scheduler.Kick).
 	Changed func()
@@ -378,6 +381,9 @@ func (fl *Flows) handleEnter(ctx context.Context, j Job) error {
 	if err != nil || !ok {
 		return err
 	}
+	if fl.paused(ctx, f.ProjectID) {
+		return fl.waitPause(ctx, f, it, c)
+	}
 	st, found := f.Definition.Stage(f.Stage)
 	if !found {
 		return fmt.Errorf("%w: stage %s is not in the pipeline", ErrPermanent, f.Stage)
@@ -453,6 +459,10 @@ func (fl *Flows) handleFinished(ctx context.Context, j Job) error {
 	if err != nil {
 		return err
 	}
+	if r.Status == run.StatusCancelled && fl.paused(ctx, f.ProjectID) {
+		// The kill switch stopped it: the stage runs again on resume.
+		return fl.waitPause(ctx, f, it, c)
+	}
 	outcome, text := fl.stageOutcome(ctx, r)
 	asked, err := fl.blockingQuestions(ctx, it.ID, r.ID)
 	if err != nil {
@@ -465,6 +475,60 @@ func (fl *Flows) handleFinished(ctx context.Context, j Job) error {
 	}
 	_, err = fl.transition(ctx, f, it, c, outcome, text, event.System)
 	return err
+}
+
+func (fl *Flows) paused(ctx context.Context, projectID string) bool {
+	return fl.Paused != nil && fl.Paused(ctx, projectID)
+}
+
+// waitPause makes a flow wait for its project to be resumed; the current
+// stage then starts (again).
+func (fl *Flows) waitPause(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer) error {
+	next := f
+	next.Status, next.Waiting, next.RunID, next.UpdatedAt, next.Version = FlowWaiting, "pause", "", fl.Now(), f.Version+1
+	e := fl.itemEvent(it, c.ID, "flow.waiting", event.System, map[string]any{"stage": f.Stage, "for": "pause"})
+	if err := fl.Store.SaveFlow(ctx, next, f.Version, nil, nil, []event.Event{e}); err != nil {
+		return err
+	}
+	fl.kick()
+	return nil
+}
+
+// ResumePaused continues the flows waiting for a pause that has ended.
+func (fl *Flows) ResumePaused(ctx context.Context) {
+	flows, err := fl.Store.ActiveFlows(ctx)
+	if err != nil {
+		fl.logger().ErrorContext(ctx, "resuming paused flows failed", "error", err)
+		return
+	}
+	for _, f := range flows {
+		if f.Waiting != "pause" || fl.paused(ctx, f.ProjectID) {
+			continue
+		}
+		if err := fl.unpause(ctx, f); err != nil && !errors.Is(err, ErrConflict) {
+			fl.logger().ErrorContext(ctx, "resuming a paused flow failed", "ticket", f.TicketID, "error", err)
+		}
+	}
+}
+
+func (fl *Flows) unpause(ctx context.Context, f Flow) error {
+	it, err := fl.Items.ItemByID(ctx, f.TicketID)
+	if err != nil {
+		return err
+	}
+	_, c, err := fl.customer(ctx, f.ProjectID)
+	if err != nil {
+		return err
+	}
+	next := f
+	next.Status, next.Waiting, next.UpdatedAt, next.Version = FlowRunning, "", fl.Now(), f.Version+1
+	e := fl.itemEvent(it, c.ID, "flow.resumed", event.System, map[string]any{"stage": f.Stage, "after": "pause"})
+	jobs := []Job{fl.job(JobFlowEnter, "", flowJob{TicketID: it.ID, FlowVersion: next.Version}, fl.Now())}
+	if err := fl.Store.SaveFlow(ctx, next, f.Version, nil, jobs, []event.Event{e}); err != nil {
+		return err
+	}
+	fl.kick()
+	return nil
 }
 
 // blockingQuestions returns the blocking questions a run asked.
@@ -632,6 +696,9 @@ func (fl *Flows) handleMerge(ctx context.Context, j Job) error {
 	f, it, c, ok, err := fl.current(ctx, p)
 	if err != nil || !ok {
 		return err
+	}
+	if fl.paused(ctx, f.ProjectID) {
+		return fl.waitPause(ctx, f, it, c)
 	}
 	pr, err := fl.PullRequests.EnsureForTicket(ctx, it)
 	switch {

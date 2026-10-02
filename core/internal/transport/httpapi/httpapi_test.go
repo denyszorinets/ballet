@@ -99,7 +99,8 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		Execution:    &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 		AgentTracker: &app.AgentTracker{Reports: st, RunStore: st, Items: st, Tenancy: st, Authz: authz,
 			Now: time.Now, NewID: store.NewID},
-		Flows: &app.Flows{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Flows:   &app.Flows{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Control: &app.Control{Store: st, Tenancy: st, Authz: authz, RunStore: st, Now: time.Now},
 		Assumptions: &app.Assumptions{Store: st, Questions: st, Reports: st, Items: st, Tenancy: st, Authz: authz,
 			Now: time.Now, NewID: store.NewID},
 		Questions: &app.Questions{Store: st, Items: st, Tenancy: st, Authz: authz, Inbox: st, Now: time.Now, NewID: store.NewID,
@@ -734,5 +735,23 @@ func TestAssumptionAPI_EmptyRegisterAndErrors(t *testing.T) {
 	code, _ = call(t, api, "GET", "/api/v1/projects/WEB/assumptions?review=maybe", "alice", "")
 	assert.Equal(t, http.StatusBadRequest, code)
 	code, _ = call(t, api, "POST", "/api/v1/assumptions/nope/reject", "alice", `{"comment":"no"}`)
+	assert.Equal(t, http.StatusNotFound, code)
+}
+
+func TestControlAPI_PauseAndResume(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	code, out := call(t, api, "PUT", "/api/v1/projects/WEB/pause", "alice", `{"reason":"freeze"}`)
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, "project", out["scope"])
+	code, out = call(t, api, "PUT", "/api/v1/pause", "alice", `{}`)
+	require.Equal(t, http.StatusOK, code, out)
+	code, out = call(t, api, "GET", "/api/v1/pauses", "alice", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, out["items"], 2)
+	code, _ = call(t, api, "DELETE", "/api/v1/projects/WEB/pause", "alice", "")
+	assert.Equal(t, http.StatusNoContent, code)
+	code, _ = call(t, api, "DELETE", "/api/v1/projects/WEB/pause", "alice", "")
 	assert.Equal(t, http.StatusNotFound, code)
 }

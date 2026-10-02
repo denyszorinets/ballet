@@ -524,6 +524,33 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
    (its status changes when the Runner reports). ``409`` if the run has
    ended. Needs ``run.manage``.
 
+.. _reference-rest-control:
+
+Pause and kill switch
+---------------------
+
+See :ref:`concepts-unattended-pause`.
+
+``GET /api/v1/pauses`` → ``200``
+   ``{"items": [{"scope": "organization"|"project", "project"?,
+   "reason"?, "paused_by", "paused_at"}]}`` — the organization pause and
+   the pauses of projects the caller can read.
+
+``PUT /api/v1/projects/{project}/pause`` — ``{"reason"?}`` → ``200`` the pause
+   Pauses the project's autonomous work. Needs ``run.manage`` on the
+   project.
+
+``DELETE /api/v1/projects/{project}/pause`` → ``204``
+   Resumes it; ``404`` when it is not paused.
+
+``POST /api/v1/projects/{project}/kill`` — ``{"reason"?}`` → ``200`` ``{"pause", "cancelled"}``
+   Pauses the project and cancels its runs in progress; ``cancelled``
+   counts them.
+
+``PUT /api/v1/pause``, ``DELETE /api/v1/pause``, ``POST /api/v1/kill``
+   The same for the whole organization; need ``run.manage`` at
+   organization scope.
+
 .. _reference-rest-execution:
 
 Execution settings

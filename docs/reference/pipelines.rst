@@ -122,6 +122,12 @@ Stopping
    run (when the stage's next step runs, at the latest at the reconciler's
    next pass).
 
+Project and organization pauses
+   While the project or organization is paused, a flow waits before
+   entering its next stage or merging (``waiting: pause``); a stage
+   cancelled by the kill switch runs again after the resume
+   (:ref:`concepts-unattended-pause`).
+
 .. _reference-pipelines-scheduling:
 
 Scheduling
