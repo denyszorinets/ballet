@@ -49,10 +49,14 @@ func (s *Store) SetBudget(ctx context.Context, b app.Budget, expectedVersion int
 // writes; cache reads are not counted) of usage matching f.
 func (s *Store) CountedTokens(ctx context.Context, f app.UsageFilter) (int64, error) {
 	var n sql.NullInt64
+	until := ""
+	if !f.Until.IsZero() {
+		until = formatTime(f.Until)
+	}
 	err := s.db.QueryRow(ctx, `SELECT sum(input_tokens + output_tokens + cache_write_tokens) FROM usage_records
 		WHERE (? = '' OR customer_id = ?) AND (? = '' OR project_id = ?) AND (? = '' OR ticket_key = ?)
-		AND occurred_at >= ?`,
-		f.CustomerID, f.CustomerID, f.ProjectID, f.ProjectID, f.Ticket, f.Ticket, formatTime(f.Since)).Scan(&n)
+		AND occurred_at >= ? AND (? = '' OR occurred_at < ?)`,
+		f.CustomerID, f.CustomerID, f.ProjectID, f.ProjectID, f.Ticket, f.Ticket, formatTime(f.Since), until, until).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("counted tokens: %w", err)
 	}

@@ -60,10 +60,21 @@ Digest
 ------
 
 For any period (typically overnight), Ballet produces a per-project
-digest from the same data: tickets completed and merged, open questions
-by impact, failures, assumptions made, debt filed, spend versus budget.
-It is shown in the UI; delivery through notification channels comes
-later.
+digest (project page → *Digest*, or ``GET
+/api/v1/projects/{project}/digest``). It is computed on request from the
+project's events in the period and its current state:
+
+- tickets done (by their pipeline or by hand), failed, started, and pull
+  requests merged;
+- agent sessions by status and the counted tokens used;
+- questions raised and who answered them (planner or humans), and the
+  questions open now, blocking ones first;
+- assumptions recorded, changesets proposed;
+- pipelines waiting now and for what;
+- interventions: pauses, kill switches and resumes.
+
+The page offers the last 12 hours to 30 days and downloads the digest as
+Markdown. Delivery through notification channels comes later.
 
 Operational metrics
 -------------------

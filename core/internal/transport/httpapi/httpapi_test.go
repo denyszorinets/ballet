@@ -100,6 +100,7 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		AgentTracker: &app.AgentTracker{Reports: st, RunStore: st, Items: st, Tenancy: st, Authz: authz,
 			Now: time.Now, NewID: store.NewID},
 		Flows:   &app.Flows{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Digests: &app.Digests{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 		Budgets: &app.Budgets{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 		Control: &app.Control{Store: st, Tenancy: st, Authz: authz, RunStore: st, Now: time.Now},
 		Assumptions: &app.Assumptions{Store: st, Questions: st, Reports: st, Items: st, Tenancy: st, Authz: authz,
@@ -770,5 +771,16 @@ func TestBudgetAPI_SetAndRead(t *testing.T) {
 	code, _ = call(t, api, "PUT", "/api/v1/projects/WEB/budget", "alice", `{"ticket_tokens":1,"daily_tokens":1,"version":0}`)
 	assert.Equal(t, http.StatusConflict, code)
 	code, _ = call(t, api, "PUT", "/api/v1/customers/acme/budget", "alice", `{"ticket_tokens":-1,"daily_tokens":0,"version":0}`)
+	assert.Equal(t, http.StatusBadRequest, code)
+}
+
+func TestDigestAPI_DefaultsToTheLastDay(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	code, out := call(t, api, "GET", "/api/v1/projects/WEB/digest", "alice", "")
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Contains(t, out["markdown"], "# Digest of WEB")
+	code, _ = call(t, api, "GET", "/api/v1/projects/WEB/digest?since=yesterday", "alice", "")
 	assert.Equal(t, http.StatusBadRequest, code)
 }

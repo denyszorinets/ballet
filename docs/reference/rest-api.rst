@@ -527,6 +527,22 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
    (its status changes when the Runner reports). ``409`` if the run has
    ended. Needs ``run.manage``.
 
+.. _reference-rest-digest:
+
+Digest
+------
+
+``GET /api/v1/projects/{project}/digest[?since=…&until=…]`` → ``200``
+   What happened in the project from ``since`` (RFC 3339; default 24
+   hours before ``until``) to ``until`` (default now)
+   (:doc:`/architecture/observability`): ``{"project", "since",
+   "until", "done", "failed", "started", "merged", "waiting"`` (tickets:
+   ``{"key", "title"?, "at", "detail"?}``)``, "questions_raised",
+   "answered_by_planner", "answered_by_human", "open_questions",
+   "assumptions", "proposals", "runs"`` (by status)``, "tokens",
+   "interventions", "markdown"}``. Needs ``tracker.read``; ``400`` when
+   ``since`` is not before ``until``.
+
 .. _reference-rest-budgets:
 
 Budgets

@@ -25,7 +25,7 @@ type Budget struct {
 // UsageFilter selects usage records; empty fields match everything.
 type UsageFilter struct {
 	CustomerID, ProjectID, Ticket string
-	Since                         time.Time
+	Since, Until                  time.Time // Until zero: no bound
 }
 
 // BudgetStore persists budgets and sums usage.

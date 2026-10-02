@@ -20,6 +20,7 @@ type EventQuery struct {
 	AfterSeq   int64
 	UpToSeq    int64
 	Limit      int
+	Since      time.Time // events at or after it (to the second); zero: all
 }
 
 // EventLog reads Core's append-only event log.
