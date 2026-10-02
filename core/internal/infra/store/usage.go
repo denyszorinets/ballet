@@ -25,15 +25,15 @@ func (s *Store) InsertUsage(ctx context.Context, records []app.UsageRecord) erro
 
 // AggregateUsage sums a project's usage since a time, grouped by ticket
 // or model, largest first.
-func (s *Store) AggregateUsage(ctx context.Context, projectID, groupBy string, since time.Time) ([]app.UsageTotals, error) {
-	col := map[string]string{"ticket": "ticket_key", "model": "model"}[groupBy]
+func (s *Store) AggregateUsage(ctx context.Context, projectID, groupBy string, since time.Time, ticket string) ([]app.UsageTotals, error) {
+	col := map[string]string{"ticket": "ticket_key", "model": "model", "run": "run"}[groupBy]
 	if col == "" {
 		return nil, fmt.Errorf("aggregate usage: unknown grouping %q", groupBy)
 	}
 	rows, err := s.db.Query(ctx, `SELECT `+col+`, count(*), sum(input_tokens), sum(output_tokens),
 			sum(cache_read_tokens), sum(cache_write_tokens)
-		FROM usage_records WHERE project_id = ? AND occurred_at >= ?
-		GROUP BY `+col+` ORDER BY sum(input_tokens) + sum(output_tokens) DESC`, projectID, formatTime(since))
+		FROM usage_records WHERE project_id = ? AND occurred_at >= ? AND (? = '' OR ticket_key = ?)
+		GROUP BY `+col+` ORDER BY sum(input_tokens) + sum(output_tokens) DESC`, projectID, formatTime(since), ticket, ticket)
 	if err != nil {
 		return nil, fmt.Errorf("aggregate usage: %w", err)
 	}

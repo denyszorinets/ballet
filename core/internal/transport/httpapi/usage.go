@@ -37,7 +37,7 @@ func registerUsage(mux *router, u *app.Usage) {
 				return
 			}
 		}
-		rep, err := u.Report(r.Context(), r.PathValue("project"), groupBy, since)
+		rep, err := u.Report(r.Context(), r.PathValue("project"), groupBy, since, q.Get("ticket"))
 		if err != nil {
 			writeError(w, err)
 			return

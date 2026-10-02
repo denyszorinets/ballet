@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { apiError, type Schemas } from '$lib/api/client';
 	import { getSession, type Session } from '$lib/session';
+	import SessionTimeline from '$lib/components/SessionTimeline.svelte';
 	import { nextStates, stateLabel, type Item, type ItemState } from '$lib/tracker';
 
 	type Dependency = Schemas['Dependency'];
@@ -18,6 +19,7 @@
 	let history = $state<Event[]>([]);
 	let knowledge = $state<Schemas['KnowledgeEntry'][]>([]);
 	let runs = $state<Schemas['Run'][]>([]);
+	let usage = $state<Schemas['UsageTotals'][]>([]);
 	let reports = $state<Schemas['Report'][]>([]);
 	let questions = $state<Schemas['Question'][]>([]);
 	let pr = $state<Schemas['PullRequest']>();
@@ -103,6 +105,10 @@
 		questions = q.data?.items ?? [];
 		pr = pp.data;
 		flow = fw.data;
+		const u = await s.api.GET('/api/v1/projects/{project}/usage', {
+			params: { path: { project: it.data.project }, query: { group_by: 'run', ticket: k } }
+		});
+		usage = u.data?.items ?? [];
 		if (!customer || containers.length === 0) {
 			const pp = { params: { path: { project: it.data.project } } };
 			const [p, list] = await Promise.all([
@@ -478,23 +484,7 @@
 			</ul>
 		{/if}
 		{#if runs.length}
-			<div class="table-wrap">
-				<table aria-label="Runs">
-					<thead><tr><th>Stage</th><th>Status</th><th>Result</th><th>Started</th></tr></thead>
-					<tbody>
-						{#each [...runs].reverse() as r (r.id)}
-							<tr>
-								<td>{r.stage}{r.adapter ? ` · ${r.adapter}` : ''}</td>
-								<td><span class="badge" data-status={r.status}>{r.status}</span></td>
-								<td class="small">{r.result?.summary ?? r.error ?? ''}</td>
-								<td class="muted small"
-									>{r.started_at ? new Date(r.started_at).toLocaleString() : ''}</td
-								>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+			<SessionTimeline {runs} {reports} {questions} {history} {usage} />
 		{/if}
 		{#if reports.length}
 			<ul class="activity" aria-label="Agent reports">

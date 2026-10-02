@@ -789,10 +789,14 @@ paths:
     get:
       operationId: getProjectUsage
       tags: [usage]
-      summary: LLM token usage of the project, grouped by ticket or model
+      summary: LLM token usage of the project, grouped by ticket, model or run
+      description: >-
+        group_by=run groups by the caller of the gateway: "run:<id>" for agent runs,
+        "planner:<session>" for the planner.
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [ticket, model], default: ticket } }
+        - { name: group_by, in: query, schema: { type: string, enum: [ticket, model, run], default: ticket } }
         - { name: since, in: query, schema: { type: string, format: date-time } }
+        - { name: ticket, in: query, schema: { type: string }, description: Only this ticket's usage }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/UsageReport" } } } }
         default: { $ref: "#/components/responses/Error" }
@@ -1809,7 +1813,7 @@ components:
       additionalProperties: false
       required: [requests, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens]
       properties:
-        key: { type: string, description: Ticket key or model of the group }
+        key: { type: string, description: "Ticket key, model or caller (run:<id>, planner:<session>) of the group" }
         requests: { type: integer, format: int64 }
         input_tokens: { type: integer, format: int64 }
         output_tokens: { type: integer, format: int64 }

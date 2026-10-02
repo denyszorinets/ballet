@@ -35,7 +35,16 @@ export interface FakeCore {
 	/** Git tokens by project key (as the fake received them). */
 	gitTokens: Record<string, string>;
 	/** Agent activity by item key: runs, reports, questions (API shapes). */
-	activity: Record<string, { runs?: unknown[]; reports?: unknown[]; questions?: unknown[] }>;
+	activity: Record<
+		string,
+		{
+			runs?: unknown[];
+			reports?: unknown[];
+			questions?: unknown[];
+			usage?: unknown[];
+			history?: unknown[];
+		}
+	>;
 	/** Pull requests by ticket key (API shape). */
 	pullRequests: Record<string, Record<string, unknown>>;
 	/** Flows by ticket key (API shape). */
@@ -486,7 +495,8 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 								type: 'item.created',
 								occurred_at: now,
 								actor: { kind: 'human', subject: 'alice' }
-							}
+							},
+							...(core.activity[it.key]?.history ?? [])
 						]
 					}
 				});
@@ -771,6 +781,23 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			if (v) return r.fulfill({ json: v });
 			if (name === 'default') return r.fulfill({ json: template });
 			return err(r, 404, 'not_found', 'pipeline not found');
+		}
+		if ((m = path.match(/^\/projects\/([^/]+)\/usage$/))) {
+			const ticket = url.searchParams.get('ticket') ?? '';
+			const items = core.activity[ticket]?.usage ?? [];
+			return r.fulfill({
+				json: {
+					group_by: url.searchParams.get('group_by') ?? 'ticket',
+					items,
+					total: {
+						requests: 0,
+						input_tokens: 0,
+						output_tokens: 0,
+						cache_read_tokens: 0,
+						cache_write_tokens: 0
+					}
+				}
+			});
 		}
 		if (path === '/pauses') return r.fulfill({ json: { items: core.pauses } });
 		if ((m = path.match(/^(?:\/projects\/([^/]+))?\/(pause|kill)$/))) {
