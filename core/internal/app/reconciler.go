@@ -188,7 +188,6 @@ func (rc *Reconciler) expected(f Flow) (Job, bool) {
 // continue.
 func (rc *Reconciler) flag(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer, reason string) error {
 	fl := rc.Flows
-	fl.cancelRun(ctx, f.RunID)
 	next := f
 	next.Status, next.Waiting, next.RunID, next.Report = FlowWaiting, "question", "", reason
 	next.UpdatedAt, next.Version = fl.Now(), f.Version+1
@@ -204,6 +203,8 @@ func (rc *Reconciler) flag(ctx context.Context, f Flow, it tracker.Item, c tenan
 		[]event.Event{e}); err != nil {
 		return err
 	}
+	// Only now: the flow no longer waits for the run, so its end is ignored.
+	fl.cancelRun(ctx, f.RunID)
 	fl.logger().WarnContext(ctx, "flagged stuck stage", "ticket", it.Key, "stage", f.Stage, "reason", reason)
 	fl.kick()
 	return nil
