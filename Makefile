@@ -9,6 +9,8 @@ BIN_DIR     := bin
 WEB_DIR     := web
 DOCS_DIR    := docs
 STATICCHECK := honnef.co/go/tools/cmd/staticcheck@v0.8.1
+# Where `make bundle` copies the built SPA for Core to embed (bindata tag).
+WEBUI_DIST  := core/internal/transport/webui/dist
 SPHINX      := cd $(DOCS_DIR) && uv run --frozen sphinx-build
 
 # Run a command in every Go module directory, failing on the first error.
@@ -65,7 +67,27 @@ tidy: ## Tidy every module and sync the workspace
 	$(call each_module,go mod tidy)
 	go work sync
 
+##@ Run
+
+.PHONY: bundle
+bundle: web-deps ## Build all binaries into bin/, with the web UI embedded in core
+	cd $(WEB_DIR) && bun run build
+	rm -rf $(WEBUI_DIST) && cp -R $(WEB_DIR)/build $(WEBUI_DIST)
+	@mkdir -p $(BIN_DIR)
+	@set -e; for s in $(SERVICES); do echo "==> build $$s"; \
+		tags=; [ $$s = core ] && tags=bindata; \
+		(cd $$s && go build -tags "$$tags" -o ../$(BIN_DIR)/$$s ./cmd/$$s); done
+	cd gateway && go build -o ../$(BIN_DIR)/fake-anthropic ./cmd/fake-anthropic
+
+.PHONY: run
+run: bundle ## Build everything and run Ballet on http://localhost:8080 (Ctrl-C stops)
+	scripts/run.sh
+
 ##@ Web
+
+.PHONY: web-deps
+web-deps: ## Install web dependencies unless installed
+	@[ -d $(WEB_DIR)/node_modules ] || (cd $(WEB_DIR) && bun install --frozen-lockfile)
 
 .PHONY: web-install
 web-install: ## Install web dependencies (frozen lockfile)
@@ -137,5 +159,6 @@ check: go-check web-check ## Run all Go and web checks (CI entry point)
 .PHONY: clean
 clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)/core $(BIN_DIR)/gateway $(BIN_DIR)/knowledge $(BIN_DIR)/runner
+	rm -rf $(BIN_DIR)/fake-anthropic $(WEBUI_DIST)
 	rm -rf $(DOCS_DIR)/_build $(WEB_DIR)/build $(WEB_DIR)/.svelte-kit
 	rm -rf $(WEB_DIR)/test-results $(WEB_DIR)/playwright-report
