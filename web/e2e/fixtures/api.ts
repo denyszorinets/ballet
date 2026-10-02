@@ -44,6 +44,8 @@ export interface FakeCore {
 	inbox: Record<string, unknown>[];
 	/** Answers received, by question ID. */
 	answers: Record<string, string>;
+	/** Assumption register (API shape: reports of kind assumption). */
+	assumptions: Record<string, unknown>[];
 }
 
 export interface FakePlannerSession {
@@ -223,6 +225,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		flows: {},
 		inbox: [],
 		answers: {},
+		assumptions: [],
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
@@ -652,6 +655,25 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			}
 			const items = core.plannerSessions.filter((x) => x.project === m![1]).map(withTimes);
 			return r.fulfill({ json: { items } });
+		}
+		if ((m = path.match(/^\/projects\/([^/]+)\/assumptions$/))) {
+			const review = url.searchParams.get('review');
+			const items = core.assumptions.filter(
+				(a) => !review || (review === 'open' ? !a.review : a.review === review)
+			);
+			return r.fulfill({ json: { items } });
+		}
+		if ((m = path.match(/^\/assumptions\/([^/]+)\/(confirm|reject)$/))) {
+			const a = core.assumptions.find((x) => x.id === m![1]);
+			if (!a) return err(r, 404, 'not_found', 'report not found');
+			if (a.review) return err(r, 409, 'conflict', 'reviewed already');
+			if (m[2] === 'reject' && !String(body.comment ?? '').trim())
+				return err(r, 400, 'invalid_argument', 'a rejection needs a comment');
+			a.review = m[2] === 'confirm' ? 'confirmed' : 'rejected';
+			a.reviewed_by = 'user-alice';
+			a.review_comment = body.comment || undefined;
+			if (m[2] === 'reject') a.follow_up = 'changeset:cs9';
+			return r.fulfill({ json: a });
 		}
 		if (path === '/inbox') return r.fulfill({ json: { items: core.inbox } });
 		if ((m = path.match(/^\/questions\/([^/]+)\/(answer|chat)$/))) {

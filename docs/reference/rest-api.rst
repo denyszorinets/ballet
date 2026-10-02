@@ -477,7 +477,22 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
    What the ticket's runs reported through the tracker MCP
    (:doc:`/reference/tracker-mcp`), oldest first: ``{"id", "run", "kind":
    "progress"|"stage_report"|"assumption", "outcome"?, "text", "detail"?,
-   "created_at"}``. Needs ``tracker.read``.
+   "created_at"}``; assumptions also carry their review (below). Needs
+   ``tracker.read``.
+
+``GET /api/v1/projects/{project}/assumptions[?review=open|confirmed|rejected]`` → ``200``
+   The project's assumption register, newest first
+   (:ref:`concepts-questions-assumptions`): reports of kind ``assumption``
+   with ``"ticket", "ticket_title", "review"?: "confirmed"|"rejected",
+   "review_comment"?, "reviewed_by"?, "reviewed_at"?, "follow_up"?``.
+   ``open`` lists unreviewed ones. Needs ``tracker.read``.
+
+``POST /api/v1/assumptions/{report}/confirm`` and ``.../reject`` — ``{"comment"?}`` → ``200`` the assumption
+   Reviews an assumption; a rejection needs a ``comment`` and creates
+   follow-up work, referenced by ``follow_up`` as ``question:<id>`` or
+   ``changeset:<id>``. Needs ``tracker.write``; ``400`` without a comment
+   to reject, ``404`` for a report that is not an assumption, ``409`` when
+   it is reviewed already.
 
 ``GET /api/v1/items/{item}/questions`` → ``200``
    Questions raised on the ticket — by its runs, or by Ballet about the

@@ -112,7 +112,8 @@ func (a *AgentTracker) Context(ctx context.Context, c RunCaller) (string, error)
 	if len(reports) > 0 {
 		out.WriteString("\n## Reports so far\n\n")
 		for _, r := range reports {
-			fmt.Fprintf(&out, "- %s (%s%s): %s\n", r.CreatedAt.Format(time.RFC3339), r.Kind, outcome(r), oneLine(r.Text, 300))
+			fmt.Fprintf(&out, "- %s (%s%s): %s%s\n", r.CreatedAt.Format(time.RFC3339), r.Kind, outcome(r), oneLine(r.Text, 300),
+				reviewNote(r))
 		}
 	}
 	qs, err := a.Reports.Questions(ctx, s.ticket.ID)
@@ -137,6 +138,17 @@ func outcome(r report.Report) string {
 		return ""
 	}
 	return ", " + string(r.Outcome)
+}
+
+// reviewNote tells an agent how a human judged an assumption.
+func reviewNote(r report.Report) string {
+	switch r.Review {
+	case report.ReviewConfirmed:
+		return " — confirmed by a human"
+	case report.ReviewRejected:
+		return " — REJECTED by a human: " + oneLine(r.ReviewComment, 500)
+	}
+	return ""
 }
 
 func oneLine(s string, n int) string {

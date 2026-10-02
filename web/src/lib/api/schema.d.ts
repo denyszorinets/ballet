@@ -386,6 +386,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project}/assumptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        /** The project's assumption register, newest first */
+        get: operations["listAssumptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assumptions/{report}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm an assumption */
+        post: operations["confirmAssumption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assumptions/{report}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject an assumption; creates follow-up work */
+        post: operations["rejectAssumption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/questions/{question}/answer": {
         parameters: {
             query?: never;
@@ -1442,6 +1500,25 @@ export interface components {
             detail?: string;
             /** Format: date-time */
             created_at: string;
+            /** @description Assumption register: the ticket's key */
+            ticket?: string;
+            /** @description Assumption register: the ticket's title */
+            ticket_title?: string;
+            /**
+             * @description Assumptions: a human's review; absent when unreviewed
+             * @enum {string}
+             */
+            review?: "confirmed" | "rejected";
+            review_comment?: string;
+            reviewed_by?: string;
+            /** Format: date-time */
+            reviewed_at?: string;
+            /** @description The work a rejection created: question:<id> or changeset:<id> */
+            follow_up?: string;
+        };
+        AssumptionReview: {
+            /** @description Required to reject */
+            comment?: string;
         };
         ReportList: {
             items: components["schemas"]["Report"][];
@@ -2852,6 +2929,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuestionList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listAssumptions: {
+        parameters: {
+            query?: {
+                review?: "open" | "confirmed" | "rejected";
+            };
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    confirmAssumption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssumptionReview"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    rejectAssumption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssumptionReview"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Report"];
                 };
             };
             default: components["responses"]["Error"];

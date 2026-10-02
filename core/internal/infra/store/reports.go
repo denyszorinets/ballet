@@ -21,29 +21,83 @@ func (s *Store) CreateReport(ctx context.Context, r report.Report, e event.Event
 	))
 }
 
+const reportCols = `id, project_id, ticket_id, run_id, kind, outcome, text, detail, created_at, review, review_comment,
+	reviewed_by, reviewed_at, follow_up`
+
 // Reports returns a ticket's reports, oldest first; runID narrows them to
 // one run when set.
 func (s *Store) Reports(ctx context.Context, ticketID, runID string) ([]report.Report, error) {
-	rows, err := s.db.Query(ctx, `SELECT id, project_id, ticket_id, run_id, kind, outcome, text, detail, created_at
-		FROM agent_reports WHERE ticket_id = ? AND (? = '' OR run_id = ?) ORDER BY created_at, id`, ticketID, runID, runID)
+	return s.queryReports(ctx, "reports", `SELECT `+reportCols+` FROM agent_reports
+		WHERE ticket_id = ? AND (? = '' OR run_id = ?) ORDER BY created_at, id`, ticketID, runID, runID)
+}
+
+// Report returns a report by ID.
+func (s *Store) Report(ctx context.Context, id string) (report.Report, error) {
+	r, err := scanReport(s.db.QueryRow(ctx, `SELECT `+reportCols+` FROM agent_reports WHERE id = ?`, id))
 	if err != nil {
-		return nil, fmt.Errorf("reports: %w", err)
+		return report.Report{}, mapReadErr("report", err)
+	}
+	return r, nil
+}
+
+// Assumptions returns a project's assumptions, newest first; review
+// narrows them ("open" for unreviewed ones).
+func (s *Store) Assumptions(ctx context.Context, projectID, review string) ([]report.Report, error) {
+	if review == "open" {
+		review = "-"
+	}
+	return s.queryReports(ctx, "assumptions", `SELECT `+reportCols+` FROM agent_reports
+		WHERE project_id = ? AND kind = 'assumption' AND (? = '' OR review = ? OR (? = '-' AND review = ''))
+		ORDER BY created_at DESC, id DESC`, projectID, review, review, review)
+}
+
+// ReviewAssumption records a review of an unreviewed assumption
+// (ErrConflict when it was reviewed meanwhile) and e.
+func (s *Store) ReviewAssumption(ctx context.Context, r report.Report, e event.Event) error {
+	return mapWriteErr("review assumption", s.db.Batch(ctx,
+		sqlstore.ExecOne(`UPDATE agent_reports SET review = ?, review_comment = ?, reviewed_by = ?, reviewed_at = ?,
+			follow_up = ? WHERE id = ? AND kind = 'assumption' AND review = ''`, string(r.Review), r.ReviewComment,
+			r.ReviewedBy, formatTime(r.ReviewedAt), r.FollowUp, r.ID),
+		s.AppendEvent(e),
+	))
+}
+
+func (s *Store) queryReports(ctx context.Context, what, query string, args ...any) ([]report.Report, error) {
+	rows, err := s.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", what, err)
 	}
 	defer rows.Close()
 	var out []report.Report
 	for rows.Next() {
-		var r report.Report
-		var kind, outcome, created string
-		if err := rows.Scan(&r.ID, &r.ProjectID, &r.TicketID, &r.RunID, &kind, &outcome, &r.Text, &r.Detail, &created); err != nil {
-			return nil, fmt.Errorf("reports: %w", err)
-		}
-		r.Kind, r.Outcome = report.Kind(kind), report.Outcome(outcome)
-		if r.CreatedAt, err = parseTime(created); err != nil {
-			return nil, err
+		r, err := scanReport(rows)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", what, err)
 		}
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+func scanReport(row scanner) (report.Report, error) {
+	var r report.Report
+	var kind, outcome, review, created string
+	var reviewed sql.NullString
+	if err := row.Scan(&r.ID, &r.ProjectID, &r.TicketID, &r.RunID, &kind, &outcome, &r.Text, &r.Detail, &created, &review,
+		&r.ReviewComment, &r.ReviewedBy, &reviewed, &r.FollowUp); err != nil {
+		return report.Report{}, err
+	}
+	r.Kind, r.Outcome, r.Review = report.Kind(kind), report.Outcome(outcome), report.Review(review)
+	var err error
+	if r.CreatedAt, err = parseTime(created); err != nil {
+		return report.Report{}, err
+	}
+	if reviewed.Valid {
+		if r.ReviewedAt, err = parseTime(reviewed.String); err != nil {
+			return report.Report{}, err
+		}
+	}
+	return r, nil
 }
 
 // CreateQuestion stores a question and records e.
