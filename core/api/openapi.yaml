@@ -341,6 +341,74 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PullRequest" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/projects/{project}/pipelines:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: listPipelines
+      tags: [pipelines]
+      summary: Latest version of each pipeline; Ballet's template as version 0 until a default is saved
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PipelineList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{project}/pipelines/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Project" }
+      - { name: name, in: path, required: true, schema: { type: string }, description: '"default" or a ticket type' }
+    get:
+      operationId: getPipeline
+      tags: [pipelines]
+      parameters:
+        - { name: version, in: query, schema: { type: integer, minimum: 0 }, description: "0 or absent: the latest" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Pipeline" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      operationId: savePipeline
+      tags: [pipelines]
+      summary: Save a new version after the version read (project.update)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SavePipeline" } } }
+      responses:
+        "200": { description: Saved, content: { application/json: { schema: { $ref: "#/components/schemas/Pipeline" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{project}/pipelines/{name}/versions:
+    parameters:
+      - { $ref: "#/components/parameters/Project" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPipelineVersions
+      tags: [pipelines]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PipelineList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/pipelines/parse:
+    post:
+      operationId: parsePipelineYAML
+      tags: [pipelines]
+      summary: Parse and validate pipeline YAML
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [yaml], properties: { yaml: { type: string } } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ParsedPipeline" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/pipelines/render:
+    post:
+      operationId: renderPipelineYAML
+      tags: [pipelines]
+      summary: Render a pipeline definition as YAML
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [definition], properties: { definition: { $ref: "#/components/schemas/PipelineDefinition" } } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: false, required: [yaml], properties: { yaml: { type: string } } } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/runs/{run}:
     parameters: [{ $ref: "#/components/parameters/Run" }]
     get:
@@ -1056,6 +1124,65 @@ components:
         checks: { type: string, enum: [none, pending, success, failure] }
         review: { type: string, enum: [none, approved, changes_requested, commented] }
         updated_at: { type: string, format: date-time }
+    PipelineStage:
+      type: object
+      additionalProperties: false
+      required: [id, kind]
+      properties:
+        id: { type: string }
+        kind: { type: string, enum: [agent, human, platform] }
+        name: { type: string }
+        instructions: { type: string, description: "agent: what the stage does" }
+        adapter: { type: string, description: "agent: default claude-code" }
+        model: { type: string }
+        skills: { type: array, items: { type: string }, description: "agent: project skills to include; empty: all" }
+        action: { type: string, enum: [merge], description: platform }
+        timeout_minutes: { type: integer, minimum: 0 }
+        next:
+          type: object
+          description: "Outcome → stage id, $done, $failed or $question"
+          additionalProperties: false
+          properties:
+            done: { type: string }
+            failed: { type: string }
+            blocked: { type: string }
+    PipelineDefinition:
+      type: object
+      additionalProperties: false
+      required: [stages, max_iterations]
+      properties:
+        stages: { type: array, items: { $ref: "#/components/schemas/PipelineStage" } }
+        max_iterations: { type: integer, description: "1-20 (validated by the server)" }
+    Pipeline:
+      type: object
+      additionalProperties: false
+      required: [project, name, version, definition, created_by]
+      properties:
+        project: { type: string }
+        name: { type: string }
+        version: { type: integer, format: int64, description: "0: Ballet's template" }
+        definition: { $ref: "#/components/schemas/PipelineDefinition" }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    PipelineList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Pipeline" } } }
+    SavePipeline:
+      type: object
+      additionalProperties: false
+      required: [definition, version]
+      properties:
+        definition: { $ref: "#/components/schemas/PipelineDefinition" }
+        version: { type: integer, format: int64, description: "The version read (0 for the first)" }
+    ParsedPipeline:
+      type: object
+      additionalProperties: false
+      required: [errors]
+      properties:
+        definition: { $ref: "#/components/schemas/PipelineDefinition" }
+        errors: { type: array, items: { type: string } }
     RunStatus: { type: string, enum: [queued, starting, running, succeeded, failed, cancelled] }
     RunSpec:
       type: object

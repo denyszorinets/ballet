@@ -447,6 +447,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project}/pipelines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        /** Latest version of each pipeline; Ballet's template as version 0 until a default is saved */
+        get: operations["listPipelines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project}/pipelines/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+                /** @description "default" or a ticket type */
+                name: string;
+            };
+            cookie?: never;
+        };
+        get: operations["getPipeline"];
+        /** Save a new version after the version read (project.update) */
+        put: operations["savePipeline"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project}/pipelines/{name}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+                name: string;
+            };
+            cookie?: never;
+        };
+        get: operations["listPipelineVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pipelines/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Parse and validate pipeline YAML */
+        post: operations["parsePipelineYAML"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pipelines/render": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Render a pipeline definition as YAML */
+        post: operations["renderPipelineYAML"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run}": {
         parameters: {
             query?: never;
@@ -1248,6 +1344,64 @@ export interface components {
             review: "none" | "approved" | "changes_requested" | "commented";
             /** Format: date-time */
             updated_at: string;
+        };
+        PipelineStage: {
+            id: string;
+            /** @enum {string} */
+            kind: "agent" | "human" | "platform";
+            name?: string;
+            /** @description agent: what the stage does */
+            instructions?: string;
+            /** @description agent: default claude-code */
+            adapter?: string;
+            model?: string;
+            /** @description agent: project skills to include; empty: all */
+            skills?: string[];
+            /**
+             * @description platform
+             * @enum {string}
+             */
+            action?: "merge";
+            timeout_minutes?: number;
+            /** @description Outcome → stage id, $done, $failed or $question */
+            next?: {
+                done?: string;
+                failed?: string;
+                blocked?: string;
+            };
+        };
+        PipelineDefinition: {
+            stages: components["schemas"]["PipelineStage"][];
+            /** @description 1-20 (validated by the server) */
+            max_iterations: number;
+        };
+        Pipeline: {
+            project: string;
+            name: string;
+            /**
+             * Format: int64
+             * @description 0: Ballet's template
+             */
+            version: number;
+            definition: components["schemas"]["PipelineDefinition"];
+            created_by: string;
+            /** Format: date-time */
+            created_at?: string;
+        };
+        PipelineList: {
+            items: components["schemas"]["Pipeline"][];
+        };
+        SavePipeline: {
+            definition: components["schemas"]["PipelineDefinition"];
+            /**
+             * Format: int64
+             * @description The version read (0 for the first)
+             */
+            version: number;
+        };
+        ParsedPipeline: {
+            definition?: components["schemas"]["PipelineDefinition"];
+            errors: string[];
         };
         /** @enum {string} */
         RunStatus: "queued" | "starting" | "running" | "succeeded" | "failed" | "cancelled";
@@ -2575,6 +2729,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PullRequest"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listPipelines: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPipeline: {
+        parameters: {
+            query?: {
+                /** @description 0 or absent: the latest */
+                version?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+                /** @description "default" or a ticket type */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pipeline"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    savePipeline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+                /** @description "default" or a ticket type */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavePipeline"];
+            };
+        };
+        responses: {
+            /** @description Saved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pipeline"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listPipelineVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    parsePipelineYAML: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    yaml: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParsedPipeline"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    renderPipelineYAML: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    definition: components["schemas"]["PipelineDefinition"];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        yaml: string;
+                    };
                 };
             };
             default: components["responses"]["Error"];

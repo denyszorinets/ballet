@@ -10,6 +10,7 @@ Exact, exhaustive descriptions of configuration and interfaces.
    rest-api
    realtime-api
    planner
+   pipelines
    runners
    llm-gateway
    knowledge-mcp
