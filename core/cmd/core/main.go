@@ -58,19 +58,20 @@ const (
 // serviceConfig is the complete core configuration.
 type serviceConfig struct {
 	service.Config
-	OIDC      oidc.Config     `toml:"oidc"`
-	Tokens    tokensConfig    `toml:"tokens"`
-	Storage   storageConfig   `toml:"storage"`
-	RBAC      rbacConfig      `toml:"rbac"`
-	Web       webConfig       `toml:"web"`
-	Services  servicesConfig  `toml:"services"`
-	Secrets   secretsConfig   `toml:"secrets"`
-	Knowledge knowledgeConfig `toml:"knowledge"`
-	Gateway   gatewayConfig   `toml:"gateway"`
-	Planner   plannerConfig   `toml:"planner"`
-	Agents    agentsConfig    `toml:"agents"`
-	Forge     forgeConfig     `toml:"forge"`
-	Scheduler schedulerConfig `toml:"scheduler"`
+	OIDC       oidc.Config      `toml:"oidc"`
+	Tokens     tokensConfig     `toml:"tokens"`
+	Storage    storageConfig    `toml:"storage"`
+	RBAC       rbacConfig       `toml:"rbac"`
+	Web        webConfig        `toml:"web"`
+	Services   servicesConfig   `toml:"services"`
+	Secrets    secretsConfig    `toml:"secrets"`
+	Knowledge  knowledgeConfig  `toml:"knowledge"`
+	Gateway    gatewayConfig    `toml:"gateway"`
+	Planner    plannerConfig    `toml:"planner"`
+	Agents     agentsConfig     `toml:"agents"`
+	Forge      forgeConfig      `toml:"forge"`
+	Scheduler  schedulerConfig  `toml:"scheduler"`
+	Reconciler reconcilerConfig `toml:"reconciler"`
 }
 
 // gatewayConfig locates the LLM gateway (ADR-0011), used by the planner.
@@ -100,6 +101,13 @@ type schedulerConfig struct {
 	MaxActive           int           `toml:"max_active"`             // flows occupying a slot, globally
 	MaxActivePerProject int           `toml:"max_active_per_project"` // and per project
 	Interval            time.Duration `toml:"interval"`               // how often to look for runnable tickets
+}
+
+// reconcilerConfig configures repairing flows after crashes and flagging
+// stuck stages.
+type reconcilerConfig struct {
+	Interval time.Duration `toml:"interval"` // between passes
+	Slack    time.Duration `toml:"slack"`    // beyond a run's timeout before it is stuck
 }
 
 // agentsConfig configures coding-agent runs (ADR-0003).
@@ -168,17 +176,18 @@ type tokensConfig struct {
 
 func defaultConfig() serviceConfig {
 	return serviceConfig{
-		Config:    service.DefaultConfig(":8080"),
-		OIDC:      oidc.Config{Audience: "ballet"},
-		Tokens:    tokensConfig{KeyFile: "data/token-keys.json"},
-		Storage:   storageConfig{Path: "data/core.db"},
-		Web:       webConfig{ClientID: "ballet-web"},
-		Services:  servicesConfig{TokensDir: "data/service-tokens", TokenTTL: 30 * 24 * time.Hour},
-		Secrets:   secretsConfig{KeyFile: "data/secrets.key"},
-		Knowledge: knowledgeConfig{URL: "http://localhost:8081"},
-		Gateway:   gatewayConfig{URL: "http://localhost:8082"},
-		Forge:     forgeConfig{PollInterval: time.Minute},
-		Scheduler: schedulerConfig{Enabled: true, MaxActive: 4, MaxActivePerProject: 2, Interval: 10 * time.Second},
+		Config:     service.DefaultConfig(":8080"),
+		OIDC:       oidc.Config{Audience: "ballet"},
+		Tokens:     tokensConfig{KeyFile: "data/token-keys.json"},
+		Storage:    storageConfig{Path: "data/core.db"},
+		Web:        webConfig{ClientID: "ballet-web"},
+		Services:   servicesConfig{TokensDir: "data/service-tokens", TokenTTL: 30 * 24 * time.Hour},
+		Secrets:    secretsConfig{KeyFile: "data/secrets.key"},
+		Knowledge:  knowledgeConfig{URL: "http://localhost:8081"},
+		Gateway:    gatewayConfig{URL: "http://localhost:8082"},
+		Forge:      forgeConfig{PollInterval: time.Minute},
+		Scheduler:  schedulerConfig{Enabled: true, MaxActive: 4, MaxActivePerProject: 2, Interval: 10 * time.Second},
+		Reconciler: reconcilerConfig{Interval: time.Minute, Slack: 10 * time.Minute},
 		Agents: agentsConfig{ClaudeCommand: "claude", RunTokenTTL: 3 * time.Hour,
 			TrackerMCPURL: "http://localhost:8080" + trackermcp.Path},
 		Planner: plannerConfig{
@@ -204,6 +213,9 @@ func (c serviceConfig) Validate() error {
 	if c.Scheduler.MaxActive < 1 || c.Scheduler.MaxActivePerProject < 1 || c.Scheduler.Interval < time.Second {
 		errs = append(errs, errors.New("scheduler.max_active and scheduler.max_active_per_project must be at least 1, "+
 			"scheduler.interval at least 1s"))
+	}
+	if c.Reconciler.Interval < time.Second || c.Reconciler.Slack < time.Minute {
+		errs = append(errs, errors.New("reconciler.interval must be at least 1s and reconciler.slack at least 1m"))
 	}
 	if c.Agents.RunTokenTTL < 10*time.Minute {
 		errs = append(errs, errors.New("agents.run_token_ttl must be at least 10m"))
@@ -418,6 +430,8 @@ func run() error {
 	if cfg.Scheduler.Enabled {
 		go scheduler.Run(ctx)
 	}
+	reconciler := &app.Reconciler{Flows: flows, Jobs: st, Interval: cfg.Reconciler.Interval, Slack: cfg.Reconciler.Slack}
+	go reconciler.Run(ctx)
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,

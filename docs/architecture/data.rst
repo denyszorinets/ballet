@@ -96,6 +96,12 @@ Claims are optimistic, so several orchestrators never run the same claim
 twice. Results are counted in ``ballet_jobs_total{kind, result}``
 (``done``, ``retry``, ``dead``); dead jobs keep their last error.
 
+What jobs cannot cover — a run that ended while Core was down before its
+follow-up job was queued, a job that died, a run that hangs — the
+**reconciler** repairs: once a minute it compares every active flow with
+its ticket, its run and its jobs (see
+:ref:`reference-pipelines-recovery`).
+
 Identifiers
 -----------
 

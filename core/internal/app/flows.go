@@ -315,13 +315,7 @@ func (fl *Flows) current(ctx context.Context, p flowJob) (Flow, tracker.Item, te
 // stop ends a flow whose ticket a human took out of the pipeline, and
 // cancels its active run.
 func (fl *Flows) stop(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer) error {
-	if f.RunID != "" {
-		if r, err := fl.RunStore.Run(ctx, f.RunID); err == nil && !r.Status.Terminal() && fl.Runs.Dispatcher != nil {
-			if _, err := fl.Runs.Dispatcher.cancel(ctx, r, event.System); err != nil {
-				fl.logger().WarnContext(ctx, "cancel run of stopped flow failed", "run", r.ID, "error", err)
-			}
-		}
-	}
+	fl.cancelRun(ctx, f.RunID)
 	next := f
 	next.Status, next.Waiting, next.UpdatedAt, next.Version = FlowStopped, "", fl.Now(), f.Version+1
 	e := fl.itemEvent(it, c.ID, "flow.stopped", event.System, map[string]any{"stage": f.Stage, "state": it.State})
@@ -330,6 +324,28 @@ func (fl *Flows) stop(ctx context.Context, f Flow, it tracker.Item, c tenancy.Cu
 	}
 	fl.kick()
 	return nil
+}
+
+// cancelRun cancels a flow's run unless it already ended.
+func (fl *Flows) cancelRun(ctx context.Context, runID string) {
+	if runID == "" || fl.Runs.Dispatcher == nil {
+		return
+	}
+	// The dispatcher may move the run on meanwhile: retry from a fresh read.
+	for attempt := 0; attempt < 3; attempt++ {
+		r, err := fl.RunStore.Run(ctx, runID)
+		if err != nil || r.Status.Terminal() {
+			return
+		}
+		_, err = fl.Runs.Dispatcher.cancel(ctx, r, event.System)
+		if err == nil {
+			return
+		}
+		if !errors.Is(err, ErrConflict) || attempt == 2 {
+			fl.logger().WarnContext(ctx, "cancel run failed", "run", r.ID, "error", err)
+			return
+		}
+	}
 }
 
 // ignoreConflict treats losing a race as success: another transition
