@@ -23,6 +23,10 @@ type Session struct {
 	// sees once the conversation was compacted; "" when never compacted.
 	Summary     string
 	SummaryUpTo int64
+	// QuestionID is set for a question's sub-chat; Context then holds what
+	// the planner knows about the question.
+	QuestionID string
+	Context    string
 }
 
 const maxTitle = 200

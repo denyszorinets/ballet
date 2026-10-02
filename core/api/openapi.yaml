@@ -318,6 +318,28 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Question" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/questions/{question}/chat:
+    parameters: [{ name: question, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: questionChat
+      tags: [planner]
+      summary: The question's sub-chat with the planner, started on first use
+      description: >-
+        Needs tracker.write. The session's planner knows the ticket, the question
+        and the latest stage reports; talk to it with planner.send.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PlannerSession" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/inbox:
+    get:
+      operationId: listInbox
+      tags: [runs]
+      summary: Open questions of every project the caller can read, most impactful first
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/InboxList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/items/{item}/pull-request:
     parameters: [{ $ref: "#/components/parameters/Item" }]
     get:
@@ -1163,6 +1185,34 @@ components:
         answered_by: { type: string }
         created_at: { type: string, format: date-time }
         answered_at: { type: string, format: date-time }
+    InboxEntry:
+      type: object
+      additionalProperties: false
+      required: [id, ticket, text, blocking, status, created_at, customer, project, ticket_title, ticket_state, blocked_behind]
+      properties:
+        id: { type: string }
+        ticket: { type: string }
+        run: { type: string }
+        text: { type: string }
+        context: { type: string }
+        blocking: { type: boolean }
+        status: { type: string, enum: [open, answered] }
+        route: { type: string, enum: [planner, human] }
+        answer: { type: string }
+        answered_by: { type: string }
+        created_at: { type: string, format: date-time }
+        answered_at: { type: string, format: date-time }
+        customer: { type: string }
+        project: { type: string }
+        ticket_title: { type: string }
+        ticket_state: { $ref: "#/components/schemas/ItemState" }
+        blocked_behind: { type: integer, description: Unresolved items waiting behind the ticket }
+        chat: { type: string, description: "The question's sub-chat session, if started" }
+    InboxList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/InboxEntry" } } }
     QuestionAnswer:
       type: object
       additionalProperties: false
@@ -1373,6 +1423,7 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         running: { type: boolean, description: The planner is answering }
+        question: { type: string, description: Set for a question's sub-chat }
     PlannerSessionList:
       type: object
       additionalProperties: false
@@ -1427,6 +1478,7 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         running: { type: boolean }
+        question: { type: string, description: Set for a question's sub-chat }
         messages: { type: array, items: { $ref: "#/components/schemas/PlannerMessage" } }
     ChangesetStatus: { type: string, enum: [proposed, applied, rejected] }
     ItemReference:

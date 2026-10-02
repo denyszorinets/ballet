@@ -55,14 +55,21 @@ budget.
 The inbox and sub-chats
 -----------------------
 
-The UI inbox lists open questions, ordered by **impact**: how much work
-is blocked behind each question, computed from the dependency graph.
+The **Inbox** (main navigation, with the number of questions waiting for
+a human) lists the open questions of every project you can read, most
+impactful first: questions waiting for a human before those the planner
+is still working on, blocking ones first, then by how many unresolved
+items wait behind the ticket in the dependency graph, then the oldest.
 
-Opening a question opens a **sub-chat** scoped to that ticket: a short
-conversation with the planner agent, which has the ticket, the question,
-the stage reports and the relevant knowledge. The human can ask for
-clarification, discuss options, then confirm an answer. Closing the
-sub-chat releases the ticket. Switching between sub-chats is meant to
+Selecting a question shows its ticket, text and context, and an answer
+form (for members with ``tracker.write``): **Answer and resume** records
+the answer and resumes the ticket, and the next question opens. **Open a
+sub-chat** starts a conversation with the planner scoped to the question
+— its instructions hold the ticket, the question and the latest stage
+reports, and it can research the knowledge base and the plan. The
+planner suggests; the human answers. There is one sub-chat per question,
+shared by everyone who opens it; sub-chats do not appear among the
+project's planner sessions. Switching between sub-chats is meant to
 take seconds — answering a night's worth of questions should take
 minutes.
 

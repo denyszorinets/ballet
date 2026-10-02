@@ -10,14 +10,14 @@ import (
 	"github.com/denyszorinets/ballet/kit/sqlstore"
 )
 
-const sessionCols = `id, project_id, title, created_by, created_at, updated_at, summary, summary_upto`
+const sessionCols = `id, project_id, title, created_by, created_at, updated_at, summary, summary_upto, question_id, context`
 
 // CreatePlannerSession inserts a session and records e.
 func (s *Store) CreatePlannerSession(ctx context.Context, ps planner.Session, e event.Event) error {
 	return mapWriteErr("create planner session", s.db.Batch(ctx,
-		sqlstore.Exec(`INSERT INTO planner_sessions (`+sessionCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		sqlstore.Exec(`INSERT INTO planner_sessions (`+sessionCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			ps.ID, ps.ProjectID, ps.Title, ps.CreatedBy, formatTime(ps.CreatedAt), formatTime(ps.UpdatedAt),
-			ps.Summary, ps.SummaryUpTo),
+			ps.Summary, ps.SummaryUpTo, ps.QuestionID, ps.Context),
 		s.AppendEvent(e),
 	))
 }
@@ -28,9 +28,16 @@ func (s *Store) PlannerSession(ctx context.Context, id string) (planner.Session,
 	return ps, mapReadErr("planner session "+id, err)
 }
 
+// QuestionSession returns a question's sub-chat.
+func (s *Store) QuestionSession(ctx context.Context, questionID string) (planner.Session, error) {
+	ps, err := scanSession(s.db.QueryRow(ctx, `SELECT `+sessionCols+` FROM planner_sessions WHERE question_id = ?
+		ORDER BY created_at LIMIT 1`, questionID))
+	return ps, mapReadErr("question session "+questionID, err)
+}
+
 // ListPlannerSessions returns a project's sessions, most recently active first.
 func (s *Store) ListPlannerSessions(ctx context.Context, projectID string) ([]planner.Session, error) {
-	rows, err := s.db.Query(ctx, `SELECT `+sessionCols+` FROM planner_sessions WHERE project_id = ?
+	rows, err := s.db.Query(ctx, `SELECT `+sessionCols+` FROM planner_sessions WHERE project_id = ? AND question_id = ''
 		ORDER BY updated_at DESC, id DESC`, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("list planner sessions: %w", err)
@@ -121,7 +128,8 @@ func (s *Store) PlannerMessages(ctx context.Context, sessionID string) ([]planne
 func scanSession(r scanner) (planner.Session, error) {
 	var ps planner.Session
 	var created, updated string
-	if err := r.Scan(&ps.ID, &ps.ProjectID, &ps.Title, &ps.CreatedBy, &created, &updated, &ps.Summary, &ps.SummaryUpTo); err != nil {
+	if err := r.Scan(&ps.ID, &ps.ProjectID, &ps.Title, &ps.CreatedBy, &created, &updated, &ps.Summary, &ps.SummaryUpTo,
+		&ps.QuestionID, &ps.Context); err != nil {
 		return planner.Session{}, err
 	}
 	var err error

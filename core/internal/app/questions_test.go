@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/denyszorinets/ballet/core/internal/app"
+	"github.com/denyszorinets/ballet/core/internal/domain/event"
 	"github.com/denyszorinets/ballet/core/internal/domain/forge"
 	"github.com/denyszorinets/ballet/core/internal/domain/onboarding"
 	"github.com/denyszorinets/ballet/core/internal/domain/pipeline"
@@ -225,4 +226,101 @@ func TestQuestions_IterationLimitAnswerResumesTheLoop(t *testing.T) {
 	e.runner.mu.Lock()
 	assert.True(t, strings.Contains(e.runner.prompts["implement#3"], "Use the simpler design from the review."))
 	e.runner.mu.Unlock()
+}
+
+func TestQuestions_InboxOrdersByImpactAndHidesOtherCustomers(t *testing.T) {
+	tr, env := newTracker(t)
+	st := env.store
+	qs := &app.Questions{Store: st, Items: st, Tenancy: st, Authz: env.rbac, Inbox: st, Now: time.Now, NewID: store.NewID}
+	alice, bob := user(t, "alice", "ballet-admins"), user(t, "bob", "acme-devs")
+	ticket := func(project, title string) app.ItemView {
+		it, err := tr.CreateItem(alice, app.CreateItemInput{ProjectKey: project, Kind: tracker.KindTicket, Title: title,
+			AcceptanceCriteria: []string{"works"}})
+		require.NoError(t, err)
+		return it
+	}
+	a, b, c, d := ticket("WEB", "A"), ticket("WEB", "B"), ticket("WEB", "C"), ticket("WEB", "D")
+	other := ticket("GLX", "Elsewhere")
+	for _, dep := range [][2]string{{b.Key, c.Key}, {c.Key, d.Key}} {
+		_, err := tr.AddDependency(alice, dep[0], app.DirBlocks, dep[1])
+		require.NoError(t, err)
+	}
+	ask := func(it app.ItemView, text string, blocking bool, route string) {
+		q := report.Question{ID: store.NewID(), ProjectID: it.ProjectID, TicketID: it.ID, RunID: "r", Text: text,
+			Blocking: blocking, Status: report.QuestionOpen, Route: route, CreatedAt: time.Now()}
+		require.NoError(t, st.CreateQuestion(t.Context(), q, event.Event{Project: it.ProjectID, EntityType: "item",
+			EntityID: it.ID, Type: "item.question_raised", Actor: event.System, OccurredAt: time.Now()}))
+	}
+	ask(a, "minor", false, report.RouteHuman)
+	ask(b, "blocks two", true, report.RouteHuman)
+	ask(c, "blocks one", true, report.RouteHuman)
+	ask(d, "planner on it", true, report.RoutePlanner)
+	ask(other, "globex", true, report.RouteHuman)
+
+	inbox, err := qs.ListInbox(bob)
+	require.NoError(t, err)
+	var got []string
+	for _, e := range inbox {
+		got = append(got, e.Text)
+	}
+	assert.Equal(t, []string{"blocks two", "blocks one", "minor", "planner on it"}, got)
+	assert.Equal(t, 2, inbox[0].BlockedBehind)
+	assert.Equal(t, b.Key, inbox[0].TicketKey)
+	assert.Equal(t, "WEB", inbox[0].ProjectKey)
+	assert.Equal(t, "B", inbox[0].TicketTitle)
+
+	all, err := qs.ListInbox(alice)
+	require.NoError(t, err)
+	assert.Len(t, all, 5)
+}
+
+func TestQuestions_SubChatStartsWithTheQuestionsContext(t *testing.T) {
+	e := newQuestions(t, func(stage string, n int) report.Outcome {
+		if stage == "implement" && n == 1 {
+			return report.OutcomeBlocked
+		}
+		return report.OutcomeDone
+	})
+	e.llm.script(toolUse("escalate", `{"reason":"not in the sources"}`))
+	pl := &app.Planner{Store: e.st, Tenancy: e.st, Authz: e.flows.Authz, LLM: e.llm, Model: "m", MaxTokens: 100,
+		MaxRounds: 2, Now: time.Now, NewID: store.NewID, Context: t.Context()}
+	e.qs.Planner, e.qs.Reports, e.qs.Inbox = pl, e.st, e.st
+	tk := e.ticket(t, auto)
+	_, err := e.flows.Start(user(t, "dave", "acme-admins"), tk.Key)
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		qs, _ := e.st.Questions(t.Context(), tk.ID)
+		return len(qs) == 1 && qs[0].Route == report.RouteHuman
+	}, 5*time.Second, 10*time.Millisecond)
+	q := e.question(t, tk.ID)
+
+	bob := user(t, "bob", "acme-devs")
+	_, err = e.qs.Chat(user(t, "carol", "acme-viewers"), q.ID)
+	assert.ErrorIs(t, err, app.ErrForbidden)
+	s, err := e.qs.Chat(bob, q.ID)
+	require.NoError(t, err)
+	assert.Equal(t, q.ID, s.QuestionID)
+	assert.Contains(t, s.Title, "Question on "+tk.Key)
+	again, err := e.qs.Chat(bob, q.ID)
+	require.NoError(t, err)
+	assert.Equal(t, s.ID, again.ID, "one sub-chat per question")
+
+	listed, err := pl.ListSessions(bob, "WEB")
+	require.NoError(t, err)
+	assert.Empty(t, listed, "sub-chats are not planning sessions")
+	inbox, err := e.qs.ListInbox(bob)
+	require.NoError(t, err)
+	require.Len(t, inbox, 1)
+	assert.Equal(t, s.ID, inbox[0].Chat)
+
+	// The planner sees the question and the stage report in its instructions.
+	e.llm.script(&app.LLMResponse{StopReason: "end_turn", Content: []planner.Block{planner.Text("Keycloak looks right.")}})
+	wait := collect(t, pl, bob, s.ID)
+	_, err = pl.Send(bob, s.ID, "What do you think?")
+	require.NoError(t, err)
+	wait()
+	system := e.llm.request(1).System
+	assert.Contains(t, system, app.QuestionChatInstructions)
+	assert.Contains(t, system, "Which identity provider do we use?")
+	assert.Contains(t, system, "implement blocked #1")
 }

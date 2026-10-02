@@ -40,6 +40,10 @@ export interface FakeCore {
 	pullRequests: Record<string, Record<string, unknown>>;
 	/** Flows by ticket key (API shape). */
 	flows: Record<string, Record<string, unknown>>;
+	/** Open questions as the inbox lists them (API shape), in order. */
+	inbox: Record<string, unknown>[];
+	/** Answers received, by question ID. */
+	answers: Record<string, string>;
 }
 
 export interface FakePlannerSession {
@@ -217,6 +221,8 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		activity: {},
 		pullRequests: {},
 		flows: {},
+		inbox: [],
+		answers: {},
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
@@ -646,6 +652,34 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			}
 			const items = core.plannerSessions.filter((x) => x.project === m![1]).map(withTimes);
 			return r.fulfill({ json: { items } });
+		}
+		if (path === '/inbox') return r.fulfill({ json: { items: core.inbox } });
+		if ((m = path.match(/^\/questions\/([^/]+)\/(answer|chat)$/))) {
+			const q = core.inbox.find((x) => x.id === m![1]);
+			if (!q) return err(r, 404, 'not_found', 'question not found');
+			if (m[2] === 'answer') {
+				if (!String(body.answer ?? '').trim())
+					return err(r, 400, 'invalid_argument', 'answer is empty');
+				core.answers[q.id as string] = body.answer;
+				core.inbox = core.inbox.filter((x) => x !== q);
+				return r.fulfill({
+					json: { ...q, status: 'answered', answer: body.answer, answered_by: 'user-alice' }
+				});
+			}
+			let ps = core.plannerSessions.find((x) => x.id === q.chat);
+			if (!ps) {
+				ps = {
+					id: id(),
+					project: q.project as string,
+					title: `Question on ${q.ticket}`,
+					created_by: 'user-alice',
+					running: false
+				};
+				core.plannerSessions.push(ps);
+				core.plannerMessages[ps.id] = [];
+				q.chat = ps.id;
+			}
+			return r.fulfill({ json: { ...withTimes(ps), question: q.id } });
 		}
 		if ((m = path.match(/^\/planner\/sessions\/([^/]+)$/))) {
 			const ps = core.plannerSessions.find((x) => x.id === m![1]);

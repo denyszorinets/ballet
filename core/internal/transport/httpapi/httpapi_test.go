@@ -99,8 +99,9 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		Execution:    &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 		AgentTracker: &app.AgentTracker{Reports: st, RunStore: st, Items: st, Tenancy: st, Authz: authz,
 			Now: time.Now, NewID: store.NewID},
-		Flows:     &app.Flows{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
-		Questions: &app.Questions{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Flows: &app.Flows{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Questions: &app.Questions{Store: st, Items: st, Tenancy: st, Authz: authz, Inbox: st, Now: time.Now, NewID: store.NewID,
+			Planner: &app.Planner{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID}},
 		Pipelines: &app.Pipelines{Store: st, Tenancy: st, Authz: authz, Adapters: []string{"claude-code"}, Now: time.Now},
 		PullRequests: &app.PullRequests{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now,
 			Token: func(context.Context, string, string) (string, error) { return "", nil }},
@@ -710,4 +711,13 @@ func TestQuestionAPI_Errors(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, code)
 	code, _ = call(t, api, "POST", "/api/v1/questions/nope/answer", "alice", `{"reply":"yes"}`)
 	assert.Equal(t, http.StatusBadRequest, code)
+}
+
+func TestQuestionAPI_EmptyInbox(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	code, out := call(t, api, "GET", "/api/v1/inbox", "alice", "")
+	assert.Equal(t, http.StatusOK, code)
+	assert.Equal(t, map[string]any{"items": []any{}}, out)
+	code, _ = call(t, api, "POST", "/api/v1/questions/nope/chat", "alice", "")
+	assert.Equal(t, http.StatusNotFound, code)
 }

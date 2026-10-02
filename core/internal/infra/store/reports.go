@@ -128,3 +128,21 @@ func scanQuestion(r scanner) (report.Question, error) {
 	}
 	return q, nil
 }
+
+// OpenQuestions returns every open question, oldest first.
+func (s *Store) OpenQuestions(ctx context.Context) ([]report.Question, error) {
+	rows, err := s.db.Query(ctx, `SELECT `+questionCols+` FROM questions WHERE status = 'open' ORDER BY created_at, id`)
+	if err != nil {
+		return nil, fmt.Errorf("open questions: %w", err)
+	}
+	defer rows.Close()
+	var out []report.Question
+	for rows.Next() {
+		q, err := scanQuestion(rows)
+		if err != nil {
+			return nil, fmt.Errorf("open questions: %w", err)
+		}
+		out = append(out, q)
+	}
+	return out, rows.Err()
+}
