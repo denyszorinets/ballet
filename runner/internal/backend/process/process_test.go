@@ -120,3 +120,14 @@ func TestProcess_WritesFilesBeforeTheSession(t *testing.T) {
 	_, err = b.Run(t.Context(), "run-g", runnerproto.Spec{Command: []string{"true"}, Files: map[string]string{"../x": "no"}}, o.write)
 	assert.ErrorContains(t, err, "relative to the workspace")
 }
+
+func TestProcess_CreatesAMissingWorkDirectory(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "not", "yet")
+	b := &process.Backend{WorkRoot: root}
+	var o output
+	code, err := b.Run(t.Context(), "run-1", sh("true", nil), o.write)
+	require.NoError(t, err)
+	assert.Equal(t, 0, code)
+	_, err = os.Stat(root)
+	assert.NoError(t, err)
+}

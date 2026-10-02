@@ -37,6 +37,17 @@ jobs:
       # GitHub-hosted runners have Docker: test the Docker backend for real.
       - run: make runner-docker-test
 
+  failure:
+    name: Failure injection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.1"
+          cache-dependency-path: "**/go.sum"
+      - run: make failure-test
+
   images:
     name: Images
     runs-on: ubuntu-latest
