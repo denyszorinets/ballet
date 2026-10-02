@@ -41,20 +41,26 @@ metrics are listed in :doc:`/reference/metrics`.
 Per-ticket detail (each session's timeline, report, tokens, cost) is in
 the Core database.
 
-Planned dashboards
-------------------
+Dashboards
+----------
 
-- **Customer:** tokens and cost over time, by project and model.
-- **Project:** throughput (tickets done per day), lead time, cost per
-  ticket / epic / milestone, rework rate, stage pass rates, questions
-  per ticket and human wait time.
-- **Ticket:** every session in order — stage, duration, tokens, cost,
-  outcome, report. This is the *Timeline* on the ticket page in the
-  Ballet UI: each session with its status, outcome, duration and tokens,
-  its stage report, assumptions and questions, and the waits between
-  sessions.
-- **Platform:** active sessions, queue depth, container and provider
-  failures, retries, budget stops.
+The single-host installation provisions Prometheus and Grafana with
+three dashboards (:doc:`/how-to/install-single-host`):
+
+- **Delivery** — per customer and project: throughput (tickets done per
+  day), lead time, rework rate, stage outcomes, pipelines in progress and
+  their waits, questions per day and human versus planner answers and
+  wait times.
+- **LLM usage** — tokens over time by project, model and token type;
+  tokens per customer and project; requests and refusals.
+- **Platform** — services up, jobs and dead jobs, active runs, session
+  durations per stage, versions.
+
+Per-ticket detail — every session in order with stage, duration, tokens,
+outcome and report — is the *Timeline* on the ticket page in the Ballet
+UI: each session with its status, outcome, duration and tokens, its stage
+report, assumptions and questions, and the waits between sessions.
+Cost per token is planned.
 
 Digest
 ------
