@@ -8,4 +8,5 @@ Focused recipes for operating and developing Ballet.
 
    run-locally
    install-single-host
+   dogfood
    configure-oidc
