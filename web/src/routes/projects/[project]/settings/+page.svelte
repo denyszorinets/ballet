@@ -1,4 +1,5 @@
 <script lang="ts">
+	import BudgetEditor from '$lib/components/BudgetEditor.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { apiError, type Schemas } from '$lib/api/client';
@@ -208,6 +209,8 @@
 		</form>
 		{#if tokenMessage}<p role="status">{tokenMessage}</p>{/if}
 	{/if}
+
+	{#if customer}<BudgetEditor {customer} {project} />{/if}
 {/if}
 
 <style>

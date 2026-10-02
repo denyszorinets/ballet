@@ -113,6 +113,7 @@ func run() error {
 	svc.Mux.Handle("/v1/", &proxy.Anthropic{
 		Verifier:   verifier,
 		Core:       coreClient,
+		Budget:     coreClient,
 		DefaultURL: cfg.Anthropic.URL,
 		Logger:     svc.Logger,
 		Observe:    usage.Observe(reporter.Sink, time.Now),

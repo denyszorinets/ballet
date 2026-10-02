@@ -56,6 +56,11 @@ export interface FakeCore {
 	}[];
 	/** Runs the kill switch cancels per call. */
 	activeRuns: number;
+	/** Budgets by "customer:<key>" or "project:<key>" (API shape). */
+	budgets: Record<
+		string,
+		{ ticket_tokens: number; daily_tokens: number; used_today: number; version: number }
+	>;
 }
 
 export interface FakePlannerSession {
@@ -238,6 +243,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		assumptions: [],
 		pauses: [],
 		activeRuns: 0,
+		budgets: {},
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
@@ -686,6 +692,21 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			a.review_comment = body.comment || undefined;
 			if (m[2] === 'reject') a.follow_up = 'changeset:cs9';
 			return r.fulfill({ json: a });
+		}
+		if ((m = path.match(/^\/(customers|projects)\/([^/]+)\/budget$/))) {
+			const k = `${m[1] === 'customers' ? 'customer' : 'project'}:${m[2]}`;
+			const b = core.budgets[k] ?? { ticket_tokens: 0, daily_tokens: 0, used_today: 0, version: 0 };
+			if (method === 'PUT') {
+				if (body.version !== b.version) return err(r, 409, 'conflict', 'budget changed');
+				core.budgets[k] = {
+					...b,
+					ticket_tokens: body.ticket_tokens,
+					daily_tokens: body.daily_tokens,
+					version: b.version + 1
+				};
+				return r.fulfill({ json: core.budgets[k] });
+			}
+			return r.fulfill({ json: b });
 		}
 		if (path === '/pauses') return r.fulfill({ json: { items: core.pauses } });
 		if ((m = path.match(/^(?:\/projects\/([^/]+))?\/(pause|kill)$/))) {

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import BudgetEditor from '$lib/components/BudgetEditor.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { apiError, type Schemas } from '$lib/api/client';
@@ -128,6 +129,8 @@
 			</table>
 		</div>
 	{/if}
+
+	<BudgetEditor customer={key} />
 
 	{#if session?.permissions.can('project.create', { customer: key })}
 		<h2>New project</h2>

@@ -415,6 +415,46 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KillResult" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/customers/{customer}/budget:
+    parameters: [{ $ref: "#/components/parameters/Customer" }]
+    get:
+      operationId: getCustomerBudget
+      tags: [usage]
+      summary: The customer's token budgets and today's use (customer.read)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Budget" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      operationId: setCustomerBudget
+      tags: [usage]
+      summary: Set the customer's token budgets (customer.update)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetBudget" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Budget" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/projects/{project}/budget:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: getProjectBudget
+      tags: [usage]
+      summary: The project's token budgets and today's use (tracker.read)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Budget" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      operationId: setProjectBudget
+      tags: [usage]
+      summary: Set the project's token budgets (project.update)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetBudget" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Budget" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/questions/{question}/answer:
     parameters: [{ name: question, in: path, required: true, schema: { type: string } }]
     post:
@@ -1363,6 +1403,25 @@ components:
       properties:
         pause: { $ref: "#/components/schemas/Pause" }
         cancelled: { type: integer, description: Runs cancelled }
+    Budget:
+      type: object
+      additionalProperties: false
+      required: [ticket_tokens, daily_tokens, used_today, version]
+      properties:
+        ticket_tokens: { type: integer, format: int64, description: "Per ticket over its lifetime; 0: no limit" }
+        daily_tokens: { type: integer, format: int64, description: "Per UTC day; 0: no limit" }
+        used_today: { type: integer, format: int64, description: Counted tokens used today in the scope }
+        updated_by: { type: string }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, format: int64, description: 0 when never set }
+    SetBudget:
+      type: object
+      additionalProperties: false
+      required: [ticket_tokens, daily_tokens, version]
+      properties:
+        ticket_tokens: { type: integer, format: int64, minimum: 0 }
+        daily_tokens: { type: integer, format: int64, minimum: 0 }
+        version: { type: integer, format: int64, description: The version read; 0 for the first }
     QuestionAnswer:
       type: object
       additionalProperties: false

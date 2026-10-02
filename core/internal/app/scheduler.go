@@ -26,6 +26,9 @@ type Scheduler struct {
 	// Paused reports whether a project's autonomous work is paused
 	// (Control.Paused); optional.
 	Paused func(ctx context.Context, projectID string) bool
+	// Budget returns the budget a ticket's work ran out of
+	// (Budgets.CheckTicket); optional. Such tickets wait.
+	Budget func(ctx context.Context, it tracker.Item) (*Exceeded, error)
 	Logger *slog.Logger
 	// MaxActive and MaxActivePerProject limit the flows occupying a slot
 	// (running, or waiting for checks); flows waiting for a human do not.
@@ -62,6 +65,11 @@ func (s *Scheduler) Tick(ctx context.Context) (int, error) {
 		}
 		if busy[it.ProjectID] >= s.MaxActivePerProject || (s.Paused != nil && s.Paused(ctx, it.ProjectID)) {
 			continue
+		}
+		if s.Budget != nil {
+			if ex, err := s.Budget(ctx, it); err != nil || ex != nil {
+				continue
+			}
 		}
 		if err := s.Start(ctx, it); err != nil {
 			// A human started or moved the ticket meanwhile: not an error.

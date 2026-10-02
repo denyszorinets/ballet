@@ -125,6 +125,12 @@ func (rc *Reconciler) flow(ctx context.Context, f Flow) error {
 	if f.Status == FlowWaiting && f.Waiting == "question" {
 		return rc.resumeIfAnswered(ctx, f)
 	}
+	if f.Status == FlowWaiting && f.Waiting == "budget" {
+		if fl.paused(ctx, f.ProjectID) || !fl.withinBudget(ctx, f) {
+			return nil
+		}
+		return fl.unpause(ctx, f) // a new day, or a raised budget
+	}
 	if f.Status == FlowWaiting && f.Waiting == "pause" {
 		if fl.paused(ctx, f.ProjectID) {
 			return nil

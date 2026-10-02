@@ -90,6 +90,9 @@ type Flows struct {
 	// CheckInterval between checks of a pull request waiting for checks,
 	// approval or merge; default 30 s.
 	CheckInterval time.Duration
+	// Budget, when set, returns the budget a ticket's work ran out of
+	// (Budgets.CheckTicket): agent stages then wait.
+	Budget func(ctx context.Context, it tracker.Item) (*Exceeded, error)
 	// Paused, when set, reports whether autonomous work in a project is
 	// paused (Control.Paused): flows then wait before their next stage.
 	Paused func(ctx context.Context, projectID string) bool
@@ -382,7 +385,7 @@ func (fl *Flows) handleEnter(ctx context.Context, j Job) error {
 		return err
 	}
 	if fl.paused(ctx, f.ProjectID) {
-		return fl.waitPause(ctx, f, it, c)
+		return fl.hold(ctx, f, it, c, "pause")
 	}
 	st, found := f.Definition.Stage(f.Stage)
 	if !found {
@@ -394,6 +397,9 @@ func (fl *Flows) handleEnter(ctx context.Context, j Job) error {
 	var events []event.Event
 	switch st.Kind {
 	case pipeline.KindAgent:
+		if done, err := fl.overBudget(ctx, f, it, c); done || err != nil {
+			return err
+		}
 		r, err := fl.stageRun(ctx, f, it, st)
 		if err != nil {
 			return err
@@ -461,7 +467,14 @@ func (fl *Flows) handleFinished(ctx context.Context, j Job) error {
 	}
 	if r.Status == run.StatusCancelled && fl.paused(ctx, f.ProjectID) {
 		// The kill switch stopped it: the stage runs again on resume.
-		return fl.waitPause(ctx, f, it, c)
+		return fl.hold(ctx, f, it, c, "pause")
+	}
+	if r.Status != run.StatusSucceeded {
+		// The gateway refuses calls over budget: a stage that failed then
+		// waits for budget instead of failing.
+		if done, err := fl.overBudget(ctx, f, it, c); done || err != nil {
+			return err
+		}
 	}
 	outcome, text := fl.stageOutcome(ctx, r)
 	asked, err := fl.blockingQuestions(ctx, it.ID, r.ID)
@@ -477,16 +490,63 @@ func (fl *Flows) handleFinished(ctx context.Context, j Job) error {
 	return err
 }
 
+// overBudget holds the flow when its ticket's work ran out of budget: a
+// used-up ticket budget asks the humans; a daily budget waits for the
+// next day (or a raised budget). done reports whether it held the flow.
+func (fl *Flows) overBudget(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer) (bool, error) {
+	if fl.Budget == nil {
+		return false, nil
+	}
+	ex, err := fl.Budget(ctx, it)
+	if err != nil || ex == nil {
+		return false, err
+	}
+	if ex.Scope != "ticket" {
+		return true, fl.hold(ctx, f, it, c, "budget")
+	}
+	next := f
+	next.Status, next.Waiting, next.RunID, next.UpdatedAt, next.Version = FlowWaiting, "question", "", fl.Now(), f.Version+1
+	q := report.Question{ID: fl.NewID(), ProjectID: it.ProjectID, TicketID: it.ID,
+		Text: fmt.Sprintf("%s ran out of budget before its %s stage. Raise the budget, then answer to continue.", it.Key,
+			f.Stage), Context: ex.Reason(), Blocking: true, Status: report.QuestionOpen, Route: report.RouteHuman,
+		CreatedAt: fl.Now()}
+	qe := fl.itemEvent(it, c.ID, "item.question_raised", event.System, map[string]any{"question": q.ID, "blocking": true})
+	if err := fl.Reports.CreateQuestion(ctx, q, qe); err != nil {
+		return true, err
+	}
+	e := fl.itemEvent(it, c.ID, "flow.waiting", event.System, map[string]any{"stage": f.Stage, "for": "budget",
+		"used": ex.Used, "limit": ex.Limit})
+	if err := fl.Store.SaveFlow(ctx, next, f.Version, fl.ticketWrite(it, tracker.StateWaitingForAnswer, f.Stage), nil,
+		[]event.Event{e}); err != nil {
+		return true, err
+	}
+	fl.kick()
+	return true, nil
+}
+
+// withinBudget reports whether a flow held for budget may continue.
+func (fl *Flows) withinBudget(ctx context.Context, f Flow) bool {
+	if fl.Budget == nil {
+		return true
+	}
+	it, err := fl.Items.ItemByID(ctx, f.TicketID)
+	if err != nil {
+		return false
+	}
+	ex, err := fl.Budget(ctx, it)
+	return err == nil && ex == nil
+}
+
 func (fl *Flows) paused(ctx context.Context, projectID string) bool {
 	return fl.Paused != nil && fl.Paused(ctx, projectID)
 }
 
-// waitPause makes a flow wait for its project to be resumed; the current
-// stage then starts (again).
-func (fl *Flows) waitPause(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer) error {
+// hold makes a flow wait before its current stage — for a pause to end
+// ("pause") or for budget ("budget"); the stage then starts (again).
+func (fl *Flows) hold(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer, what string) error {
 	next := f
-	next.Status, next.Waiting, next.RunID, next.UpdatedAt, next.Version = FlowWaiting, "pause", "", fl.Now(), f.Version+1
-	e := fl.itemEvent(it, c.ID, "flow.waiting", event.System, map[string]any{"stage": f.Stage, "for": "pause"})
+	next.Status, next.Waiting, next.RunID, next.UpdatedAt, next.Version = FlowWaiting, what, "", fl.Now(), f.Version+1
+	e := fl.itemEvent(it, c.ID, "flow.waiting", event.System, map[string]any{"stage": f.Stage, "for": what})
 	if err := fl.Store.SaveFlow(ctx, next, f.Version, nil, nil, []event.Event{e}); err != nil {
 		return err
 	}
@@ -522,7 +582,7 @@ func (fl *Flows) unpause(ctx context.Context, f Flow) error {
 	}
 	next := f
 	next.Status, next.Waiting, next.UpdatedAt, next.Version = FlowRunning, "", fl.Now(), f.Version+1
-	e := fl.itemEvent(it, c.ID, "flow.resumed", event.System, map[string]any{"stage": f.Stage, "after": "pause"})
+	e := fl.itemEvent(it, c.ID, "flow.resumed", event.System, map[string]any{"stage": f.Stage, "after": f.Waiting})
 	jobs := []Job{fl.job(JobFlowEnter, "", flowJob{TicketID: it.ID, FlowVersion: next.Version}, fl.Now())}
 	if err := fl.Store.SaveFlow(ctx, next, f.Version, nil, jobs, []event.Event{e}); err != nil {
 		return err
@@ -698,7 +758,7 @@ func (fl *Flows) handleMerge(ctx context.Context, j Job) error {
 		return err
 	}
 	if fl.paused(ctx, f.ProjectID) {
-		return fl.waitPause(ctx, f, it, c)
+		return fl.hold(ctx, f, it, c, "pause")
 	}
 	pr, err := fl.PullRequests.EnsureForTicket(ctx, it)
 	switch {

@@ -37,10 +37,17 @@ type CredentialResolver interface {
 	ResolveCredential(ctx context.Context, customer, project, provider string) (core.Credential, error)
 }
 
+// BudgetChecker says whether work may still call the LLM (Core's budgets).
+type BudgetChecker interface {
+	CheckBudget(ctx context.Context, customer, project, ticket string) (allowed bool, reason string, err error)
+}
+
 // Anthropic proxies the Anthropic API (/v1/...).
 type Anthropic struct {
 	Verifier *runtoken.Verifier
 	Core     CredentialResolver
+	// Budget refuses calls of work over budget; nil: no budgets.
+	Budget BudgetChecker
 	// DefaultURL is used when the credential has no base URL.
 	DefaultURL string
 	Logger     *slog.Logger
@@ -74,6 +81,17 @@ func (a *Anthropic) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !claims.Can(runtoken.CapLLMInvoke) {
 		apiError(w, http.StatusForbidden, "permission_error", "run token lacks llm.invoke")
 		return
+	}
+	if a.Budget != nil {
+		allowed, reason, err := a.Budget.CheckBudget(r.Context(), claims.Customer, claims.Project, claims.Ticket)
+		switch {
+		case err != nil:
+			// Core also holds work over budget before each stage: fail open.
+			a.logger().WarnContext(r.Context(), "budget check failed; allowing the call", "error", err)
+		case !allowed:
+			apiError(w, http.StatusForbidden, "permission_error", "Ballet budget exhausted: "+reason)
+			return
+		}
 	}
 	cred, err := a.Core.ResolveCredential(r.Context(), claims.Customer, claims.Project, "anthropic")
 	if errors.Is(err, core.ErrNoCredential) {

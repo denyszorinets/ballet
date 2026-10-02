@@ -17,7 +17,7 @@ test('an org admin creates and renames a customer and adds a project', async ({ 
 	await expect(page.getByRole('heading', { name: 'Acme' })).toBeVisible();
 	await page.getByRole('button', { name: 'Rename' }).click();
 	await page.getByRole('form', { name: 'Rename customer' }).getByLabel('Name').fill('Acme Corp');
-	await page.getByRole('button', { name: 'Save' }).click();
+	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(page.getByRole('heading', { name: 'Acme Corp' })).toBeVisible();
 
 	const project = page.getByRole('form', { name: 'New project' });
