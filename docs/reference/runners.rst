@@ -75,11 +75,16 @@ Core's runner token (``data/service-tokens/runner.token``, audience
      - Runner → Core
      - ``{"run", "status": "running"}``
    * - ``run.log``
-     - Runner → Core (notification)
+     - Runner → Core
      - ``{"run", "stream": "stdout"|"stderr"|"system", "text"}``
    * - ``run.finished``
      - Runner → Core
      - ``{"run", "exit_code", "error"?, "cancelled"?}``
+
+Every Runner → Core message is a request the Runner awaits, so a run's
+output always reaches Core before its ``run.finished``. The Runner
+batches output per stream (every 200 ms, at a stream change, or at
+16 KiB).
 
 A Runner reconnects with exponential backoff (0.5 s doubling to 30 s,
 with jitter), introduces itself with the runs it still executes, and

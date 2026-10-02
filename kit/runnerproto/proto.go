@@ -62,7 +62,8 @@ const (
 	StreamSystem = "system" // the Runner's own messages (pulling image, ...)
 )
 
-// Log is a chunk of run output.
+// Log is a chunk of run output. It is sent as a request: the Runner
+// awaits it, so output reaches Core before run.finished.
 type Log struct {
 	Run    string `json:"run" msgpack:"run"`
 	Stream string `json:"stream" msgpack:"stream"`

@@ -187,7 +187,12 @@ func (r *Runner) start(ctx context.Context, p runnerproto.Start) error {
 func (r *Runner) execute(runCtx, ctx context.Context, p runnerproto.Start) {
 	r.call(ctx, runnerproto.MethodStatus, runnerproto.Status{Run: p.Run, Status: "running"})
 	out := newBuffer(func(stream, text string) {
-		r.notify(ctx, runnerproto.MethodLog, runnerproto.Log{Run: p.Run, Stream: stream, Text: text})
+		// A request, not a notification: Core handles requests and
+		// notifications separately, and output must reach Core before
+		// run.finished does.
+		if err := r.call(ctx, runnerproto.MethodLog, runnerproto.Log{Run: p.Run, Stream: stream, Text: text}); err != nil {
+			r.logger().DebugContext(ctx, "run output not delivered", "run", p.Run, "error", err)
+		}
 	})
 	stop := out.flushEvery(r.flushInterval())
 	code, err := r.Backend.Run(runCtx, p.Run, p.Spec, out.write)
@@ -232,13 +237,6 @@ func (r *Runner) call(ctx context.Context, method string, params any) error {
 	callCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	return c.Call(callCtx, method, params, nil)
-}
-
-// notify sends output; output produced while disconnected is lost.
-func (r *Runner) notify(ctx context.Context, method string, params any) {
-	if c := r.current(); c != nil {
-		_ = c.Notify(ctx, method, params)
-	}
 }
 
 func (r *Runner) flushInterval() time.Duration {

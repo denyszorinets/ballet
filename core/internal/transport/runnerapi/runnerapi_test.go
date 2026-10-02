@@ -126,7 +126,7 @@ func TestRunnerAPI_RunLifecycle(t *testing.T) {
 	r.mu.Unlock()
 
 	require.NoError(t, c.Call(t.Context(), runnerproto.MethodStatus, runnerproto.Status{Run: v.ID, Status: "running"}, nil))
-	require.NoError(t, c.Notify(t.Context(), runnerproto.MethodLog, runnerproto.Log{Run: v.ID, Stream: "stdout", Text: "hi\n"}))
+	require.NoError(t, c.Call(t.Context(), runnerproto.MethodLog, runnerproto.Log{Run: v.ID, Stream: "stdout", Text: "hi\n"}, nil))
 	require.NoError(t, c.Call(t.Context(), runnerproto.MethodFinished, runnerproto.Finished{Run: v.ID, ExitCode: 0}, nil))
 	got, err := e.runs.Get(admin, v.ID)
 	require.NoError(t, err)
