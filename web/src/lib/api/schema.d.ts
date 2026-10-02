@@ -1100,7 +1100,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** LLM token usage of the project, grouped by ticket or model */
+        /**
+         * LLM token usage of the project, grouped by ticket, model or run
+         * @description group_by=run groups by the caller of the gateway: "run:<id>" for agent runs, "planner:<session>" for the planner.
+         */
         get: operations["getProjectUsage"];
         put?: never;
         post?: never;
@@ -2140,7 +2143,7 @@ export interface components {
             base_url?: string;
         };
         UsageTotals: {
-            /** @description Ticket key or model of the group */
+            /** @description Ticket key, model or caller (run:<id>, planner:<session>) of the group */
             key?: string;
             /** Format: int64 */
             requests: number;
@@ -4295,8 +4298,10 @@ export interface operations {
     getProjectUsage: {
         parameters: {
             query?: {
-                group_by?: "ticket" | "model";
+                group_by?: "ticket" | "model" | "run";
                 since?: string;
+                /** @description Only this ticket's usage */
+                ticket?: string;
             };
             header?: never;
             path: {

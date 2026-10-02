@@ -157,6 +157,25 @@ test('the item page shows agent activity', async ({ page }) => {
 						status: 'open',
 						created_at: at
 					}
+				],
+				usage: [
+					{
+						key: 'run:r1',
+						requests: 7,
+						input_tokens: 1200,
+						output_tokens: 300,
+						cache_read_tokens: 5000,
+						cache_write_tokens: 100
+					}
+				],
+				history: [
+					{
+						seq: 2,
+						type: 'flow.waiting',
+						occurred_at: '2026-10-01T10:05:00Z',
+						actor: { kind: 'service', subject: 'ballet' },
+						payload: { stage: 'implement', for: 'answer' }
+					}
 				]
 			}
 		}
@@ -168,9 +187,19 @@ test('the item page shows agent activity', async ({ page }) => {
 	await expect(page.getByRole('list', { name: 'Open questions' })).toContainText(
 		'Blocking question: Which IdP for staff?'
 	);
-	const runs = page.getByRole('table', { name: 'Runs' });
-	await expect(runs).toContainText('implement · claude-code');
-	await expect(runs).toContainText('Login works.');
+	const timeline = page.getByRole('region', { name: 'Timeline' });
+	const session = timeline.getByRole('listitem', { name: 'Session implement' });
+	await expect(session).toContainText('succeeded');
+	await expect(session).toContainText('outcome: done');
+	await expect(session).toContainText('claude-code');
+	await expect(session).toContainText('Implemented login.');
+	await expect(session).toContainText(
+		'1,200 in · 300 out · 100 cache write · 5,000 cache read · 7 requests'
+	);
+	await expect(session).toContainText('Sessions last 8 hours.');
+	await expect(session).toContainText('Which IdP for staff?');
+	await expect(timeline).toContainText('Waited for answers at implement');
+	await expect(timeline).toContainText('1,600 counted tokens');
 	const reports = page.getByRole('list', { name: 'Agent reports' });
 	await expect(reports.getByRole('listitem').first()).toContainText('stage report: done');
 	await expect(reports).toContainText('Sessions last 8 hours.');

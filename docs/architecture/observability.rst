@@ -49,7 +49,10 @@ Planned dashboards
   ticket / epic / milestone, rework rate, stage pass rates, questions
   per ticket and human wait time.
 - **Ticket:** every session in order — stage, duration, tokens, cost,
-  outcome, report.
+  outcome, report. This is the *Timeline* on the ticket page in the
+  Ballet UI: each session with its status, outcome, duration and tokens,
+  its stage report, assumptions and questions, and the waits between
+  sessions.
 - **Platform:** active sessions, queue depth, container and provider
   failures, retries, budget stops.
 

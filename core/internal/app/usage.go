@@ -34,7 +34,9 @@ type UsageTotals struct {
 // UsageStore persists and aggregates usage.
 type UsageStore interface {
 	InsertUsage(ctx context.Context, records []UsageRecord) error
-	AggregateUsage(ctx context.Context, projectID, groupBy string, since time.Time) ([]UsageTotals, error)
+	// AggregateUsage sums a project's usage since a time (of one ticket,
+	// when ticket is set), grouped by "ticket", "model" or "run".
+	AggregateUsage(ctx context.Context, projectID, groupBy string, since time.Time, ticket string) ([]UsageTotals, error)
 }
 
 // Usage ingests and reports LLM usage.
@@ -116,9 +118,9 @@ type UsageReport struct {
 
 // Report aggregates a project's usage since a time, grouped by "ticket"
 // or "model". Requires tracker.read on the project.
-func (u *Usage) Report(ctx context.Context, projectKey, groupBy string, since time.Time) (UsageReport, error) {
-	if groupBy != "ticket" && groupBy != "model" {
-		return UsageReport{}, fmt.Errorf("%w: group_by must be ticket or model", ErrInvalid)
+func (u *Usage) Report(ctx context.Context, projectKey, groupBy string, since time.Time, ticket string) (UsageReport, error) {
+	if groupBy != "ticket" && groupBy != "model" && groupBy != "run" {
+		return UsageReport{}, fmt.Errorf("%w: group_by must be ticket, model or run", ErrInvalid)
 	}
 	id, err := caller(ctx)
 	if err != nil {
@@ -135,7 +137,7 @@ func (u *Usage) Report(ctx context.Context, projectKey, groupBy string, since ti
 	if err := u.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: c.Key, Project: p.Key}); err != nil {
 		return UsageReport{}, err
 	}
-	groups, err := u.Store.AggregateUsage(ctx, p.ID, groupBy, since)
+	groups, err := u.Store.AggregateUsage(ctx, p.ID, groupBy, since, ticket)
 	if err != nil {
 		return UsageReport{}, err
 	}

@@ -189,8 +189,11 @@ LLM usage
 
 ``GET /api/v1/projects/{project}/usage`` → ``200``
    Token usage recorded by the LLM gateway. Query: ``group_by`` =
-   ``ticket`` (default) or ``model``; ``since`` (RFC 3339). Permission:
-   ``tracker.read``.
+   ``ticket`` (default), ``model`` or ``run`` (the gateway's caller:
+   ``run:<id>`` for an agent session, ``planner:<session>`` for the
+   planner); ``ticket`` limits it to one ticket; ``since`` (RFC 3339).
+   Permission: ``tracker.read``. The ticket page's timeline uses
+   ``group_by=run&ticket=<key>``.
 
    .. code-block:: json
 

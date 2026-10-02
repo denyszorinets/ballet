@@ -33,22 +33,26 @@ func TestUsage_IngestAndReport(t *testing.T) {
 	assert.Equal(t, 2, skipped)
 
 	bob := user(t, "bob", "acme-devs")
-	byTicket, err := u.Report(bob, "WEB", "ticket", time.Time{})
+	byTicket, err := u.Report(bob, "WEB", "ticket", time.Time{}, "")
 	require.NoError(t, err)
 	require.Len(t, byTicket.Groups, 2)
 	assert.Equal(t, app.UsageTotals{Key: "WEB-1", Requests: 2, InputTokens: 150, OutputTokens: 15}, byTicket.Groups[0])
 	assert.Equal(t, int64(160), byTicket.Total.InputTokens, "other projects excluded")
 
-	byModel, err := u.Report(bob, "WEB", "model", time.Time{})
+	byModel, err := u.Report(bob, "WEB", "model", time.Time{}, "")
 	require.NoError(t, err)
 	assert.Equal(t, "opus", byModel.Groups[0].Key)
 
-	later, err := u.Report(bob, "WEB", "ticket", now.Add(time.Minute))
+	byRun, err := u.Report(bob, "WEB", "run", time.Time{}, "WEB-1")
+	require.NoError(t, err)
+	require.Len(t, byRun.Groups, 1)
+	assert.Equal(t, int64(150), byRun.Total.InputTokens, "only WEB-1, grouped by its caller")
+	later, err := u.Report(bob, "WEB", "ticket", now.Add(time.Minute), "")
 	require.NoError(t, err)
 	assert.Empty(t, later.Groups)
 
-	_, err = u.Report(bob, "WEB", "day", time.Time{})
+	_, err = u.Report(bob, "WEB", "day", time.Time{}, "")
 	assert.ErrorIs(t, err, app.ErrInvalid)
-	_, err = u.Report(user(t, "eve"), "WEB", "ticket", time.Time{})
+	_, err = u.Report(user(t, "eve"), "WEB", "ticket", time.Time{}, "")
 	assert.ErrorIs(t, err, app.ErrForbidden)
 }
