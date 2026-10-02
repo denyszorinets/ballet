@@ -51,6 +51,10 @@ test-race: ## Run Go tests with the race detector in every module
 test-standalone: ## Test every module without the workspace (GOWORK=off)
 	$(call each_module,GOWORK=off go test ./...)
 
+.PHONY: runner-docker-test
+runner-docker-test: ## Test the Runner's Docker backend against the local Docker engine
+	cd runner && BALLET_DOCKER_TESTS=1 go test -race -count=1 -run Integration -v ./internal/backend/docker/
+
 .PHONY: build
 build: ## Build all service binaries into bin/
 	@mkdir -p $(BIN_DIR)

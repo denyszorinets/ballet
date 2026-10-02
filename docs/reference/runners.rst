@@ -91,6 +91,31 @@ with jitter), introduces itself with the runs it still executes, and
 delivers results it could not deliver before. Output produced while
 disconnected is lost.
 
+Backends
+--------
+
+``docker`` (default)
+   Each run gets a **fresh container** from the spec's ``image``, through
+   the Docker Engine API (Podman's compatible API works too; API
+   ``v1.41``). The Runner pulls the image if needed, creates the container
+   (named ``ballet-run-<run>``, label ``ballet.run``, ``--init``, CPU and
+   memory limits), streams its stdout and stderr, waits for it, and
+   removes it. The workspace is ``/workspace`` in the container; the
+   spec's ``workdir`` is relative to it. Cancelling stops the container
+   (``SIGTERM``, killed after 10 s).
+
+``process`` — **development only**
+   Each run executes as a local process in a fresh temporary workspace,
+   removed afterwards (:doc:`/architecture/decisions/0023-process-backend-for-development`).
+   The environment is minimal — ``PATH``, ``LANG``, ``TZ``, ``HOME``
+   inside the workspace, ``BALLET_WORKSPACE`` and the spec's ``env``;
+   ``image`` is ignored. Cancelling stops the whole process group. There
+   is **no isolation**: the session can do anything the Runner's user can.
+   The Runner logs a warning when it starts with this backend.
+
+Run the Docker backend's integration tests against a local engine with
+``make runner-docker-test`` (CI runs them on every pull request).
+
 Configuration
 -------------
 
@@ -124,3 +149,26 @@ Configuration
    * - ``runner.default_timeout``
      - ``2h``
      - Timeout of runs whose spec sets none (at least ``1m``)
+   * - ``docker.host``
+     - ``DOCKER_HOST`` or ``unix:///var/run/docker.sock``
+     - Engine endpoint: ``unix://``, ``tcp://`` or ``http(s)://``; checked
+       at start-up
+   * - ``docker.cpus`` / ``docker.memory_mb``
+     - ``0`` (unlimited)
+     - Limits per container
+   * - ``docker.network``
+     - engine default
+     - Network of the containers
+   * - ``process.work_dir``
+     - OS temp dir
+     - Parent of the run workspaces (process backend)
+   * - ``process.keep_workspaces``
+     - ``false``
+     - Keep workspaces after runs, for debugging
+
+Run a development Runner next to Core (no container runtime needed):
+
+.. code-block:: bash
+
+   BALLET_RUNNER_RUNNER_BACKEND=process BALLET_RUNNER_RUNNER_NAME=dev-1 \
+     go run ./runner/cmd/runner
