@@ -17,9 +17,9 @@ Two stores, by purpose:
    billing and in-app usage views.
 
 **Metrics (Prometheus) — trends and alerting.**
-   Counters such as ``ballet_llm_tokens_total`` and
-   ``ballet_llm_cost_total`` with labels ``customer``, ``project``,
-   ``runtime``, ``model``, ``token_type``.
+   Counters such as ``ballet_llm_tokens_total`` with labels
+   ``customer``, ``project``, ``model`` and ``token_type``
+   (:doc:`/reference/metrics`); cost per token is planned.
 
 Ticket and run IDs are **not** metric labels: each would create
 unbounded time series. Grafana uses Prometheus for customer/project
@@ -30,21 +30,13 @@ Pipeline and delivery metrics
 -----------------------------
 
 Ballet must show not only what it spends but whether it delivers good
-software. Prometheus metrics (labels ``customer``, ``project``,
-``stage``, ``runtime``, ``model``, ``outcome`` — never ticket IDs):
-
-- ``ballet_stage_runs_total`` — stage sessions by outcome (pass, returned,
-  failed, question, timeout).
-- ``ballet_stage_duration_seconds`` — histogram per stage.
-- ``ballet_ticket_lead_time_seconds`` — Ready to Done.
-- ``ballet_ticket_iterations`` — pipeline round trips per completed
-  ticket (rework rate).
-- ``ballet_questions_total`` and ``ballet_question_wait_seconds`` — how
-  often humans are needed and how long work waits for them.
-- ``ballet_questions_answered_by_planner_total`` — questions resolved
-  without a human.
-- ``ballet_ready_queue_depth``, ``ballet_active_sessions``.
-- ``ballet_budget_exhausted_total``.
+software. Core counts delivery from its event log — stages and their
+outcomes, pipeline lead time and rework (iterations), agent sessions and
+their duration, questions and how long they wait, waits for humans,
+pauses and budgets — and reports the current state (active pipelines,
+open questions, active runs) at each scrape. Labels are ``customer``,
+``project``, ``stage`` and small enumerations, never ticket IDs. The
+metrics are listed in :doc:`/reference/metrics`.
 
 Per-ticket detail (each session's timeline, report, tokens, cost) is in
 the Core database.
