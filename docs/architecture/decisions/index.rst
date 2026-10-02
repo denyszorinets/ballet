@@ -29,3 +29,4 @@ Rejected, Deprecated, Superseded.
    0020-planner-runs-in-process-in-core
    0021-hybrid-vector-search-over-all-content
    0022-humans-reach-knowledge-through-core
+   0023-process-backend-for-development

@@ -5,10 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -47,7 +50,7 @@ func setup(t *testing.T) fixture {
 		Core:       creds{"acme/WEB": {APIKey: "sk-real", BaseURL: prov.URL}},
 		DefaultURL: "http://127.0.0.1:1",
 		// A transport per test: no pooled connections shared between tests.
-		Transport: &http.Transport{},
+		Transport: &http.Transport{DialContext: closeTracer(t)},
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/v1/", gw)
@@ -156,4 +159,41 @@ func TestProxy_Rejections(t *testing.T) {
 		})
 	}
 	assert.Empty(t, f.provider.Requests(), "rejected requests never reach the provider")
+}
+
+// closeTracer dials TCP connections that record who closes them and, if
+// the test fails, logs those stacks: TestProxy_StreamsIncrementally fails
+// rarely in CI with the gateway's upstream connection closed locally
+// mid-stream (#88), and this shows by whom.
+func closeTracer(t *testing.T) func(ctx context.Context, network, addr string) (net.Conn, error) {
+	var mu sync.Mutex
+	var stacks []string
+	t.Cleanup(func() {
+		if t.Failed() {
+			mu.Lock()
+			defer mu.Unlock()
+			for _, s := range stacks {
+				t.Logf("upstream connection closed by:\n%s", s)
+			}
+		}
+	})
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		var d net.Dialer
+		c, err := d.DialContext(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+		return &tracedConn{Conn: c, record: func(s string) { mu.Lock(); stacks = append(stacks, s); mu.Unlock() }}, nil
+	}
+}
+
+type tracedConn struct {
+	net.Conn
+	once   sync.Once
+	record func(string)
+}
+
+func (c *tracedConn) Close() error {
+	c.once.Do(func() { c.record(string(debug.Stack())) })
+	return c.Conn.Close()
 }
