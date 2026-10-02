@@ -15,6 +15,7 @@ var (
 	ErrConflict      = errors.New("conflicting concurrent update")
 	ErrForbidden     = errors.New("forbidden")
 	ErrUnauthorized  = errors.New("unauthenticated")
+	ErrUnavailable   = errors.New("unavailable") // an external system (forge) failed
 )
 
 // invalid wraps a validation error as ErrInvalid, keeping its message.

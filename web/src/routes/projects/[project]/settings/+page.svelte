@@ -21,7 +21,10 @@
 		env: '',
 		branch_template: '',
 		git_name: '',
-		git_email: ''
+		git_email: '',
+		forge: '' as '' | 'github' | 'git',
+		forge_api_url: '',
+		link_template: ''
 	});
 	let token = $state('');
 	let tokenMessage = $state<string>();
@@ -43,7 +46,10 @@
 				.join('\n'),
 			branch_template: x.branch_template,
 			git_name: x.git_name,
-			git_email: x.git_email
+			git_email: x.git_email,
+			forge: x.forge,
+			forge_api_url: x.forge_api_url,
+			link_template: x.link_template
 		};
 	}
 
@@ -162,6 +168,26 @@
 				>Commit email <input
 					bind:value={form.git_email}
 					placeholder="agent@ballet.invalid"
+				/></label
+			>
+			<label
+				>Forge
+				<select bind:value={form.forge}>
+					<option value="">Automatic (GitHub for github.com, else plain git)</option>
+					<option value="github">GitHub</option>
+					<option value="git">Plain git (no pull requests)</option>
+				</select>
+			</label>
+			<label
+				>GitHub API URL (Enterprise) <input
+					bind:value={form.forge_api_url}
+					placeholder="https://api.github.com"
+				/></label
+			>
+			<label
+				>Branch link template (plain git) <input
+					bind:value={form.link_template}
+					placeholder="https://git.example.com/web/compare/{'{base}'}...{'{branch}'}"
 				/></label
 			>
 			{#if canEdit}<button class="primary" type="submit">Save</button>{/if}

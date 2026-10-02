@@ -36,6 +36,8 @@ export interface FakeCore {
 	gitTokens: Record<string, string>;
 	/** Agent activity by item key: runs, reports, questions (API shapes). */
 	activity: Record<string, { runs?: unknown[]; reports?: unknown[]; questions?: unknown[] }>;
+	/** Pull requests by ticket key (API shape). */
+	pullRequests: Record<string, Record<string, unknown>>;
 }
 
 export interface FakePlannerSession {
@@ -211,6 +213,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		execution: {},
 		gitTokens: {},
 		activity: {},
+		pullRequests: {},
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
@@ -356,6 +359,33 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 					core.deps.every((d) => d.to !== i.key || d.type !== 'blocks' || resolved(d.from))
 			);
 			return r.fulfill({ json: { items: run.map(itemJSON) } });
+		}
+		if ((m = path.match(/^\/items\/([^/]+)\/pull-request(\/refresh|\/merge)?$/))) {
+			const key = m[1];
+			const cur = core.pullRequests[key];
+			if (method === 'GET' || m[2] === '/refresh') {
+				return cur ? r.fulfill({ json: cur }) : err(r, 404, 'not_found', 'pull request not found');
+			}
+			if (m[2] === '/merge') {
+				if (!cur || cur.state !== 'open') return err(r, 409, 'conflict', 'not open');
+				cur.state = 'merged';
+				return r.fulfill({ json: cur });
+			}
+			core.pullRequests[key] ??= {
+				ticket: key,
+				forge: 'github',
+				number: 7,
+				url: 'https://github.com/acme/web/pull/7',
+				title: key,
+				head: `ballet/${key}-x`,
+				base: 'main',
+				state: 'open',
+				draft: false,
+				checks: 'success',
+				review: 'approved',
+				updated_at: now
+			};
+			return r.fulfill({ json: core.pullRequests[key] });
 		}
 		if ((m = path.match(/^\/items\/([^/]+)(\/[a-z]+)?$/))) {
 			const it = core.items.find((i) => i.key === m![1]);

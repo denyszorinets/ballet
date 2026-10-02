@@ -293,6 +293,13 @@ Read at start-up; changes need a restart.
    ``0`` disables compaction. Default ``100000``;
    ``BALLET_CORE_PLANNER_COMPACT_AT_TOKENS``.
 
+``[forge]`` (core)
+------------------
+
+``poll_interval``
+   How often Core refreshes open pull requests from their forge (at
+   least ``10s``). Default ``1m``; ``BALLET_CORE_FORGE_POLL_INTERVAL``.
+
 ``[agents]`` (core)
 -------------------
 

@@ -22,9 +22,12 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/domain/agent/claudecode"
 	"github.com/denyszorinets/ballet/core/internal/domain/credential"
 	"github.com/denyszorinets/ballet/core/internal/domain/execution"
+	"github.com/denyszorinets/ballet/core/internal/domain/forge"
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
 	domainrun "github.com/denyszorinets/ballet/core/internal/domain/run"
 	"github.com/denyszorinets/ballet/core/internal/infra/anthropic"
+	"github.com/denyszorinets/ballet/core/internal/infra/forge/gitforge"
+	"github.com/denyszorinets/ballet/core/internal/infra/forge/github"
 	"github.com/denyszorinets/ballet/core/internal/infra/knowledge"
 	"github.com/denyszorinets/ballet/core/internal/infra/secrets"
 	"github.com/denyszorinets/ballet/core/internal/infra/servicetokens"
@@ -66,6 +69,7 @@ type serviceConfig struct {
 	Gateway   gatewayConfig   `toml:"gateway"`
 	Planner   plannerConfig   `toml:"planner"`
 	Agents    agentsConfig    `toml:"agents"`
+	Forge     forgeConfig     `toml:"forge"`
 }
 
 // gatewayConfig locates the LLM gateway (ADR-0011), used by the planner.
@@ -82,6 +86,11 @@ type plannerConfig struct {
 	// CompactAtTokens: estimated context size above which older messages
 	// are summarized for the model; 0 disables compaction.
 	CompactAtTokens int `toml:"compact_at_tokens"`
+}
+
+// forgeConfig configures following pull requests (ADR-0007).
+type forgeConfig struct {
+	PollInterval time.Duration `toml:"poll_interval"` // refresh of open pull requests
 }
 
 // agentsConfig configures coding-agent runs (ADR-0003).
@@ -159,6 +168,7 @@ func defaultConfig() serviceConfig {
 		Secrets:   secretsConfig{KeyFile: "data/secrets.key"},
 		Knowledge: knowledgeConfig{URL: "http://localhost:8081"},
 		Gateway:   gatewayConfig{URL: "http://localhost:8082"},
+		Forge:     forgeConfig{PollInterval: time.Minute},
 		Agents: agentsConfig{ClaudeCommand: "claude", RunTokenTTL: 3 * time.Hour,
 			TrackerMCPURL: "http://localhost:8080" + trackermcp.Path},
 		Planner: plannerConfig{
@@ -177,6 +187,9 @@ func (c serviceConfig) Validate() error {
 	}
 	if c.Storage.Path == "" {
 		errs = append(errs, errors.New("storage.path must not be empty"))
+	}
+	if c.Forge.PollInterval < 10*time.Second {
+		errs = append(errs, errors.New("forge.poll_interval must be at least 10s"))
 	}
 	if c.Agents.RunTokenTTL < 10*time.Minute {
 		errs = append(errs, errors.New("agents.run_token_ttl must be at least 10m"))
@@ -352,6 +365,19 @@ func run() error {
 	agentTracker := &app.AgentTracker{Reports: st, RunStore: st, Runs: runs, Items: st, Tenancy: st, Authz: authz,
 		Changesets: changesets, Now: time.Now, NewID: store.NewID}
 	trackermcp.Register(svc.Mux, runtoken.NewRingVerifier(tokenKeys, time.Now), agentTracker, "v1")
+	pullRequests := &app.PullRequests{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz,
+		Token: app.GitToken(credentials), Now: time.Now, Logger: svc.Logger,
+		Forges: func(s execution.Settings) (forge.Forge, error) {
+			switch s.ForgeName() {
+			case github.Name:
+				return github.Adapter{APIURL: s.ForgeAPIURL}, nil
+			case gitforge.Name:
+				return gitforge.Adapter{LinkTemplate: s.LinkTemplate}, nil
+			}
+			return nil, fmt.Errorf("unknown forge %q", s.Forge)
+		},
+	}
+	go pullRequests.Poll(ctx, cfg.Forge.PollInterval)
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,
@@ -371,6 +397,7 @@ func run() error {
 		Runs:         runs,
 		Execution:    &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 		AgentTracker: agentTracker,
+		PullRequests: pullRequests,
 	})
 
 	searchIndexer := &app.SearchIndexer{
