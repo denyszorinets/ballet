@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/denyszorinets/ballet/core/internal/domain/agent"
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
 	"github.com/denyszorinets/ballet/core/internal/domain/execution"
 	"github.com/denyszorinets/ballet/core/internal/domain/run"
@@ -51,19 +53,68 @@ type RunView struct {
 // Runs implements the human-facing run use cases. Runs are queued for a
 // ticket and executed by Runners through the Dispatcher.
 type Runs struct {
-	Store      RunStore
-	Execution  ExecutionStore // nil: runs execute their spec as given
-	Items      ItemStore
-	Tenancy    TenancyStore
-	Authz      Authorizer
-	Dispatcher *Dispatcher
-	Now        func() time.Time
-	NewID      func() string
+	Store     RunStore
+	Execution ExecutionStore // nil: runs execute their spec as given
+	// Agents are the adapters agent runs can use, by name.
+	Agents map[string]agent.Adapter
+	// SessionSkills returns the skills a project's sessions get.
+	SessionSkills func(ctx context.Context, projectKey string) ([]agent.Skill, error)
+	MCP           []agent.MCPServer // MCP servers every session gets
+	Model         string            // agent model; "": the runtime's default
+	Items         ItemStore
+	Tenancy       TenancyStore
+	Authz         Authorizer
+	Dispatcher    *Dispatcher
+	Now           func() time.Time
+	NewID         func() string
+}
+
+// AgentInput describes an agent run.
+type AgentInput struct {
+	Adapter        string // e.g. "claude-code"
+	Prompt         string
+	TimeoutSeconds int
+}
+
+// CreateAgent queues a run executing a coding agent through an adapter:
+// the session gets the prompt, the project's skills and the MCP servers.
+// Like Create, it needs run.manage.
+func (rs *Runs) CreateAgent(ctx context.Context, ticketKey, stage string, in AgentInput) (RunView, error) {
+	a, ok := rs.Agents[in.Adapter]
+	if !ok {
+		return RunView{}, fmt.Errorf("%w: unknown agent adapter %q", ErrInvalid, in.Adapter)
+	}
+	return rs.create(ctx, ticketKey, stage, func(it tracker.Item, p tenancy.Project) (run.Spec, string, error) {
+		var skills []agent.Skill
+		if rs.SessionSkills != nil {
+			var err error
+			if skills, err = rs.SessionSkills(ctx, p.Key); err != nil {
+				return run.Spec{}, "", err
+			}
+		}
+		built, err := a.Build(agent.Session{
+			Prompt: in.Prompt, Skills: skills, MCP: rs.MCP, Model: rs.Model,
+			Instructions: fmt.Sprintf("You are a coding agent of Ballet working on ticket %s (%s) of project %s, "+
+				"stage %q. Work in the current repository; commit and push your work to the current branch.",
+				it.Key, it.Title, p.Key, stage),
+		})
+		if err != nil {
+			return run.Spec{}, "", invalid(err)
+		}
+		return run.Spec{Command: built.Command, Files: built.Files, Env: built.Env, TimeoutSeconds: in.TimeoutSeconds}, a.Name(), nil
+	})
 }
 
 // Create queues a run of stage for a ticket. Queuing by hand needs
 // run.manage on the project (the orchestrator queues runs in M5).
 func (rs *Runs) Create(ctx context.Context, ticketKey, stage string, spec run.Spec) (RunView, error) {
+	return rs.create(ctx, ticketKey, stage, func(tracker.Item, tenancy.Project) (run.Spec, string, error) {
+		return spec, "", nil
+	})
+}
+
+func (rs *Runs) create(ctx context.Context, ticketKey, stage string,
+	build func(tracker.Item, tenancy.Project) (run.Spec, string, error)) (RunView, error) {
 	id, err := caller(ctx)
 	if err != nil {
 		return RunView{}, err
@@ -78,15 +129,19 @@ func (rs *Runs) Create(ctx context.Context, ticketKey, stage string, spec run.Sp
 	if it.Kind != tracker.KindTicket {
 		return RunView{}, fmt.Errorf("%w: runs execute tickets, not %ss", ErrInvalid, it.Kind)
 	}
+	spec, adapter, err := build(it, p)
+	if err != nil {
+		return RunView{}, err
+	}
 	r := run.Run{ID: rs.NewID(), ProjectID: p.ID, TicketID: it.ID, Stage: stage, Status: run.StatusQueued, Spec: spec,
-		CreatedBy: id.Subject, CreatedAt: rs.Now(), Version: 1}
+		Adapter: adapter, CreatedBy: id.Subject, CreatedAt: rs.Now(), Version: 1}
 	if err := r.Validate(); err != nil {
 		return RunView{}, invalid(err)
 	}
 	if err := rs.prepare(ctx, &r, it); err != nil {
 		return RunView{}, err
 	}
-	e := runEvent(r, c.ID, "run.queued", actorIn(ctx, id), map[string]any{"ticket": it.Key, "stage": stage})
+	e := runEvent(r, c.ID, "run.queued", actorIn(ctx, id), map[string]any{"ticket": it.Key, "stage": stage, "adapter": r.Adapter})
 	if err := rs.Store.CreateRun(ctx, r, e); err != nil {
 		return RunView{}, err
 	}
@@ -281,6 +336,8 @@ type Dispatcher struct {
 	// SecretEnv returns the secrets a run receives with its start (the
 	// project's git token); optional.
 	SecretEnv func(ctx context.Context, r run.Run) (map[string]string, error)
+	// Adapters read agent runs' results, by adapter name.
+	Adapters map[string]agent.Adapter
 
 	mu      sync.Mutex
 	runners map[string]*runnerState
@@ -546,6 +603,22 @@ func (d *Dispatcher) Finished(ctx context.Context, runner, runID string, exitCod
 	if err != nil {
 		return err
 	}
+	if a, ok := d.Adapters[r.Adapter]; ok && r.Adapter != "" && !cancelled {
+		stdout, err := d.stdout(ctx, r.ID)
+		if err != nil {
+			return err
+		}
+		res, ok := a.Result(stdout)
+		switch {
+		case ok:
+			r.Result = &run.Result{Summary: truncate(res.Summary, 10_000), Turns: res.Turns, CostUSD: res.CostUSD}
+			if !res.Success && exitCode == 0 && errText == "" {
+				errText = "the agent reported a failure: " + truncate(res.Summary, 500)
+			}
+		case exitCode == 0 && errText == "":
+			errText = "the agent reported no result"
+		}
+	}
 	switch {
 	case cancelled:
 		return d.finish(ctx, r, run.StatusCancelled, nil, firstNonEmpty(errText, "cancelled"))
@@ -555,6 +628,34 @@ func (d *Dispatcher) Finished(ctx context.Context, runner, runID string, exitCod
 		return d.finish(ctx, r, run.StatusFailed, &exitCode, fmt.Sprintf("exited with code %d", exitCode))
 	}
 	return d.finish(ctx, r, run.StatusSucceeded, &exitCode, "")
+}
+
+// stdout returns a run's standard output.
+func (d *Dispatcher) stdout(ctx context.Context, runID string) (string, error) {
+	var b strings.Builder
+	var after int64
+	for {
+		logs, err := d.Store.RunLogs(ctx, runID, after, 1000)
+		if err != nil {
+			return "", err
+		}
+		for _, l := range logs {
+			if l.Stream == "stdout" {
+				b.WriteString(l.Text)
+			}
+			after = l.Seq
+		}
+		if len(logs) < 1000 {
+			return b.String(), nil
+		}
+	}
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
 }
 
 // cancel cancels a run on behalf of a human.

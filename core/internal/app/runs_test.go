@@ -3,6 +3,8 @@ package app_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/denyszorinets/ballet/core/internal/app"
+	"github.com/denyszorinets/ballet/core/internal/domain/agent"
 	"github.com/denyszorinets/ballet/core/internal/domain/run"
 	"github.com/denyszorinets/ballet/core/internal/domain/tracker"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
@@ -220,4 +223,76 @@ func TestRuns_ReconnectAndDisconnect(t *testing.T) {
 	e.d.Disconnect("r1", second)
 	failed := e.eventually(t, a.ID, run.StatusFailed)
 	assert.Equal(t, "the runner disconnected", failed.Error)
+}
+
+// echoAgent builds a session that prints its prompt; results are lines
+// "RESULT <ok|fail> <summary>".
+type echoAgent struct{}
+
+func (echoAgent) Name() string { return "echo" }
+
+func (echoAgent) Build(s agent.Session) (agent.Built, error) {
+	return agent.Built{Command: []string{"cat", ".ballet/prompt"}, Files: map[string]string{".ballet/prompt": s.Prompt},
+		Env: map[string]string{"SKILLS": fmt.Sprint(len(s.Skills)), "MCP": s.MCP[0].Name}}, nil
+}
+
+func (echoAgent) Result(stdout string) (agent.Result, bool) {
+	i := strings.LastIndex(stdout, "RESULT ")
+	if i < 0 {
+		return agent.Result{}, false
+	}
+	f := strings.SplitN(strings.TrimSpace(stdout[i+7:]), " ", 2)
+	return agent.Result{Success: f[0] == "ok", Summary: f[1], Turns: 2}, true
+}
+
+func TestRuns_AgentRunsAreBuiltByTheirAdapterAndJudgedByTheirResult(t *testing.T) {
+	e := newRuns(t, time.Minute)
+	e.runs.Agents = map[string]agent.Adapter{"echo": echoAgent{}}
+	e.d.Adapters = e.runs.Agents
+	e.runs.MCP = []agent.MCPServer{{Name: "knowledge", URL: "http://kn/mcp", TokenEnv: "T"}}
+	e.runs.SessionSkills = func(context.Context, string) ([]agent.Skill, error) {
+		return []agent.Skill{{Name: "gitflow"}}, nil
+	}
+	dave := user(t, "dave", "acme-admins")
+	tk := mk(t, e.tr, tracker.KindTicket, "t")
+
+	_, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "nope", Prompt: "x"})
+	assert.ErrorIs(t, err, app.ErrInvalid)
+	_, err = e.runs.CreateAgent(user(t, "bob", "acme-devs"), tk.Key, "implement", app.AgentInput{Adapter: "echo", Prompt: "x"})
+	assert.ErrorIs(t, err, app.ErrForbidden)
+
+	r, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "echo", Prompt: "Do it", TimeoutSeconds: 60})
+	require.NoError(t, err)
+	assert.Equal(t, "echo", r.Adapter)
+	assert.Equal(t, "Do it", r.Spec.Files[".ballet/prompt"])
+	assert.Equal(t, "1", r.Spec.Env["SKILLS"])
+	assert.Equal(t, "knowledge", r.Spec.Env["MCP"])
+	assert.Equal(t, 60, r.Spec.TimeoutSeconds)
+
+	fr := &fakeRunner{}
+	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 3}, fr))
+	finish := func(out string, code int) run.Run {
+		t.Helper()
+		v, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "echo", Prompt: "p"})
+		require.NoError(t, err)
+		e.eventually(t, v.ID, run.StatusStarting)
+		if out != "" {
+			require.NoError(t, e.d.Log(t.Context(), "r1", v.ID, "stdout", out))
+		}
+		require.NoError(t, e.d.Finished(t.Context(), "r1", v.ID, code, "", false))
+		return e.status(t, v.ID)
+	}
+	e.d.MaxLogBytes = 1 << 20
+
+	ok := finish("working\nRESULT ok Added login.\n", 0)
+	assert.Equal(t, run.StatusSucceeded, ok.Status)
+	assert.Equal(t, &run.Result{Summary: "Added login.", Turns: 2}, ok.Result)
+
+	failed := finish("RESULT fail Tests do not pass.\n", 0)
+	assert.Equal(t, run.StatusFailed, failed.Status, "the agent's own verdict counts")
+	assert.Equal(t, "the agent reported a failure: Tests do not pass.", failed.Error)
+
+	silent := finish("crashed\n", 0)
+	assert.Equal(t, run.StatusFailed, silent.Status)
+	assert.Equal(t, "the agent reported no result", silent.Error)
 }

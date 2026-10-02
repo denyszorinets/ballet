@@ -92,6 +92,11 @@ Risks
 - Running the process backend in production would give agents the
   Runner's privileges. Mitigated by the explicit opt-in, the start-up
   warning and documentation.
+- Coding agents skip permission prompts in their sessions because
+  sessions are meant to be disposable containers (Claude Code is told
+  so with ``IS_SANDBOX=1``). Under the process backend this means an agent
+  acts on the host with the Runner's permissions — acceptable only on a
+  development machine.
 
 Follow-up
 ~~~~~~~~~

@@ -3,6 +3,7 @@
 package docker
 
 import (
+	"archive/tar"
 	"bufio"
 	"bytes"
 	"context"
@@ -15,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sort"
 	"strings"
 	"time"
 
@@ -140,11 +142,15 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 	}
 	// Secrets end up in the container's configuration, which lives only as
 	// long as the container.
-	env := make([]string, 0, len(spec.Env)+len(spec.SecretEnv))
+	env := []string{"HOME=" + Workspace + "/.home", "BALLET_WORKSPACE=" + Workspace}
 	for _, m := range []map[string]string{spec.Env, spec.SecretEnv} {
 		for k, v := range m {
 			env = append(env, k+"="+v)
 		}
+	}
+	files, err := workspaceArchive(spec.Files)
+	if err != nil {
+		return -1, err
 	}
 	workdir := path.Join(Workspace, strings.TrimPrefix(path.Clean("/"+spec.Workdir), "/"))
 	host := map[string]any{"Init": true}
@@ -162,7 +168,7 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 	}
 	// Creation and clean-up must not be cut short by a cancellation.
 	bg := context.WithoutCancel(ctx)
-	err := b.call(bg, http.MethodPost, "/containers/create", url.Values{"name": {"ballet-run-" + runID}}, map[string]any{
+	err = b.call(bg, http.MethodPost, "/containers/create", url.Values{"name": {"ballet-run-" + runID}}, map[string]any{
 		"Image": spec.Image, "Cmd": spec.Command, "Env": env, "WorkingDir": workdir,
 		"Labels":     map[string]string{"ballet.run": runID},
 		"HostConfig": host,
@@ -173,6 +179,9 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 	defer func() {
 		_ = b.call(bg, http.MethodDelete, "/containers/"+created.ID, url.Values{"force": {"1"}, "v": {"1"}}, nil, nil)
 	}()
+	if err := b.upload(bg, created.ID, files); err != nil {
+		return -1, fmt.Errorf("write workspace files: %w", err)
+	}
 	if err := b.call(bg, http.MethodPost, "/containers/"+created.ID+"/start", nil, nil, nil); err != nil {
 		return -1, fmt.Errorf("start container: %w", err)
 	}
@@ -213,6 +222,77 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 		<-logsDone
 		return -1, ctx.Err()
 	}
+}
+
+// workspaceArchive is a tar of the workspace directory, its .home and
+// files (workspace-relative paths), to extract at /.
+func workspaceArchive(files map[string]string) ([]byte, error) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	dirs := map[string]bool{}
+	addDir := func(d string) error {
+		if dirs[d] {
+			return nil
+		}
+		dirs[d] = true
+		return tw.WriteHeader(&tar.Header{Typeflag: tar.TypeDir, Name: d + "/", Mode: 0o777, ModTime: time.Unix(0, 0)})
+	}
+	root := strings.TrimPrefix(Workspace, "/")
+	for _, d := range []string{root, root + "/.home"} {
+		if err := addDir(d); err != nil {
+			return nil, err
+		}
+	}
+	names := make([]string, 0, len(files))
+	for n := range files {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		clean := path.Clean(n)
+		if n == "" || path.IsAbs(n) || clean == "." || strings.HasPrefix(clean, "..") {
+			return nil, fmt.Errorf("file path %q must be relative to the workspace", n)
+		}
+		full := root + "/" + clean
+		parts := strings.Split(path.Dir(full), "/")
+		for i := range parts {
+			if err := addDir(strings.Join(parts[:i+1], "/")); err != nil {
+				return nil, err
+			}
+		}
+		content := files[n]
+		if err := tw.WriteHeader(&tar.Header{Typeflag: tar.TypeReg, Name: full, Mode: 0o666, Size: int64(len(content)),
+			ModTime: time.Unix(0, 0)}); err != nil {
+			return nil, err
+		}
+		if _, err := tw.Write([]byte(content)); err != nil {
+			return nil, err
+		}
+	}
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// upload extracts a tar archive at / in the container.
+func (b *Backend) upload(ctx context.Context, id string, archive []byte) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, b.baseURL+"/"+APIVersion+"/containers/"+id+"/archive?path=%2F",
+		bytes.NewReader(archive))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-tar")
+	resp, err := b.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("docker: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+		return &apiError{Status: resp.StatusCode, Message: strings.TrimSpace(string(data))}
+	}
+	return nil
 }
 
 // ensureImage pulls image unless the engine has it.

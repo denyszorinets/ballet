@@ -106,3 +106,17 @@ func TestProcess_Errors(t *testing.T) {
 	assert.True(t, strings.HasPrefix(strings.TrimSpace(o.stdout.String()), b.WorkRoot), "no escaping the workspace")
 	_ = filepath.Join
 }
+
+func TestProcess_WritesFilesBeforeTheSession(t *testing.T) {
+	b := &process.Backend{WorkRoot: t.TempDir()}
+	var o output
+	spec := runnerproto.Spec{Command: []string{"sh", "-c", `cat "$HOME/.claude/skills/x/SKILL.md" ../.ballet/mcp.json`}, Workdir: "repo",
+		Files: map[string]string{".home/.claude/skills/x/SKILL.md": "skill\n", ".ballet/mcp.json": "{}\n"}}
+	code, err := b.Run(t.Context(), "run-f", spec, o.write)
+	require.NoError(t, err)
+	assert.Zero(t, code, o.stderr.String())
+	assert.Equal(t, "skill\n{}\n", o.stdout.String())
+
+	_, err = b.Run(t.Context(), "run-g", runnerproto.Spec{Command: []string{"true"}, Files: map[string]string{"../x": "no"}}, o.write)
+	assert.ErrorContains(t, err, "relative to the workspace")
+}

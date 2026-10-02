@@ -1087,6 +1087,16 @@ export interface components {
             workdir?: string;
             /** @description 0: the Runner's default */
             timeout_seconds?: number;
+            /** @description Workspace-relative path → content, written first */
+            files?: {
+                [key: string]: string;
+            };
+        };
+        RunResult: {
+            /** @description The agent's final message */
+            summary: string;
+            turns: number;
+            cost_usd: number;
         };
         Run: {
             id: string;
@@ -1097,6 +1107,9 @@ export interface components {
             spec: components["schemas"]["RunSpec"];
             /** @description The ticket branch the run works on */
             branch?: string;
+            /** @description Agent adapter that built the session */
+            adapter?: string;
+            result?: components["schemas"]["RunResult"];
             runner?: string;
             exit_code?: number;
             error?: string;
@@ -1113,10 +1126,17 @@ export interface components {
         RunList: {
             items: components["schemas"]["Run"][];
         };
+        /** @description Exactly one of spec (a command) or agent (a coding agent session). */
         CreateRun: {
             /** @description Pipeline stage, e.g. implement */
             stage: string;
-            spec: components["schemas"]["RunSpec"];
+            spec?: components["schemas"]["RunSpec"];
+            agent?: {
+                /** @enum {string} */
+                adapter: "claude-code";
+                prompt: string;
+                timeout_seconds?: number;
+            };
         };
         RunLog: {
             /** Format: int64 */

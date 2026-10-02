@@ -76,6 +76,43 @@ logs or events, and never served to other services. With the Docker
 backend it is part of the container's configuration while the container
 exists.
 
+.. _reference-runners-agents:
+
+Agent runs
+----------
+
+An **agent run** executes a coding agent instead of a plain command
+(:doc:`/architecture/decisions/0003-orchestrate-existing-coding-agents`).
+An **adapter** turns the session — prompt, instructions, the project's
+skills, MCP servers — into files, environment and a command, and reads
+the agent's result back when the run finishes.
+
+**Claude Code** (adapter ``claude-code``) runs ``claude -p`` headless
+(``--output-format stream-json --permission-mode bypassPermissions``,
+``IS_SANDBOX=1``) in the repository, with the prompt on standard input.
+Everything it gets lives in ``$HOME`` (``<workspace>/.home``), outside the
+repository, so agents cannot commit it:
+
+- ``.claude/skills/<name>/SKILL.md`` and the skill's files — the
+  project's skills in the versions it resolves (pins apply);
+- ``.claude/CLAUDE.md`` — standing instructions (ticket, stage);
+- ``.claude.json`` — MCP servers: the customer's knowledge
+  (:doc:`knowledge-mcp`), authenticated with the run's token
+  (``Bearer ${BALLET_RUN_TOKEN}``, expanded by Claude Code).
+
+Each run gets its own **run token** (kind ``run``, the run's customer,
+project and ticket; audiences ``gateway``, ``knowledge``, ``core``;
+``llm.invoke``, ``knowledge.read``/``write``, ``tracker.read``/``report``;
+valid for ``agents.run_token_ttl``), issued when the run starts and
+delivered as ``BALLET_RUN_TOKEN`` in ``secret_env``. Claude Code uses it as
+its API key against the LLM gateway (``ANTHROPIC_BASE_URL``), so its
+usage is metered to the ticket.
+
+When the run finishes, Core reads the final ``result`` event from the
+run's output: the agent's final message, turns and cost become the run's
+``result``. A session that exits 0 but reports an error, or reports
+nothing, fails the run.
+
 Protocol
 --------
 
