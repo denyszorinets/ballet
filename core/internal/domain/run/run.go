@@ -65,6 +65,7 @@ type Run struct {
 	Stage      string // pipeline stage, e.g. "implement"
 	Status     Status
 	Spec       Spec
+	Branch     string // the ticket branch the run works on ("": no repository)
 	Runner     string // the Runner executing it
 	ExitCode   *int
 	Error      string // why it failed or was cancelled

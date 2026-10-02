@@ -45,15 +45,17 @@ func TestProcess_RunsInAFreshWorkspace(t *testing.T) {
 	b := &process.Backend{WorkRoot: root}
 	var o output
 	t.Setenv("BALLET_RUNNER_SECRET", "do-not-leak")
-	code, err := b.Run(t.Context(), "run-1", sh(`pwd; echo "home=$HOME"; echo "x=$X"; echo "secret=$BALLET_RUNNER_SECRET"; echo oops >&2; touch f; exit 3`,
-		map[string]string{"X": "1"}), o.write)
+	spec := sh(`pwd; echo "home=$HOME"; echo "x=$X tok=$TOK"; echo "secret=$BALLET_RUNNER_SECRET"; echo oops >&2; touch f; exit 3`,
+		map[string]string{"X": "1"})
+	spec.SecretEnv = map[string]string{"TOK": "t"}
+	code, err := b.Run(t.Context(), "run-1", spec, o.write)
 	require.NoError(t, err)
 	assert.Equal(t, 3, code)
 	lines := strings.Split(strings.TrimSpace(o.stdout.String()), "\n")
 	require.Len(t, lines, 4)
 	assert.True(t, strings.HasSuffix(lines[0], "/repo"), lines[0])
 	assert.Contains(t, lines[1], "/.home")
-	assert.Equal(t, "x=1", lines[2])
+	assert.Equal(t, "x=1 tok=t", lines[2], "secret env is passed to the session")
 	assert.Equal(t, "secret=", lines[3], "the Runner's environment is not inherited")
 	assert.Equal(t, "oops\n", o.stderr.String())
 	assert.Contains(t, o.system.String(), "workspace")

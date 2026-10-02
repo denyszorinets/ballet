@@ -64,4 +64,6 @@ func TestResolveCredential_ForGatewayOnly(t *testing.T) {
 
 	assert.Equal(t, http.StatusForbidden, get("customer=acme&provider=anthropic", tok(runtoken.CapRunnerConnect)).Code)
 	assert.Equal(t, http.StatusNotFound, get("customer=acme&provider=openai", tok(runtoken.CapCredentialsRead)).Code)
+	assert.Equal(t, http.StatusBadRequest, get("customer=acme&provider=git", tok(runtoken.CapCredentialsRead)).Code,
+		"git tokens are not served to services")
 }

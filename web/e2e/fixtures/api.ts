@@ -30,6 +30,10 @@ export interface FakeCore {
 	/** Transcripts by session ID. */
 	plannerMessages: Record<string, FakePlannerMessage[]>;
 	changesets: FakeChangeset[];
+	/** Execution settings by project key. */
+	execution: Record<string, Record<string, unknown>>;
+	/** Git tokens by project key (as the fake received them). */
+	gitTokens: Record<string, string>;
 }
 
 export interface FakePlannerSession {
@@ -116,6 +120,9 @@ const ROLES = [
 	{
 		role: 'org-admin',
 		actions: [
+			'project.update',
+			'credential.manage',
+			'run.manage',
 			'customer.create',
 			'customer.read',
 			'project.read',
@@ -134,6 +141,9 @@ const ROLES = [
 	{
 		role: 'customer-admin',
 		actions: [
+			'project.update',
+			'credential.manage',
+			'run.manage',
 			'customer.read',
 			'project.read',
 			'tracker.read',
@@ -196,6 +206,8 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		plannerSessions: [],
 		plannerMessages: {},
 		changesets: [],
+		execution: {},
+		gitTokens: {},
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
@@ -633,6 +645,47 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				cs.status = 'applied';
 			}
 			return r.fulfill({ json: changesetJSON(cs) });
+		}
+		if ((m = path.match(/^\/projects\/([^/]+)\/execution$/))) {
+			const cur = core.execution[m[1]] ?? {
+				project: m[1],
+				repo_url: '',
+				default_branch: '',
+				image: '',
+				setup: [],
+				env: {},
+				branch_template: 'ballet/{ticket}-{slug}',
+				git_name: '',
+				git_email: '',
+				version: 0
+			};
+			if (method === 'PUT') {
+				if (body.version !== cur.version) return err(r, 409, 'conflict', 'stale version');
+				if (body.repo_url && !/^(https?|ssh|file):\/\//.test(body.repo_url)) {
+					return err(
+						r,
+						400,
+						'invalid_argument',
+						'repo_url must be an https, ssh, git@host:path or file URL'
+					);
+				}
+				const next = { ...cur, ...body, project: m[1], version: cur.version + 1 };
+				core.execution[m[1]] = next;
+				return r.fulfill({ json: next });
+			}
+			return r.fulfill({ json: cur });
+		}
+		if ((m = path.match(/^\/projects\/([^/]+)\/credentials\/git$/)) && method === 'PUT') {
+			core.gitTokens[m[1]] = body.api_key;
+			return r.fulfill({
+				json: {
+					provider: 'git',
+					project: m[1],
+					base_url: '',
+					fingerprint: 'abcd…' + body.api_key.slice(-4),
+					updated_at: now
+				}
+			});
 		}
 		if (path === '/role-bindings' && method === 'GET')
 			return r.fulfill({ json: { items: core.bindings } });

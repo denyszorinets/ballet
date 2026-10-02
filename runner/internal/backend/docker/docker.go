@@ -138,9 +138,13 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 	if err := b.ensureImage(ctx, spec.Image, out); err != nil {
 		return -1, err
 	}
-	env := make([]string, 0, len(spec.Env))
-	for k, v := range spec.Env {
-		env = append(env, k+"="+v)
+	// Secrets end up in the container's configuration, which lives only as
+	// long as the container.
+	env := make([]string, 0, len(spec.Env)+len(spec.SecretEnv))
+	for _, m := range []map[string]string{spec.Env, spec.SecretEnv} {
+		for k, v := range m {
+			env = append(env, k+"="+v)
+		}
 	}
 	workdir := path.Join(Workspace, strings.TrimPrefix(path.Clean("/"+spec.Workdir), "/"))
 	host := map[string]any{"Init": true}

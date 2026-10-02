@@ -96,7 +96,8 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		Tracker:      tracker,
 		Changesets:   &app.Changesets{Store: st, Tracker: tracker},
 		Planner:      pl,
-		Runs: &app.Runs{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID,
+		Execution:    &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
+		Runs: &app.Runs{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 			Dispatcher: &app.Dispatcher{Store: st, Tenancy: st, Now: time.Now}},
 	})
 	return contract(t, mux), pl
@@ -592,4 +593,30 @@ func TestRunAPI_QueueInspectCancel(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, code)
 	code, _ = call(t, api, "GET", "/api/v1/runs/nope", "alice", "")
 	assert.Equal(t, http.StatusNotFound, code)
+}
+
+func TestExecutionAPI_SettingsShapeRuns(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"Login page"}`)
+
+	code, x := call(t, api, "GET", "/api/v1/projects/WEB/execution", "alice", "")
+	require.Equal(t, http.StatusOK, code, x)
+	assert.Equal(t, 0.0, x["version"])
+	code, x = call(t, api, "PUT", "/api/v1/projects/WEB/execution", "alice",
+		`{"repo_url":"https://github.com/acme/web.git","default_branch":"main","image":"golang:1.27","setup":["make deps"],"version":0}`)
+	require.Equal(t, http.StatusOK, code, x)
+	assert.Equal(t, "ballet/{ticket}-{slug}", x["branch_template"])
+	code, _ = call(t, api, "PUT", "/api/v1/projects/WEB/execution", "alice", `{"repo_url":"ftp://x","version":1}`)
+	assert.Equal(t, http.StatusBadRequest, code)
+
+	code, r := call(t, api, "POST", "/api/v1/items/WEB-1/runs", "alice", `{"stage":"implement","spec":{"command":["make"]}}`)
+	require.Equal(t, http.StatusCreated, code, r)
+	assert.Equal(t, "ballet/WEB-1-login-page", r["branch"])
+	assert.Equal(t, "golang:1.27", r["spec"].(map[string]any)["image"])
+
+	code, c := call(t, api, "PUT", "/api/v1/projects/WEB/credentials/git", "alice", `{"api_key":"ghp_token"}`)
+	require.Equal(t, http.StatusOK, code, c)
+	assert.NotContains(t, fmt.Sprint(c), "ghp_token")
 }

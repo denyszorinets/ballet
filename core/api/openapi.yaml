@@ -264,6 +264,26 @@ paths:
         "201": { description: Queued, content: { application/json: { schema: { $ref: "#/components/schemas/Run" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/projects/{project}/execution:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: getExecutionSettings
+      tags: [runs]
+      summary: How the project's runs execute (version 0 when never set)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ExecutionSettings" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      operationId: setExecutionSettings
+      tags: [runs]
+      summary: Replace the project's execution settings (project.update)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SetExecutionSettings" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ExecutionSettings" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/runs/{run}:
     parameters: [{ $ref: "#/components/parameters/Run" }]
     get:
@@ -623,7 +643,7 @@ components:
     PlannerSession: { name: session, in: path, required: true, schema: { type: string }, description: Planner session ID }
     Changeset: { name: changeset, in: path, required: true, schema: { type: string }, description: Changeset ID }
     Entry: { name: entry, in: path, required: true, schema: { type: string }, description: Knowledge entry ID }
-    Provider: { name: provider, in: path, required: true, schema: { type: string, enum: [anthropic, openai] } }
+    Provider: { name: provider, in: path, required: true, schema: { type: string, enum: [anthropic, openai, git] } }
     Item: { name: item, in: path, required: true, schema: { type: string }, description: "Item key, e.g. WEB-42" }
 
   responses:
@@ -886,6 +906,36 @@ components:
         type: { $ref: "#/components/schemas/DependencyType" }
         item: { type: string, description: Key of the other item }
 
+    ExecutionSettings:
+      type: object
+      additionalProperties: false
+      required: [project, repo_url, default_branch, image, setup, env, branch_template, git_name, git_email, version]
+      properties:
+        project: { type: string }
+        repo_url: { type: string, description: "https, ssh, git@host:path or file URL; empty: no repository" }
+        default_branch: { type: string }
+        image: { type: string, description: Devcontainer image of the runs }
+        setup: { type: array, items: { type: string }, description: Shell commands run in the repository before each session }
+        env: { type: object, additionalProperties: { type: string } }
+        branch_template: { type: string, description: "{ticket}, {slug}, {type}" }
+        git_name: { type: string }
+        git_email: { type: string }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+    SetExecutionSettings:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        repo_url: { type: string }
+        default_branch: { type: string }
+        image: { type: string }
+        setup: { type: array, items: { type: string } }
+        env: { type: object, additionalProperties: { type: string } }
+        branch_template: { type: string }
+        git_name: { type: string }
+        git_email: { type: string }
+        version: { type: integer, format: int64, description: "The version read (0 the first time)" }
     RunStatus: { type: string, enum: [queued, starting, running, succeeded, failed, cancelled] }
     RunSpec:
       type: object
@@ -908,6 +958,7 @@ components:
         stage: { type: string }
         status: { $ref: "#/components/schemas/RunStatus" }
         spec: { $ref: "#/components/schemas/RunSpec" }
+        branch: { type: string, description: The ticket branch the run works on }
         runner: { type: string }
         exit_code: { type: integer }
         error: { type: string }
@@ -1106,7 +1157,7 @@ components:
       additionalProperties: false
       required: [provider, base_url, fingerprint, updated_at]
       properties:
-        provider: { type: string, enum: [anthropic, openai] }
+        provider: { type: string, enum: [anthropic, openai, git] }
         project: { type: string, description: Project key of an override; absent for the customer default }
         base_url: { type: string }
         fingerprint: { type: string, description: Identifies the key without revealing it }

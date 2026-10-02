@@ -43,6 +43,39 @@ Runs are listed on their ticket and over REST
 (:ref:`reference-rest-runs`). Until the orchestrator queues runs
 automatically (M5), people with ``run.manage`` queue them by hand.
 
+.. _reference-runners-workspace:
+
+Workspace preparation
+---------------------
+
+A project's **execution settings** (:ref:`reference-rest-execution`) say
+how its runs execute. When they name a repository, every run starts by
+preparing its workspace, in the session itself, before the run's command:
+
+#. git identity (``git_name`` / ``git_email``, default ``Ballet Agent`` /
+   ``agent@ballet.invalid``) and, for pushing, a git credential helper
+   that reads the token from ``BALLET_GIT_TOKEN``;
+#. ``git clone <repo_url> repo`` and change into ``repo``;
+#. check out the **ticket branch**: the existing remote branch (later
+   stages continue where earlier ones pushed) or a new branch from
+   ``default_branch``. The branch is named by ``branch_template`` with
+   ``{ticket}`` (key), ``{slug}`` (of the title) and ``{type}`` (ticket
+   type); the default is ``ballet/{ticket}-{slug}``;
+#. the ``setup`` commands, in order (any failure fails the run);
+#. the run's command, in the repository.
+
+Runs also get the project's ``image`` (unless their spec sets one), its
+``env``, and ``BALLET_TICKET``, ``BALLET_STAGE`` and ``BALLET_BRANCH``.
+The run records its branch.
+
+**Git token.** Set it as the project's (or customer's) ``git`` credential
+(``PUT /api/v1/projects/{project}/credentials/git``). It is stored
+encrypted and delivered to the Runner only with ``run.start``, in the
+spec's ``secret_env``: never stored with the run, never in the remote URL,
+logs or events, and never served to other services. With the Docker
+backend it is part of the container's configuration while the container
+exists.
+
 Protocol
 --------
 
@@ -66,8 +99,9 @@ Core's runner token (``data/service-tokens/runner.token``, audience
        not in ``active`` fail.
    * - ``run.start``
      - Core → Runner
-     - ``{"run", "spec"}``; an error result (e.g. at capacity) requeues
-       the run
+     - ``{"run", "spec"}``; ``spec.secret_env`` holds secrets the Runner
+       adds to the session's environment and must never log or store. An
+       error result (e.g. at capacity) requeues the run
    * - ``run.cancel``
      - Core → Runner
      - ``{"run"}``

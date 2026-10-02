@@ -109,6 +109,7 @@
 		<a href={resolve('/projects/[project]/planner', { project: project.key })}>Planner</a>
 		<a href={resolve('/projects/[project]/changesets', { project: project.key })}>Changesets</a>
 		<a href={resolve('/projects/[project]/skills', { project: project.key })}>Skills</a>
+		<a href={resolve('/projects/[project]/settings', { project: project.key })}>Settings</a>
 	</div>
 
 	{#if canWrite}

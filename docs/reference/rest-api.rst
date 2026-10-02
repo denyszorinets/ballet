@@ -109,11 +109,14 @@ Binding representation:
 ``DELETE /api/v1/role-bindings/{id}`` → ``204``
    Bootstrap bindings are not stored and return ``404``.
 
-LLM credentials
----------------
+.. _reference-rest-credentials:
+
+Credentials
+-----------
 
 Provider API keys used by the LLM gateway
-(:doc:`/architecture/decisions/0011-llm-gateway-for-credentials-and-metering`).
+(:doc:`/architecture/decisions/0011-llm-gateway-for-credentials-and-metering`)
+and the token runs use for the project repository.
 A customer has a default per provider; a project may override it.
 Permission: ``credential.manage`` (customer admins, org admins).
 
@@ -124,8 +127,11 @@ Representation — the key itself is **never returned**:
    {"provider": "anthropic", "project": "WEB", "base_url": "",
     "fingerprint": "9f86d081…1234", "updated_at": "…"}
 
-``provider`` is ``anthropic`` (messages) or ``openai`` (OpenAI-compatible
-API, used for embeddings). ``project`` is absent for the customer default.
+``provider`` is ``anthropic`` (messages), ``openai`` (OpenAI-compatible
+API, used for embeddings) or ``git`` (token for cloning and pushing the
+project repository, delivered only to runs —
+:ref:`reference-runners-workspace`). ``project`` is absent for the customer
+default.
 
 ``GET /api/v1/customers/{customer}/credentials`` → ``200`` list
 
@@ -468,6 +474,27 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
    Cancels a queued run at once; an active run is cancelled on its Runner
    (its status changes when the Runner reports). ``409`` if the run has
    ended. Needs ``run.manage``.
+
+.. _reference-rest-execution:
+
+Execution settings
+------------------
+
+``GET /api/v1/projects/{project}/execution`` → ``200``
+   ``{"project", "repo_url", "default_branch", "image", "setup", "env",
+   "branch_template", "git_name", "git_email", "updated_at"?, "version"}``;
+   ``version`` 0 when never set. Needs ``tracker.read``.
+
+``PUT /api/v1/projects/{project}/execution`` — the same fields and the ``version`` read → ``200``
+   Replaces the settings (:ref:`reference-runners-workspace`). Needs
+   ``project.update``. ``400`` for a ``repo_url`` that is not an https,
+   ssh, ``git@host:path`` or file URL or that contains credentials, a
+   ``branch_template`` without ``{ticket}`` or producing an invalid
+   branch name, multi-line or empty setup commands, or ``env`` names that
+   are invalid or start with ``BALLET_``. ``409`` on a stale ``version``.
+
+The repository token is a credential with provider ``git``
+(:ref:`reference-rest-credentials`).
 
 Planner sessions
 ----------------

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
+	"github.com/denyszorinets/ballet/core/internal/domain/execution"
 	"github.com/denyszorinets/ballet/core/internal/domain/run"
 	"github.com/denyszorinets/ballet/core/internal/domain/tenancy"
 	"github.com/denyszorinets/ballet/core/internal/domain/tracker"
@@ -51,6 +52,7 @@ type RunView struct {
 // ticket and executed by Runners through the Dispatcher.
 type Runs struct {
 	Store      RunStore
+	Execution  ExecutionStore // nil: runs execute their spec as given
 	Items      ItemStore
 	Tenancy    TenancyStore
 	Authz      Authorizer
@@ -81,6 +83,9 @@ func (rs *Runs) Create(ctx context.Context, ticketKey, stage string, spec run.Sp
 	if err := r.Validate(); err != nil {
 		return RunView{}, invalid(err)
 	}
+	if err := rs.prepare(ctx, &r, it); err != nil {
+		return RunView{}, err
+	}
 	e := runEvent(r, c.ID, "run.queued", actorIn(ctx, id), map[string]any{"ticket": it.Key, "stage": stage})
 	if err := rs.Store.CreateRun(ctx, r, e); err != nil {
 		return RunView{}, err
@@ -89,6 +94,43 @@ func (rs *Runs) Create(ctx context.Context, ticketKey, stage string, spec run.Sp
 		rs.Dispatcher.Kick()
 	}
 	return RunView{Run: r, TicketKey: it.Key, ProjectKey: p.Key}, nil
+}
+
+// prepare applies the project's execution settings: the run starts in a
+// workspace with the repository checked out on the ticket branch (see
+// execution.Wrap), in the project's image, with its environment.
+func (rs *Runs) prepare(ctx context.Context, r *run.Run, it tracker.Item) error {
+	if rs.Execution == nil {
+		return nil
+	}
+	x, err := rs.Execution.ExecutionSettings(ctx, r.ProjectID)
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	env := map[string]string{"BALLET_TICKET": it.Key, "BALLET_STAGE": r.Stage}
+	for k, v := range x.Env {
+		env[k] = v
+	}
+	if r.Spec.Image == "" {
+		r.Spec.Image = x.Image
+	}
+	if x.RepoURL != "" {
+		branch, err := execution.BranchName(x.BranchTemplate, it.Key, string(it.Type), it.Title)
+		if err != nil {
+			return invalid(err)
+		}
+		r.Branch = branch
+		env["BALLET_BRANCH"] = branch
+		r.Spec.Command = execution.Wrap(x, branch, true, r.Spec.Command)
+	}
+	for k, v := range r.Spec.Env {
+		env[k] = v
+	}
+	r.Spec.Env = env
+	return nil
 }
 
 // Get returns a run.
@@ -204,7 +246,9 @@ func runEvent(r run.Run, customerID, typ string, actor event.Actor, payload map[
 
 // RunnerConn reaches a connected Runner.
 type RunnerConn interface {
-	Start(ctx context.Context, r run.Run) error
+	// Start sends a run with secretEnv: environment variables (tokens)
+	// delivered with the start only, never stored with the run.
+	Start(ctx context.Context, r run.Run, secretEnv map[string]string) error
 	Cancel(ctx context.Context, runID string) error
 }
 
@@ -234,6 +278,9 @@ type Dispatcher struct {
 	Grace       time.Duration // default 2 minutes
 	MaxLogBytes int64         // per run; default 8 MiB
 	Interval    time.Duration // dispatch and sweep period; default 1 second
+	// SecretEnv returns the secrets a run receives with its start (the
+	// project's git token); optional.
+	SecretEnv func(ctx context.Context, r run.Run) (map[string]string, error)
 
 	mu      sync.Mutex
 	runners map[string]*runnerState
@@ -384,8 +431,19 @@ func (d *Dispatcher) dispatch(ctx context.Context) {
 		d.mu.Lock()
 		st.active[r.ID] = true
 		d.mu.Unlock()
+		var secrets map[string]string
+		if d.SecretEnv != nil {
+			if secrets, err = d.SecretEnv(ctx, assigned); err != nil {
+				d.mu.Lock()
+				delete(st.active, r.ID)
+				d.mu.Unlock()
+				d.finish(ctx, assigned, run.StatusFailed, nil, "could not resolve the run's credentials")
+				d.logger().ErrorContext(ctx, "resolve run secrets failed", "run", r.ID, "error", err)
+				continue
+			}
+		}
 		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		err := st.conn.Start(callCtx, assigned)
+		err := st.conn.Start(callCtx, assigned, secrets)
 		cancel()
 		if err != nil {
 			d.logger().WarnContext(ctx, "runner refused run; requeued", "run", r.ID, "runner", st.info.Name, "error", err)
