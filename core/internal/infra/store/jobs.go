@@ -100,3 +100,24 @@ func scanJob(r scanner) (app.Job, error) {
 	j.UpdatedAt, err = parseTime(updated)
 	return j, err
 }
+
+// FlowJobs returns the flow jobs of a ticket that are not done: live ones
+// and dead ones.
+func (s *Store) FlowJobs(ctx context.Context, ticketID string) ([]app.Job, error) {
+	rows, err := s.db.Query(ctx, `SELECT `+jobCols+` FROM jobs
+		WHERE kind LIKE 'flow.%' AND status <> 'done' AND json_extract(payload, '$.ticket_id') = ?
+		ORDER BY created_at, id`, ticketID)
+	if err != nil {
+		return nil, fmt.Errorf("flow jobs: %w", err)
+	}
+	defer rows.Close()
+	var out []app.Job
+	for rows.Next() {
+		j, err := scanJob(rows)
+		if err != nil {
+			return nil, fmt.Errorf("flow jobs: %w", err)
+		}
+		out = append(out, j)
+	}
+	return out, rows.Err()
+}

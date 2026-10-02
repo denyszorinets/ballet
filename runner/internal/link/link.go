@@ -90,9 +90,14 @@ func (r *Runner) session(ctx context.Context) error {
 	}
 	defer func() { _ = conn.Close() }()
 	r.mu.Lock()
-	active := make([]string, 0, len(r.runs))
+	// Runs whose result is not delivered yet are still ours: Core fails
+	// runs a reconnecting Runner does not claim.
+	active := make([]string, 0, len(r.runs)+len(r.pending))
 	for id := range r.runs {
 		active = append(active, id)
+	}
+	for _, f := range r.pending {
+		active = append(active, f.Run)
 	}
 	sort.Strings(active)
 	r.mu.Unlock()

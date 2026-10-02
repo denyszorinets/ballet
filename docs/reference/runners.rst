@@ -180,9 +180,10 @@ batches output per stream (every 200 ms, at a stream change, or at
 16 KiB).
 
 A Runner reconnects with exponential backoff (0.5 s doubling to 30 s,
-with jitter), introduces itself with the runs it still executes, and
-delivers results it could not deliver before. Output produced while
-disconnected is lost.
+with jitter), introduces itself with the runs it still executes or
+holds an undelivered result for, and then delivers those results. Core
+fails the runs a reconnecting Runner does not claim. Output produced
+while disconnected is lost.
 
 Backends
 --------

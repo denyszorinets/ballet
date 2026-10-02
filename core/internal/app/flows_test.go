@@ -83,7 +83,9 @@ type flowEnv struct {
 	st     *store.Store
 }
 
-func newFlows(t *testing.T, script func(string, int) report.Outcome) flowEnv {
+// newFlows builds a flow environment; setup runs before the orchestrator
+// and dispatcher start (to simulate failures).
+func newFlows(t *testing.T, script func(string, int) report.Outcome, setup ...func(*app.Orchestrator, *app.Dispatcher)) flowEnv {
 	t.Helper()
 	tr, env := newTracker(t)
 	st := env.store
@@ -102,6 +104,9 @@ func newFlows(t *testing.T, script func(string, int) report.Outcome) flowEnv {
 		PullRequests: prs, Orchestrator: o, Now: time.Now, NewID: store.NewID, CheckInterval: 30 * time.Millisecond}
 	fl.Register(o)
 	d.OnFinished = fl.RunFinished
+	for _, f := range setup {
+		f(o, d)
+	}
 	sr := &scriptedRunner{d: d, st: st, prompts: map[string]string{}, script: script}
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup

@@ -26,6 +26,7 @@ type core struct {
 	statuses []string
 	logs     map[string]string
 	finished map[string]runnerproto.Finished
+	release  chan struct{} // ends "gate" runs
 }
 
 func (c *core) handler(_ context.Context, req *rpc.Request) (any, error) {
@@ -72,15 +73,19 @@ func (c *core) result(t *testing.T, run string) runnerproto.Finished {
 	return c.finished[run]
 }
 
-// backend echoes the command; "sleep" blocks until cancelled; "fail" errors.
-type backend struct{}
+// backend echoes the command; "sleep" blocks until cancelled; "gate"
+// until release is closed; "fail" errors.
+type backend struct{ release chan struct{} }
 
-func (backend) Run(ctx context.Context, _ string, spec runnerproto.Spec, out func(string, string)) (int, error) {
+func (b backend) Run(ctx context.Context, _ string, spec runnerproto.Spec, out func(string, string)) (int, error) {
 	switch spec.Command[0] {
 	case "sleep":
 		out("stdout", "sleeping\n")
 		<-ctx.Done()
 		return -1, ctx.Err()
+	case "gate":
+		<-b.release
+		return 0, nil
 	case "fail":
 		return -1, errors.New("image not found")
 	}
@@ -92,7 +97,7 @@ func (backend) Run(ctx context.Context, _ string, spec runnerproto.Spec, out fun
 
 func setup(t *testing.T, capacity int) (*core, *link.Runner) {
 	t.Helper()
-	c := &core{logs: map[string]string{}, finished: map[string]runnerproto.Finished{}}
+	c := &core{logs: map[string]string{}, finished: map[string]runnerproto.Finished{}, release: make(chan struct{})}
 	srv := httptest.NewServer(rpc.NewServer(rpc.ServerOptions{
 		Options: rpc.Options{Handler: c.handler},
 		Authenticate: func(_ context.Context, tok string) (auth.Identity, time.Time, error) {
@@ -106,7 +111,7 @@ func setup(t *testing.T, capacity int) (*core, *link.Runner) {
 	r := &link.Runner{
 		URL:   "ws" + strings.TrimPrefix(srv.URL, "http"),
 		Token: func(context.Context) (string, error) { return "runner-token", nil },
-		Name:  "r1", Labels: map[string]string{"backend": "fake"}, Capacity: capacity, Backend: backend{},
+		Name:  "r1", Labels: map[string]string{"backend": "fake"}, Capacity: capacity, Backend: backend{release: c.release},
 		FlushInterval: 20 * time.Millisecond,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -170,4 +175,20 @@ func TestRunner_ReconnectsAndDeliversResults(t *testing.T) {
 
 	require.NoError(t, c.conn().Call(t.Context(), runnerproto.MethodCancel, runnerproto.Cancel{Run: "long"}, nil))
 	assert.True(t, c.result(t, "long").Cancelled)
+}
+
+func TestRunner_KeepsResultsFinishedWhileDisconnected(t *testing.T) {
+	c, _ := setup(t, 1)
+	require.NoError(t, start(t, c, "quick", "gate", 0))
+	require.Eventually(t, func() bool { c.mu.Lock(); defer c.mu.Unlock(); return len(c.statuses) == 1 }, 5*time.Second, 5*time.Millisecond)
+
+	// The run ends while Core is away: on reconnect the Runner still
+	// claims it, so Core waits for its result instead of failing it.
+	_ = c.conn().Close()
+	close(c.release)
+	require.Eventually(t, func() bool { c.mu.Lock(); defer c.mu.Unlock(); return len(c.hellos) == 2 }, 10*time.Second, 10*time.Millisecond)
+	c.mu.Lock()
+	assert.Equal(t, []string{"quick"}, c.hellos[1].Active)
+	c.mu.Unlock()
+	assert.Equal(t, 0, c.result(t, "quick").ExitCode)
 }

@@ -300,6 +300,24 @@ Read at start-up; changes need a restart.
    How often Core refreshes open pull requests from their forge (at
    least ``10s``). Default ``1m``; ``BALLET_CORE_FORGE_POLL_INTERVAL``.
 
+.. _reference-config-reconciler:
+
+``[reconciler]`` (core)
+-----------------------
+
+The reconciler repairs flows after crashes and flags stuck stages (see
+:ref:`reference-pipelines-recovery`).
+
+``interval``
+   Time between passes (at least ``1s``). Default ``1m``;
+   ``BALLET_CORE_RECONCILER_INTERVAL``.
+
+``slack``
+   How long a stage run may exceed its timeout before it counts as stuck,
+   and the minimum age of a stage run before it can be cancelled as
+   orphaned (at least ``1m``). Default ``10m``;
+   ``BALLET_CORE_RECONCILER_SLACK``.
+
 .. _reference-config-scheduler:
 
 ``[scheduler]`` (core)

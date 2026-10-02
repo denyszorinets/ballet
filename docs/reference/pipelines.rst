@@ -112,7 +112,8 @@ Targets and limits
 
 Stopping
    Pausing or cancelling the ticket stops the flow and cancels its active
-   run.
+   run (when the stage's next step runs, at the latest at the reconciler's
+   next pass).
 
 .. _reference-pipelines-scheduling:
 
@@ -129,8 +130,34 @@ waits for a human (an approval, a review, a merge or an answer). So
 resolving a blocker, moving a ticket to ``ready`` or finishing a flow
 starts the next tickets within seconds.
 
+.. _reference-pipelines-recovery:
+
+Recovery and stuck stages
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Flows survive restarts of Core and Runners: their steps are durable jobs,
+and a Runner that stays away longer than its grace period fails its runs,
+which ends the stage ``failed``. In addition, Core's reconciler checks
+every active flow periodically (``[reconciler] interval``, default one
+minute):
+
+- a flow whose ticket is no longer ``in_progress`` or
+  ``waiting_for_answer`` (a human paused or cancelled it) is stopped, and
+  its run cancelled;
+- a stage run that made no progress beyond its timeout (the stage's
+  ``timeout_minutes``, else two hours) plus ``[reconciler] slack`` is
+  cancelled, and the flow is *flagged*;
+- the step a flow waits for — entering a stage, handling a finished run,
+  checking a pull request — is queued again when it was lost; when it
+  failed for good the flow is flagged;
+- stage runs that no flow waits for any more are cancelled.
+
+Flagging records ``flow.stuck`` with the reason, raises a blocking
+question on the ticket and makes the flow wait for an ``answer`` (the
+ticket is ``waiting_for_answer``).
+
 Every transition is recorded in the ticket history (``flow.started``,
-``flow.stage_started``, ``flow.stage_finished``, ``flow.waiting``, ``flow.done``,
+``flow.stage_started``, ``flow.stage_finished``, ``flow.waiting``, ``flow.stuck``, ``flow.done``,
 ``flow.failed``, ``flow.stopped``).
 
 REST
