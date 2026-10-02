@@ -502,6 +502,7 @@
 					<li>
 						<span class="badge">{r.kind.replace('_', ' ')}{r.outcome ? `: ${r.outcome}` : ''}</span>
 						{r.text}
+						{#if r.review}<span class="badge" title={r.review_comment}>{r.review}</span>{/if}
 						{#if r.detail}<details>
 								<summary class="muted small">Details</summary>
 								<div class="markdown">{r.detail}</div>

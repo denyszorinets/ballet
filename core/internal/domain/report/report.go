@@ -42,6 +42,13 @@ type Report struct {
 	Text      string  // Markdown
 	Detail    string  // stage reports: details; assumptions: rationale
 	CreatedAt time.Time
+
+	// Assumptions: a human's review.
+	Review        Review
+	ReviewComment string
+	ReviewedBy    string
+	ReviewedAt    time.Time
+	FollowUp      string // the question or changeset a rejection created
 }
 
 // MaxText bounds report texts.
@@ -67,6 +74,15 @@ func (r Report) Validate() error {
 	}
 	return errors.Join(errs...)
 }
+
+// Review is a human's verdict on an assumption; "" when not reviewed.
+type Review string
+
+// Reviews.
+const (
+	ReviewConfirmed Review = "confirmed"
+	ReviewRejected  Review = "rejected"
+)
 
 // QuestionStatus is where a question stands.
 type QuestionStatus string

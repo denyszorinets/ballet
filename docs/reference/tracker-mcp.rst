@@ -39,8 +39,9 @@ Tools
        orchestrator reads the outcome
    * - ``record_assumption``
      - ``assumption``, ``rationale``?
-     - Records a reversible decision taken without asking, for later
-       confirmation
+     - Records a reversible decision taken without asking; humans review it
+       in the assumption register (:ref:`concepts-questions-assumptions`).
+       ``ticket_context`` shows each assumption's review
    * - ``raise_question``
      - ``question``, ``context``?, ``blocking``?
      - Records a question; the planner tries to answer it from the

@@ -304,6 +304,44 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/QuestionList" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/projects/{project}/assumptions:
+    parameters: [{ $ref: "#/components/parameters/Project" }]
+    get:
+      operationId: listAssumptions
+      tags: [runs]
+      summary: The project's assumption register, newest first
+      parameters:
+        - { name: review, in: query, schema: { type: string, enum: [open, confirmed, rejected] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ReportList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/assumptions/{report}/confirm:
+    parameters: [{ name: report, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: confirmAssumption
+      tags: [runs]
+      summary: Confirm an assumption
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssumptionReview" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Report" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/assumptions/{report}/reject:
+    parameters: [{ name: report, in: path, required: true, schema: { type: string } }]
+    post:
+      operationId: rejectAssumption
+      tags: [runs]
+      summary: Reject an assumption; creates follow-up work
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssumptionReview" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Report" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/questions/{question}/answer:
     parameters: [{ name: question, in: path, required: true, schema: { type: string } }]
     post:
@@ -1160,6 +1198,19 @@ components:
         text: { type: string, description: Markdown }
         detail: { type: string, description: "Stage reports: details; assumptions: rationale" }
         created_at: { type: string, format: date-time }
+        ticket: { type: string, description: "Assumption register: the ticket's key" }
+        ticket_title: { type: string, description: "Assumption register: the ticket's title" }
+        review: { type: string, enum: [confirmed, rejected], description: "Assumptions: a human's review; absent when unreviewed" }
+        review_comment: { type: string }
+        reviewed_by: { type: string }
+        reviewed_at: { type: string, format: date-time }
+        follow_up:
+          type: string
+          description: "The work a rejection created: question:<id> or changeset:<id>"
+    AssumptionReview:
+      type: object
+      additionalProperties: false
+      properties: { comment: { type: string, description: Required to reject } }
     ReportList:
       type: object
       additionalProperties: false

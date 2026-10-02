@@ -34,6 +34,7 @@ type Deps struct {
 	Pipelines    *app.Pipelines
 	Flows        *app.Flows
 	Questions    *app.Questions
+	Assumptions  *app.Assumptions
 	Credentials  *app.Credentials
 	Usage        *app.Usage
 	Knowledge    *KnowledgeProxy // nil: knowledge routes not served
@@ -67,6 +68,7 @@ func Register(mux *http.ServeMux, d Deps) []string {
 	registerPipelines(r, d.Pipelines)
 	registerFlows(r, d.Flows)
 	registerQuestions(r, d.Questions)
+	registerAssumptions(r, d.Assumptions)
 	registerCredentials(r, d.Credentials)
 	registerUsage(r, d.Usage)
 	registerKnowledge(r, d.Knowledge)

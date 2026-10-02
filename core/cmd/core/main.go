@@ -462,6 +462,8 @@ func run() error {
 		Pipelines:    pipelines,
 		Flows:        flows,
 		Questions:    questions,
+		Assumptions: &app.Assumptions{Store: st, Questions: st, Reports: st, Items: st, Tenancy: st, Authz: authz,
+			Changesets: changesets, Now: time.Now, NewID: store.NewID},
 	})
 
 	searchIndexer := &app.SearchIndexer{

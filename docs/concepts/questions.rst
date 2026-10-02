@@ -11,8 +11,9 @@ Assume or ask
 Skills instruct agents to classify every uncertainty:
 
 **Reversible, low-impact** — make a reasonable assumption
-   Record it and continue. Assumptions are listed on the ticket and in the stage report. A human
-   can confirm or correct them later; a correction becomes a new ticket.
+   Record it and continue. Assumptions are listed on the ticket and in
+   the project's assumption register, where a human confirms or rejects
+   them (see below).
 
 **Irreversible, high-impact or genuinely ambiguous** — ask a question
    Examples: product behavior not covered by any document, a choice that
@@ -51,6 +52,25 @@ Questions Ballet raises itself — the iteration limit, a stuck stage — go
 to the humans directly. After the answer, a flow stopped by the
 iteration limit continues where its loop was going, with a fresh loop
 budget.
+
+.. _concepts-questions-assumptions:
+
+The assumption register
+-----------------------
+
+Every project has an **assumption register** (project page →
+*Assumptions*): the assumptions its agents recorded, newest first,
+filtered by review. Anyone with ``tracker.write`` can **confirm** an
+assumption or **reject** it, saying what is right instead. Agents see the
+review in ``ticket_context``. A rejection is recorded
+(``item.assumption_reviewed``) and creates follow-up work:
+
+- while the ticket is not done or cancelled, an answered question on the
+  ticket ("Assumption rejected: …" with the human's correction), which its
+  next sessions receive in their context;
+- once the ticket is resolved, a **changeset** proposing a bug ticket that
+  corrects the assumption, related to the original ticket, for a human to
+  approve.
 
 The inbox and sub-chats
 -----------------------

@@ -16,6 +16,20 @@ type reportJSON struct {
 	Text      string         `json:"text"`
 	Detail    string         `json:"detail,omitempty"`
 	CreatedAt time.Time      `json:"created_at"`
+	// Assumptions.
+	Ticket        string        `json:"ticket,omitempty"`
+	TicketTitle   string        `json:"ticket_title,omitempty"`
+	Review        report.Review `json:"review,omitempty"`
+	ReviewComment string        `json:"review_comment,omitempty"`
+	ReviewedBy    string        `json:"reviewed_by,omitempty"`
+	ReviewedAt    *time.Time    `json:"reviewed_at,omitempty"`
+	FollowUp      string        `json:"follow_up,omitempty"`
+}
+
+func toReportJSON(x report.Report) reportJSON {
+	return reportJSON{ID: x.ID, Run: x.RunID, Kind: x.Kind, Outcome: x.Outcome, Text: x.Text, Detail: x.Detail,
+		CreatedAt: x.CreatedAt, Review: x.Review, ReviewComment: x.ReviewComment, ReviewedBy: x.ReviewedBy,
+		ReviewedAt: timePtr(x.ReviewedAt), FollowUp: x.FollowUp}
 }
 
 type questionJSON struct {
@@ -42,8 +56,7 @@ func registerReports(mux *router, at *app.AgentTracker) {
 		}
 		out := listJSON[reportJSON]{Items: make([]reportJSON, 0, len(reports))}
 		for _, x := range reports {
-			out.Items = append(out.Items, reportJSON{ID: x.ID, Run: x.RunID, Kind: x.Kind, Outcome: x.Outcome, Text: x.Text,
-				Detail: x.Detail, CreatedAt: x.CreatedAt})
+			out.Items = append(out.Items, toReportJSON(x))
 		}
 		writeJSON(w, http.StatusOK, out)
 	})

@@ -100,6 +100,8 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		AgentTracker: &app.AgentTracker{Reports: st, RunStore: st, Items: st, Tenancy: st, Authz: authz,
 			Now: time.Now, NewID: store.NewID},
 		Flows: &app.Flows{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Assumptions: &app.Assumptions{Store: st, Questions: st, Reports: st, Items: st, Tenancy: st, Authz: authz,
+			Now: time.Now, NewID: store.NewID},
 		Questions: &app.Questions{Store: st, Items: st, Tenancy: st, Authz: authz, Inbox: st, Now: time.Now, NewID: store.NewID,
 			Planner: &app.Planner{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID}},
 		Pipelines: &app.Pipelines{Store: st, Tenancy: st, Authz: authz, Adapters: []string{"claude-code"}, Now: time.Now},
@@ -719,5 +721,18 @@ func TestQuestionAPI_EmptyInbox(t *testing.T) {
 	assert.Equal(t, http.StatusOK, code)
 	assert.Equal(t, map[string]any{"items": []any{}}, out)
 	code, _ = call(t, api, "POST", "/api/v1/questions/nope/chat", "alice", "")
+	assert.Equal(t, http.StatusNotFound, code)
+}
+
+func TestAssumptionAPI_EmptyRegisterAndErrors(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	code, out := call(t, api, "GET", "/api/v1/projects/WEB/assumptions?review=open", "alice", "")
+	assert.Equal(t, http.StatusOK, code)
+	assert.Equal(t, map[string]any{"items": []any{}}, out)
+	code, _ = call(t, api, "GET", "/api/v1/projects/WEB/assumptions?review=maybe", "alice", "")
+	assert.Equal(t, http.StatusBadRequest, code)
+	code, _ = call(t, api, "POST", "/api/v1/assumptions/nope/reject", "alice", `{"comment":"no"}`)
 	assert.Equal(t, http.StatusNotFound, code)
 }
