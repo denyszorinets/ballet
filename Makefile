@@ -91,7 +91,7 @@ IMAGE_TARGETS := core gateway knowledge runner
 images: ## Build the service images (ballet-<service>) and the agent image (ballet-agent)
 	@set -e; for t in $(IMAGE_TARGETS); do echo "==> image ballet-$$t"; \
 		docker build -f deploy/Containerfile --target $$t -t ballet-$$t .; done
-	docker build -t ballet-agent deploy/agent
+	docker build -f deploy/agent/Containerfile -t ballet-agent deploy/agent
 
 ##@ Web
 

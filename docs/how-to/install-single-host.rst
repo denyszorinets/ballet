@@ -23,7 +23,7 @@ Start
 
    git clone https://github.com/denyszorinets/ballet.git && cd ballet
    docker compose -f deploy/compose.yaml --profile keycloak up -d --build
-   docker build -t ballet-agent deploy/agent
+   docker build -f deploy/agent/Containerfile -t ballet-agent deploy/agent
 
 The first command builds the images (``make images`` builds them too) and
 starts the services; ``--profile keycloak`` adds the development Keycloak
