@@ -22,11 +22,13 @@ type fakeRunner struct {
 	started   []string
 	cancelled []string
 	refuse    bool
+	attempts  int
 }
 
 func (f *fakeRunner) Start(_ context.Context, r run.Run) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.attempts++
 	if f.refuse {
 		return errors.New("busy")
 	}
@@ -179,9 +181,16 @@ func TestRuns_RefusedRunsAreRequeued(t *testing.T) {
 	r, _ := e.runs.Create(dave, tk.Key, "implement", cmd)
 	fr := &fakeRunner{refuse: true}
 	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 1}, fr))
-	time.Sleep(50 * time.Millisecond)
-	assert.Equal(t, run.StatusQueued, e.status(t, r.ID).Status)
-	assert.Empty(t, e.status(t, r.ID).Runner)
+	require.Eventually(t, func() bool { fr.mu.Lock(); defer fr.mu.Unlock(); return fr.attempts >= 2 }, 5*time.Second,
+		5*time.Millisecond, "a refused run goes back to the queue and is offered again")
+	assert.Empty(t, fr.starts())
+
+	fr.mu.Lock()
+	fr.refuse = false
+	fr.mu.Unlock()
+	e.eventually(t, r.ID, run.StatusStarting)
+	assert.Equal(t, []string{r.ID}, fr.starts())
+	assert.Equal(t, "r1", e.status(t, r.ID).Runner)
 }
 
 func TestRuns_ReconnectAndDisconnect(t *testing.T) {
