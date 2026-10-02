@@ -220,6 +220,7 @@ type runnerState struct {
 	info   RunnerInfo
 	conn   RunnerConn
 	active map[string]bool
+	ready  bool // reconciled: may receive runs
 }
 
 // Dispatcher assigns queued runs to connected Runners and records what
@@ -298,6 +299,8 @@ func (d *Dispatcher) Connect(ctx context.Context, info RunnerInfo, conn RunnerCo
 		d.mu.Unlock()
 		return ErrRunnerConflict
 	}
+	// Not ready until reconciled: a run assigned to this connection in the
+	// meantime would look like one the Runner lost.
 	st := &runnerState{info: info, conn: conn, active: map[string]bool{}}
 	d.runners[info.Name] = st
 	delete(d.gone, info.Name)
@@ -309,6 +312,9 @@ func (d *Dispatcher) Connect(ctx context.Context, info RunnerInfo, conn RunnerCo
 	}
 	held, err := d.Store.ListRuns(ctx, RunFilter{Runner: info.Name, Statuses: []run.Status{run.StatusStarting, run.StatusRunning}})
 	if err != nil {
+		d.mu.Lock()
+		delete(d.runners, info.Name)
+		d.mu.Unlock()
 		return err
 	}
 	for _, r := range held {
@@ -320,6 +326,9 @@ func (d *Dispatcher) Connect(ctx context.Context, info RunnerInfo, conn RunnerCo
 		}
 		d.finish(ctx, r, run.StatusFailed, nil, "the runner restarted and no longer executes this run")
 	}
+	d.mu.Lock()
+	st.ready = true
+	d.mu.Unlock()
 	d.Kick()
 	return nil
 }
@@ -396,6 +405,9 @@ func (d *Dispatcher) pick() *runnerState {
 	defer d.mu.Unlock()
 	var best *runnerState
 	for _, st := range d.runners {
+		if !st.ready {
+			continue
+		}
 		free := st.info.Capacity - len(st.active)
 		if free > 0 && (best == nil || free > best.info.Capacity-len(best.active)) {
 			best = st
