@@ -386,6 +386,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/{item}/pull-request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        /** The ticket's pull request as last seen (404 when none) */
+        get: operations["getPullRequest"];
+        put?: never;
+        /** Open (or find) the pull request of the ticket branch (tracker.write) */
+        post: operations["openPullRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item}/pull-request/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read the pull request's state from the forge now */
+        post: operations["refreshPullRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item}/pull-request/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Squash-merge the pull request (humans, tracker.write) */
+        post: operations["mergePullRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run}": {
         parameters: {
             query?: never;
@@ -1093,6 +1154,15 @@ export interface components {
             branch_template: string;
             git_name: string;
             git_email: string;
+            /**
+             * @description '' : github for github.com, else git
+             * @enum {string}
+             */
+            forge: "" | "github" | "git";
+            /** @description GitHub Enterprise API URL */
+            forge_api_url: string;
+            /** @description Generic git: branch link, {branch} and {base} */
+            link_template: string;
             /** Format: date-time */
             updated_at?: string;
             /** Format: int64 */
@@ -1109,6 +1179,10 @@ export interface components {
             branch_template?: string;
             git_name?: string;
             git_email?: string;
+            /** @enum {string} */
+            forge?: "" | "github" | "git";
+            forge_api_url?: string;
+            link_template?: string;
             /**
              * Format: int64
              * @description The version read (0 the first time)
@@ -1152,6 +1226,28 @@ export interface components {
         };
         QuestionList: {
             items: components["schemas"]["Question"][];
+        };
+        PullRequest: {
+            ticket: string;
+            /** @enum {string} */
+            forge: "github" | "git";
+            /** @description 0 for generic git */
+            number: number;
+            url: string;
+            title: string;
+            head: string;
+            base: string;
+            head_sha?: string;
+            /** @enum {string} */
+            state: "open" | "closed" | "merged";
+            draft: boolean;
+            mergeable?: boolean;
+            /** @enum {string} */
+            checks: "none" | "pending" | "success" | "failure";
+            /** @enum {string} */
+            review: "none" | "approved" | "changes_requested" | "commented";
+            /** Format: date-time */
+            updated_at: string;
         };
         /** @enum {string} */
         RunStatus: "queued" | "starting" | "running" | "succeeded" | "failed" | "cancelled";
@@ -2383,6 +2479,102 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuestionList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPullRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullRequest"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    openPullRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullRequest"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    refreshPullRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullRequest"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    mergePullRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullRequest"];
                 };
             };
             default: components["responses"]["Error"];

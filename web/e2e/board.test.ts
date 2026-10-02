@@ -175,3 +175,20 @@ test('the item page shows agent activity', async ({ page }) => {
 	await expect(reports.getByRole('listitem').first()).toContainText('stage report: done');
 	await expect(reports).toContainText('Sessions last 8 hours.');
 });
+
+test('engineers open and merge the pull request of a ticket', async ({ page }) => {
+	const core = await open(page, 'engineer', '/items/WEB-2');
+	await expect(page.getByText('No pull request yet.')).toBeVisible();
+	await page.getByRole('button', { name: 'Open pull request' }).click();
+	const pr = page.getByTestId('pull-request');
+	await expect(pr.getByRole('link', { name: '#7' })).toHaveAttribute(
+		'href',
+		'https://github.com/acme/web/pull/7'
+	);
+	await expect(pr).toContainText('checks: success');
+	await expect(pr).toContainText('review: approved');
+	await page.getByRole('button', { name: 'Merge' }).click();
+	await expect(pr).toContainText('merged');
+	await expect(page.getByRole('button', { name: 'Merge' })).toHaveCount(0);
+	expect(core.pullRequests['WEB-2'].state).toBe('merged');
+});

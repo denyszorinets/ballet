@@ -304,6 +304,43 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/QuestionList" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/items/{item}/pull-request:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    get:
+      operationId: getPullRequest
+      tags: [runs]
+      summary: The ticket's pull request as last seen (404 when none)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PullRequest" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: openPullRequest
+      tags: [runs]
+      summary: Open (or find) the pull request of the ticket branch (tracker.write)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PullRequest" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/items/{item}/pull-request/refresh:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    post:
+      operationId: refreshPullRequest
+      tags: [runs]
+      summary: Read the pull request's state from the forge now
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PullRequest" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/items/{item}/pull-request/merge:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    post:
+      operationId: mergePullRequest
+      tags: [runs]
+      summary: Squash-merge the pull request (humans, tracker.write)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PullRequest" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/runs/{run}:
     parameters: [{ $ref: "#/components/parameters/Run" }]
     get:
@@ -929,7 +966,8 @@ components:
     ExecutionSettings:
       type: object
       additionalProperties: false
-      required: [project, repo_url, default_branch, image, setup, env, branch_template, git_name, git_email, version]
+      required: [project, repo_url, default_branch, image, setup, env, branch_template, git_name, git_email, forge,
+        forge_api_url, link_template, version]
       properties:
         project: { type: string }
         repo_url: { type: string, description: "https, ssh, git@host:path or file URL; empty: no repository" }
@@ -940,6 +978,9 @@ components:
         branch_template: { type: string, description: "{ticket}, {slug}, {type}" }
         git_name: { type: string }
         git_email: { type: string }
+        forge: { type: string, enum: ["", github, git], description: "'' : github for github.com, else git" }
+        forge_api_url: { type: string, description: "GitHub Enterprise API URL" }
+        link_template: { type: string, description: "Generic git: branch link, {branch} and {base}" }
         updated_at: { type: string, format: date-time }
         version: { type: integer, format: int64 }
     SetExecutionSettings:
@@ -955,6 +996,9 @@ components:
         branch_template: { type: string }
         git_name: { type: string }
         git_email: { type: string }
+        forge: { type: string, enum: ["", github, git] }
+        forge_api_url: { type: string }
+        link_template: { type: string }
         version: { type: integer, format: int64, description: "The version read (0 the first time)" }
     Report:
       type: object
@@ -993,6 +1037,25 @@ components:
       additionalProperties: false
       required: [items]
       properties: { items: { type: array, items: { $ref: "#/components/schemas/Question" } } }
+    PullRequest:
+      type: object
+      additionalProperties: false
+      required: [ticket, forge, number, url, title, head, base, state, draft, checks, review, updated_at]
+      properties:
+        ticket: { type: string }
+        forge: { type: string, enum: [github, git] }
+        number: { type: integer, description: "0 for generic git" }
+        url: { type: string }
+        title: { type: string }
+        head: { type: string }
+        base: { type: string }
+        head_sha: { type: string }
+        state: { type: string, enum: [open, closed, merged] }
+        draft: { type: boolean }
+        mergeable: { type: boolean }
+        checks: { type: string, enum: [none, pending, success, failure] }
+        review: { type: string, enum: [none, approved, changes_requested, commented] }
+        updated_at: { type: string, format: date-time }
     RunStatus: { type: string, enum: [queued, starting, running, succeeded, failed, cancelled] }
     RunSpec:
       type: object

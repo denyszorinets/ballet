@@ -30,6 +30,7 @@ type Deps struct {
 	Runs         *app.Runs
 	Execution    *app.Execution
 	AgentTracker *app.AgentTracker
+	PullRequests *app.PullRequests
 	Credentials  *app.Credentials
 	Usage        *app.Usage
 	Knowledge    *KnowledgeProxy // nil: knowledge routes not served
@@ -59,6 +60,7 @@ func Register(mux *http.ServeMux, d Deps) []string {
 	registerRuns(r, d.Runs)
 	registerExecution(r, d.Execution)
 	registerReports(r, d.AgentTracker)
+	registerPullRequests(r, d.PullRequests)
 	registerCredentials(r, d.Credentials)
 	registerUsage(r, d.Usage)
 	registerKnowledge(r, d.Knowledge)
@@ -151,6 +153,8 @@ func writeError(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, "already_exists"
 	case errors.Is(err, app.ErrConflict):
 		status, code = http.StatusConflict, "conflict"
+	case errors.Is(err, app.ErrUnavailable):
+		status, code = http.StatusBadGateway, "unavailable"
 	}
 	msg := err.Error()
 	if status == http.StatusInternalServerError {

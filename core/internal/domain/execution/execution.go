@@ -33,6 +33,9 @@ type Settings struct {
 	BranchTemplate string            // e.g. "ballet/{ticket}-{slug}"
 	GitName        string            // commit identity
 	GitEmail       string
+	Forge          string // "github", "git" or "" (github for github.com, else git)
+	ForgeAPIURL    string // GitHub Enterprise API; "" : https://api.github.com
+	LinkTemplate   string // generic git: link of a branch, {branch} and {base}
 	UpdatedAt      time.Time
 	Version        int64
 }
@@ -83,10 +86,36 @@ func (s Settings) Validate() error {
 			errs = append(errs, errors.New("each setup command must be one non-empty line"))
 		}
 	}
+	switch s.Forge {
+	case "", "github", "git":
+	default:
+		errs = append(errs, fmt.Errorf("forge %q must be github or git", s.Forge))
+	}
+	for name, v := range map[string]string{"forge_api_url": s.ForgeAPIURL, "link_template": s.LinkTemplate} {
+		if v == "" {
+			continue
+		}
+		if u, err := url.Parse(strings.NewReplacer("{branch}", "b", "{base}", "b").Replace(v)); err != nil ||
+			(u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			errs = append(errs, fmt.Errorf("%s must be an http(s) URL", name))
+		}
+	}
 	if len(s.Image) > 300 || strings.ContainsAny(s.Image, " \t\n") {
 		errs = append(errs, errors.New("image must be an image reference"))
 	}
 	return errors.Join(errs...)
+}
+
+// ForgeName is the forge of the repository: Forge, or github for
+// github.com repositories, else git.
+func (s Settings) ForgeName() string {
+	if s.Forge != "" {
+		return s.Forge
+	}
+	if strings.Contains(s.RepoURL, "github.com") {
+		return "github"
+	}
+	return "git"
 }
 
 // Slug turns a title into a short branch-safe slug.

@@ -510,6 +510,54 @@ Execution settings
 The repository token is a credential with provider ``git``
 (:ref:`reference-rest-credentials`).
 
+Three more fields choose how Ballet follows the project's branches
+(:doc:`/architecture/decisions/0007-review-on-git-platforms-via-forge-adapters`):
+``forge`` — ``github``, ``git`` (plain git hosting, no pull requests) or
+``""`` (GitHub for ``github.com`` repositories, else plain git);
+``forge_api_url`` — the GitHub Enterprise API URL (default
+``https://api.github.com``); ``link_template`` — for plain git, the link of
+a branch with ``{branch}`` and ``{base}``.
+
+.. _reference-rest-pull-requests:
+
+Pull requests
+-------------
+
+A ticket's branch goes into the default branch through a pull request on
+the project's forge; review happens there. Representation:
+``{"ticket", "forge", "number", "url", "title", "head", "base",
+"head_sha"?, "state": "open"|"closed"|"merged", "draft", "mergeable"?,
+"checks": "none"|"pending"|"success"|"failure", "review":
+"none"|"approved"|"changes_requested"|"commented", "updated_at"}``.
+
+- **GitHub**: Core opens the pull request with the project's git token.
+  ``checks`` combines the head commit's check runs and commit statuses;
+  ``review`` is each reviewer's latest verdict (any "changes requested"
+  wins). Merging squash-merges.
+- **Plain git**: there is no pull request (``number`` 0). The branch is
+  ``open`` once pushed and ``merged`` once the default branch contains its
+  last commit; squash merges are not detected. ``url`` comes from
+  ``link_template``. It cannot be merged through Ballet.
+
+Core refreshes open pull requests every ``forge.poll_interval`` and records
+``item.pr_updated`` events on the ticket when they change.
+
+``GET /api/v1/items/{item}/pull-request`` → ``200`` as last seen; ``404`` when none (``tracker.read``)
+
+``POST /api/v1/items/{item}/pull-request`` → ``200``
+   Opens the pull request of the ticket branch (named by the project's
+   branch template) into the default branch, or finds the existing one.
+   ``400`` when the project has no repository; ``502`` when the forge
+   fails. Needs ``tracker.write``.
+
+``POST /api/v1/items/{item}/pull-request/refresh`` → ``200``
+   Reads the current state from the forge (``tracker.read``).
+
+``POST /api/v1/items/{item}/pull-request/merge`` → ``200``
+   Squash-merges an open pull request. Needs ``tracker.write`` and a human
+   caller (merging by policy comes with the orchestrator). ``409`` if it is
+   not open; ``400`` on plain git.
+
 Planner sessions
 ----------------
 

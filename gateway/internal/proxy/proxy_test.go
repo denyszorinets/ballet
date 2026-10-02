@@ -197,3 +197,11 @@ func (c *tracedConn) Close() error {
 	c.once.Do(func() { c.record(string(debug.Stack())) })
 	return c.Conn.Close()
 }
+
+func TestProxy_RejectsOversizedRequests(t *testing.T) {
+	f := setup(t)
+	body := `{"model":"m","pad":"` + strings.Repeat("x", 33<<20) + `"}`
+	resp := post(t, f, map[string]string{"Authorization": "Bearer " + f.issue("WEB", runtoken.CapLLMInvoke)}, body)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, resp.StatusCode)
+	assert.Empty(t, f.provider.Requests(), "nothing is forwarded")
+}

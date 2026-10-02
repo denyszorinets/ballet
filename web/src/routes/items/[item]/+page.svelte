@@ -20,6 +20,9 @@
 	let runs = $state<Schemas['Run'][]>([]);
 	let reports = $state<Schemas['Report'][]>([]);
 	let questions = $state<Schemas['Question'][]>([]);
+	let pr = $state<Schemas['PullRequest']>();
+	let prError = $state<string>();
+	let prBusy = $state(false);
 	const itemQuery = $derived(`?item=${encodeURIComponent(key)}`);
 	let error = $state<string>();
 	let actionError = $state<string>();
@@ -41,15 +44,35 @@
 		!!item && !!session?.permissions.can('tracker.write', { customer, project: item.project })
 	);
 
+	async function prAction(action: 'open' | 'refresh' | 'merge') {
+		if (!session) return;
+		prBusy = true;
+		prError = undefined;
+		const path = { params: { path: { item: key } } };
+		try {
+			const res =
+				action === 'open'
+					? await session.api.POST('/api/v1/items/{item}/pull-request', path)
+					: action === 'refresh'
+						? await session.api.POST('/api/v1/items/{item}/pull-request/refresh', path)
+						: await session.api.POST('/api/v1/items/{item}/pull-request/merge', path);
+			if (res.data) pr = res.data;
+			else prError = apiError(res.error);
+		} finally {
+			prBusy = false;
+		}
+	}
+
 	async function load(s: Session, k: string) {
 		const path = { params: { path: { item: k } } };
-		const [it, d, h, rn, rp, q] = await Promise.all([
+		const [it, d, h, rn, rp, q, pp] = await Promise.all([
 			s.api.GET('/api/v1/items/{item}', path),
 			s.api.GET('/api/v1/items/{item}/dependencies', path),
 			s.api.GET('/api/v1/items/{item}/history', path),
 			s.api.GET('/api/v1/items/{item}/runs', path),
 			s.api.GET('/api/v1/items/{item}/reports', path),
-			s.api.GET('/api/v1/items/{item}/questions', path)
+			s.api.GET('/api/v1/items/{item}/questions', path),
+			s.api.GET('/api/v1/items/{item}/pull-request', path)
 		]);
 		if (!it.data) {
 			error = apiError(it.error);
@@ -61,6 +84,7 @@
 		runs = rn.data?.items ?? [];
 		reports = rp.data?.items ?? [];
 		questions = q.data?.items ?? [];
+		pr = pp.data;
 		if (!customer || containers.length === 0) {
 			const pp = { params: { path: { project: it.data.project } } };
 			const [p, list] = await Promise.all([
@@ -356,6 +380,35 @@
 		{/if}
 	{/if}
 
+	{#if item.kind === 'ticket'}
+		<h2>Pull request</h2>
+		{#if pr}
+			<p class="pr" data-testid="pull-request">
+				{#if pr.url}<a href={pr.url} rel="external noopener" target="_blank"
+						>{pr.number ? `#${pr.number}` : pr.head}</a
+					>{:else}<span class="mono">{pr.head}</span>{/if}
+				<span class="badge" data-state={pr.state}>{pr.state}</span>
+				<span class="badge">checks: {pr.checks}</span>
+				<span class="badge">review: {pr.review.replace('_', ' ')}</span>
+				<span class="muted small">{pr.head} → {pr.base}</span>
+			</p>
+		{:else}
+			<p class="muted">No pull request yet.</p>
+		{/if}
+		{#if canWrite}
+			<div class="actions">
+				{#if !pr}<button disabled={prBusy} onclick={() => prAction('open')}
+						>Open pull request</button
+					>{/if}
+				{#if pr}<button disabled={prBusy} onclick={() => prAction('refresh')}>Refresh</button>{/if}
+				{#if pr?.state === 'open' && pr.forge !== 'git'}
+					<button class="primary" disabled={prBusy} onclick={() => prAction('merge')}>Merge</button>
+				{/if}
+			</div>
+		{/if}
+		{#if prError}<p class="error" role="alert">{prError}</p>{/if}
+	{/if}
+
 	{#if runs.length || reports.length || questions.length}
 		<h2>Agent activity</h2>
 		{#if questions.some((q) => q.status === 'open')}
@@ -418,6 +471,16 @@
 {/if}
 
 <style>
+	.pr {
+		display: flex;
+		gap: 0.5rem;
+		align-items: baseline;
+		flex-wrap: wrap;
+	}
+	.actions {
+		display: flex;
+		gap: 0.5rem;
+	}
 	.activity {
 		list-style: none;
 		padding: 0;

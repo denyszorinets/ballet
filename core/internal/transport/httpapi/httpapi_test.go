@@ -97,6 +97,10 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		Changesets:   &app.Changesets{Store: st, Tracker: tracker},
 		Planner:      pl,
 		Execution:    &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
+		AgentTracker: &app.AgentTracker{Reports: st, RunStore: st, Items: st, Tenancy: st, Authz: authz,
+			Now: time.Now, NewID: store.NewID},
+		PullRequests: &app.PullRequests{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now,
+			Token: func(context.Context, string, string) (string, error) { return "", nil }},
 		Runs: &app.Runs{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 			Dispatcher: &app.Dispatcher{Store: st, Tenancy: st, Now: time.Now}},
 	})
@@ -619,4 +623,30 @@ func TestExecutionAPI_SettingsShapeRuns(t *testing.T) {
 	code, c := call(t, api, "PUT", "/api/v1/projects/WEB/credentials/git", "alice", `{"api_key":"ghp_token"}`)
 	require.Equal(t, http.StatusOK, code, c)
 	assert.NotContains(t, fmt.Sprint(c), "ghp_token")
+}
+
+func TestReportsAPI_EmptyLists(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"t"}`)
+	for _, p := range []string{"reports", "questions"} {
+		code, out := call(t, api, "GET", "/api/v1/items/WEB-1/"+p, "alice", "")
+		require.Equal(t, http.StatusOK, code, out)
+		assert.Empty(t, out["items"])
+		code, _ = call(t, api, "GET", "/api/v1/items/WEB-9/"+p, "alice", "")
+		assert.Equal(t, http.StatusNotFound, code)
+	}
+}
+
+func TestPullRequestAPI_WithoutRepository(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"t"}`)
+	code, _ := call(t, api, "GET", "/api/v1/items/WEB-1/pull-request", "alice", "")
+	assert.Equal(t, http.StatusNotFound, code)
+	code, out := call(t, api, "POST", "/api/v1/items/WEB-1/pull-request", "alice", "")
+	assert.Equal(t, http.StatusBadRequest, code, out)
+	assert.Contains(t, out["message"], "has no repository")
 }
