@@ -44,6 +44,9 @@ type AgentTracker struct {
 	Changesets *Changesets
 	Now        func() time.Time
 	NewID      func() string
+	// OnQuestion is called after a run raised a question (Questions.Route);
+	// optional.
+	OnQuestion func(ctx context.Context, q report.Question)
 }
 
 type runScope struct {
@@ -162,8 +165,8 @@ func (a *AgentTracker) Report(ctx context.Context, c RunCaller, kind report.Kind
 	return r, nil
 }
 
-// RaiseQuestion records a question the run cannot answer itself. Routing
-// to the planner and the human comes with the questions feature.
+// RaiseQuestion records a question the run cannot answer itself; it goes
+// to the planner first, then to the humans (ADR-0015).
 func (a *AgentTracker) RaiseQuestion(ctx context.Context, c RunCaller, text, background string, blocking bool) (report.Question, error) {
 	s, err := a.scope(ctx, c)
 	if err != nil {
@@ -177,6 +180,9 @@ func (a *AgentTracker) RaiseQuestion(ctx context.Context, c RunCaller, text, bac
 	e := a.itemEvent(s, "item.question_raised", map[string]any{"run": s.run.ID, "question": q.ID, "blocking": blocking})
 	if err := a.Reports.CreateQuestion(ctx, q, e); err != nil {
 		return report.Question{}, err
+	}
+	if a.OnQuestion != nil {
+		a.OnQuestion(ctx, q)
 	}
 	return q, nil
 }

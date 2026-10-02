@@ -122,6 +122,9 @@ func (rc *Reconciler) flow(ctx context.Context, f Flow) error {
 			return nil // the Runner (or the dispatcher's sweep) ends it
 		}
 	}
+	if f.Status == FlowWaiting && f.Waiting == "question" {
+		return rc.resumeIfAnswered(ctx, f)
+	}
 	want, ok := rc.expected(f)
 	if !ok {
 		return nil
@@ -150,6 +153,23 @@ func (rc *Reconciler) flow(ctx context.Context, f Flow) error {
 	return nil
 }
 
+// resumeIfAnswered queues the resumption of a flow whose blocking
+// questions were all answered (its resume job was lost).
+func (rc *Reconciler) resumeIfAnswered(ctx context.Context, f Flow) error {
+	fl := rc.Flows
+	qs, err := fl.Reports.Questions(ctx, f.TicketID)
+	if err != nil {
+		return err
+	}
+	for _, q := range qs {
+		if q.Status == report.QuestionOpen && q.Blocking {
+			return nil
+		}
+	}
+	fl.logger().WarnContext(ctx, "resuming flow whose questions were answered", "ticket", f.TicketID)
+	return fl.Orchestrator.Enqueue(ctx, fl.job(JobFlowResume, "flow.resume:"+f.TicketID, flowJob{TicketID: f.TicketID}, fl.Now()))
+}
+
 // expected returns the job an active flow waits for, if any.
 func (rc *Reconciler) expected(f Flow) (Job, bool) {
 	fl := rc.Flows
@@ -174,7 +194,7 @@ func (rc *Reconciler) flag(ctx context.Context, f Flow, it tracker.Item, c tenan
 	next.UpdatedAt, next.Version = fl.Now(), f.Version+1
 	q := report.Question{ID: fl.NewID(), ProjectID: it.ProjectID, TicketID: it.ID,
 		Text: fmt.Sprintf("The %s stage of %s is stuck. How should it continue?", f.Stage, it.Key), Context: reason,
-		Blocking: true, Status: report.QuestionOpen, CreatedAt: fl.Now()}
+		Blocking: true, Status: report.QuestionOpen, Route: report.RouteHuman, CreatedAt: fl.Now()}
 	qe := fl.itemEvent(it, c.ID, "item.question_raised", event.System, map[string]any{"question": q.ID, "blocking": true})
 	if err := fl.Reports.CreateQuestion(ctx, q, qe); err != nil {
 		return err

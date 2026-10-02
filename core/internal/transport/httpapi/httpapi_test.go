@@ -100,6 +100,7 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		AgentTracker: &app.AgentTracker{Reports: st, RunStore: st, Items: st, Tenancy: st, Authz: authz,
 			Now: time.Now, NewID: store.NewID},
 		Flows:     &app.Flows{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Questions: &app.Questions{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		Pipelines: &app.Pipelines{Store: st, Tenancy: st, Authz: authz, Adapters: []string{"claude-code"}, Now: time.Now},
 		PullRequests: &app.PullRequests{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now,
 			Token: func(context.Context, string, string) (string, error) { return "", nil }},
@@ -701,4 +702,12 @@ func TestFlowAPI_NoFlowYet(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, code, "only ready tickets start: %v", out)
 	code, _ = call(t, api, "POST", "/api/v1/items/WEB-1/flow/approve", "alice", `{"comment":"ok"}`)
 	assert.Equal(t, http.StatusNotFound, code)
+}
+
+func TestQuestionAPI_Errors(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	code, _ := call(t, api, "POST", "/api/v1/questions/nope/answer", "alice", `{"answer":"yes"}`)
+	assert.Equal(t, http.StatusNotFound, code)
+	code, _ = call(t, api, "POST", "/api/v1/questions/nope/answer", "alice", `{"reply":"yes"}`)
+	assert.Equal(t, http.StatusBadRequest, code)
 }

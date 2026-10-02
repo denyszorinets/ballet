@@ -61,7 +61,8 @@ func NewServer(at *app.AgentTracker, version string) *mcp.Server {
 		Description: "Record a reversible, low-impact decision you made without asking, with its rationale."}, t.assumption)
 	mcp.AddTool(server, &mcp.Tool{Name: "raise_question",
 		Description: "Ask the planner and the humans something you cannot decide. Set blocking when you cannot " +
-			"continue without the answer."}, t.question)
+			"continue without the answer: then push your work in progress, submit your stage report and end the " +
+			"session; a new session of this stage continues with the answer."}, t.question)
 	mcp.AddTool(server, &mcp.Tool{Name: "propose_work",
 		Description: "Propose a new ticket for work you discovered but should not do in this ticket; the planner " +
 			"and the humans decide. You never create tickets."}, t.propose)
@@ -179,16 +180,27 @@ type QuestionInput struct {
 	Blocking bool   `json:"blocking,omitempty" jsonschema:"true when you cannot continue without the answer"`
 }
 
-func (t tools) question(ctx context.Context, req *mcp.CallToolRequest, in QuestionInput) (*mcp.CallToolResult, Recorded, error) {
+// QuestionRecorded is the result of raise_question.
+type QuestionRecorded struct {
+	ID   string `json:"id"`
+	Next string `json:"next"` // what the agent does now
+}
+
+func (t tools) question(ctx context.Context, req *mcp.CallToolRequest, in QuestionInput) (*mcp.CallToolResult, QuestionRecorded, error) {
 	c, err := caller(req, runtoken.CapTrackerReport)
 	if err != nil {
-		return nil, Recorded{}, err
+		return nil, QuestionRecorded{}, err
 	}
 	q, err := t.at.RaiseQuestion(ctx, c, in.Question, in.Context, in.Blocking)
 	if err != nil {
-		return nil, Recorded{}, toolErr(err)
+		return nil, QuestionRecorded{}, toolErr(err)
 	}
-	return nil, Recorded{ID: q.ID}, nil
+	next := "Continue; the answer will appear in ticket_context."
+	if in.Blocking {
+		next = "Push your work in progress, submit your stage report (outcome blocked) and end the session now. " +
+			"A new session of this stage continues once the question is answered."
+	}
+	return nil, QuestionRecorded{ID: q.ID, Next: next}, nil
 }
 
 // ProposeInput is the input of propose_work.

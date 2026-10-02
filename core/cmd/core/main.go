@@ -321,9 +321,11 @@ func run() error {
 	search := &app.Search{Store: st, Tenancy: st, Authz: authz, Embedder: embed.Hash{}}
 	knowledgeAccess := &app.KnowledgeAccess{Tenancy: st, Authz: authz}
 	changesets := &app.Changesets{Store: st, Tracker: tracker}
+	llm := &anthropic.Client{GatewayURL: cfg.Gateway.URL, Tokens: tokenIssuer}
+	knowledgeReader := &knowledge.Reader{URL: knowledgeURL, Tokens: tokenIssuer}
 	plannerSvc := &app.Planner{
 		Store: st, Tenancy: st, Authz: authz,
-		LLM: &anthropic.Client{GatewayURL: cfg.Gateway.URL, Tokens: tokenIssuer},
+		LLM: llm,
 		Tools: plannertools.All(plannertools.Deps{
 			Tracker: tracker, Changesets: changesets, Skills: skills, Search: search,
 			Knowledge: &knowledge.Client{URL: knowledgeURL, Access: knowledgeAccess, Tokens: tokenIssuer},
@@ -388,14 +390,18 @@ func run() error {
 	})
 	runs := &app.Runs{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Dispatcher: dispatcher,
 		Agents: agents, SessionSkills: skills.SessionSkills, Model: cfg.Agents.Model, Deps: st,
-		Knowledge: (&knowledge.Reader{URL: knowledgeURL, Tokens: tokenIssuer}).ForTicket,
+		Knowledge: knowledgeReader.ForTicket,
 		MCP: []agent.MCPServer{
 			{Name: "tracker", URL: cfg.Agents.TrackerMCPURL, TokenEnv: runTokenEnv},
 			{Name: "knowledge", URL: knowledgeMCP, TokenEnv: runTokenEnv},
 		},
 		Now: time.Now, NewID: store.NewID}
+	questions := &app.Questions{Store: st, Items: st, Tenancy: st, Authz: authz, Orchestrator: orchestrator,
+		Knowledge: knowledgeReader, LLM: llm, Model: cfg.Planner.Model, MaxTokens: cfg.Planner.MaxTokens,
+		Now: time.Now, NewID: store.NewID, Logger: svc.Logger}
+	questions.Register(orchestrator)
 	agentTracker := &app.AgentTracker{Reports: st, RunStore: st, Runs: runs, Items: st, Tenancy: st, Authz: authz,
-		Changesets: changesets, Now: time.Now, NewID: store.NewID}
+		Changesets: changesets, Now: time.Now, NewID: store.NewID, OnQuestion: questions.Route}
 	trackermcp.Register(svc.Mux, runtoken.NewRingVerifier(tokenKeys, time.Now), agentTracker, "v1")
 	pullRequests := &app.PullRequests{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz,
 		Token: app.GitToken(credentials), Now: time.Now, Logger: svc.Logger,
@@ -454,6 +460,7 @@ func run() error {
 		PullRequests: pullRequests,
 		Pipelines:    pipelines,
 		Flows:        flows,
+		Questions:    questions,
 	})
 
 	searchIndexer := &app.SearchIndexer{

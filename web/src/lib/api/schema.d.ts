@@ -386,6 +386,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/questions/{question}/answer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer an open question; a blocking question resumes the ticket's pipeline
+         * @description Needs tracker.write on the project. The answer is written to the knowledge base.
+         */
+        post: operations["answerQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{item}/pull-request": {
         parameters: {
             query?: never;
@@ -1387,18 +1409,29 @@ export interface components {
         };
         Question: {
             id: string;
+            /** @description Key of the ticket */
+            ticket?: string;
+            /** @description The run that asked; absent for questions Ballet raised about the pipeline */
             run?: string;
             text: string;
             context?: string;
             blocking: boolean;
             /** @enum {string} */
             status: "open" | "answered";
+            /**
+             * @description Where an open question is being answered; absent before it is routed
+             * @enum {string}
+             */
+            route?: "planner" | "human";
             answer?: string;
             answered_by?: string;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
             answered_at?: string;
+        };
+        QuestionAnswer: {
+            answer: string;
         };
         QuestionList: {
             items: components["schemas"]["Question"][];
@@ -2747,6 +2780,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QuestionList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    answerQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                question: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionAnswer"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Question"];
                 };
             };
             default: components["responses"]["Error"];

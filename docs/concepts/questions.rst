@@ -19,6 +19,8 @@ Skills instruct agents to classify every uncertainty:
    changes a public API or data model, conflicting requirements, missing
    access or credentials.
 
+.. _concepts-questions-routing:
+
 Asking a question
 -----------------
 
@@ -29,15 +31,26 @@ MCP: the question, context, and optionally suggested answers.
    released. Nothing waits idle overnight.
 #. The ticket moves to **Waiting for answer**. Work that does not depend
    on it continues; dependent tickets wait.
-#. Ballet first routes the question to the **planner agent**, which
-   answers it if the knowledge base, plan or documentation already does,
-   citing its sources.
-#. If the planner cannot answer, the question goes to the **human
-   inbox** in the Ballet UI.
-#. Once answered, Ballet starts a new session of the same stage with the
-   question and answer in its context, and the pipeline continues.
-#. The answer is written to the knowledge base as a decision or note, so
-   the same question is not asked again.
+#. Ballet first routes the question to the **planner agent**. In a short,
+   unattended conversation it may search the knowledge base and read the
+   project's tracker items, and must either answer **citing its sources**
+   (an answer without sources is refused) or escalate. Questions about
+   product intent, scope, priorities, money, credentials or anything hard
+   to undo are always escalated. The attempt is metered to the ticket.
+#. If the planner escalates (or fails), the question goes to the **human
+   inbox**; any project member with ``tracker.write`` can answer it
+   (``POST /api/v1/questions/{question}/answer``).
+#. Once no blocking question of the ticket is open, Ballet starts a new
+   session of the same stage with the questions and answers handed over,
+   and the pipeline continues.
+#. The answer is written to the knowledge base as a **decision** entry
+   linked to the ticket, authored by whoever answered, so the same
+   question is not asked again.
+
+Questions Ballet raises itself — the iteration limit, a stuck stage — go
+to the humans directly. After the answer, a flow stopped by the
+iteration limit continues where its loop was going, with a fresh loop
+budget.
 
 The inbox and sub-chats
 -----------------------

@@ -32,6 +32,8 @@ type scriptedRunner struct {
 	script  func(stage string, n int) report.Outcome // n: how often this stage ran so far (1-based)
 	hold    bool                                     // do not finish runs
 	held    []run.Run
+	// ask, when set, is called before a run reports (to raise questions).
+	ask func(r run.Run, n int)
 }
 
 func (s *scriptedRunner) Start(_ context.Context, r run.Run, _ map[string]string) error {
@@ -55,6 +57,12 @@ func (s *scriptedRunner) Start(_ context.Context, r run.Run, _ map[string]string
 	go func() {
 		ctx := context.Background()
 		_ = s.d.Running(ctx, "r1", r.ID)
+		s.mu.Lock()
+		ask := s.ask
+		s.mu.Unlock()
+		if ask != nil {
+			ask(r, n)
+		}
 		outcome := s.script(r.Stage, n)
 		_ = s.st.CreateReport(ctx, report.Report{ID: store.NewID(), ProjectID: r.ProjectID, TicketID: r.TicketID, RunID: r.ID,
 			Kind: report.KindStageReport, Outcome: outcome, Text: r.Stage + " " + string(outcome) + " #" + string(rune('0'+n)),
@@ -215,7 +223,7 @@ func TestFlows_FailedReviewLoopsBackUntilTheLimit(t *testing.T) {
 	_, err = e2.flows.Start(user(t, "dave", "acme-admins"), tk2.Key)
 	require.NoError(t, err)
 	w := e2.waitFlow(t, tk2.Key, func(f app.FlowView) bool { return f.Waiting == "question" })
-	assert.Equal(t, "review", w.Stage, "it waits on the stage that ended")
+	assert.Equal(t, "implement", w.Stage, "after the answer it goes on where the loop went")
 	assert.Equal(t, tracker.StateWaitingForAnswer, e2.state(t, tk2.Key))
 	it, _ := e2.st.ItemByKey(t.Context(), tk2.Key)
 	qs, err := e2.st.Questions(t.Context(), it.ID)

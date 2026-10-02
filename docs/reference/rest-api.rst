@@ -480,9 +480,18 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
    "created_at"}``. Needs ``tracker.read``.
 
 ``GET /api/v1/items/{item}/questions`` → ``200``
-   Questions the ticket's runs raised: ``{"id", "run"?, "text",
-   "context"?, "blocking", "status": "open"|"answered", "answer"?,
-   "answered_by"?, "created_at", "answered_at"?}``.
+   Questions raised on the ticket — by its runs, or by Ballet about the
+   pipeline (no ``run``): ``{"id", "ticket", "run"?, "text", "context"?,
+   "blocking", "status": "open"|"answered", "route"?:
+   "planner"|"human", "answer"?, "answered_by"?, "created_at",
+   "answered_at"?}``. ``answered_by`` is ``planner`` or the human's
+   subject.
+
+``POST /api/v1/questions/{question}/answer`` — ``{"answer"}`` → ``200`` the question
+   Answers an open question (see :ref:`concepts-questions-routing`).
+   Needs ``tracker.write``; ``400`` for an empty answer, ``409`` when it
+   is answered already. A blocking question's answer resumes the
+   ticket's pipeline once no blocking question is open.
 
 ``POST /api/v1/runs/{run}/cancel`` → ``200``
    Cancels a queued run at once; an active run is cancelled on its Runner

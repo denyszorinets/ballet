@@ -90,8 +90,10 @@ func (c Claims) Validate() error {
 	if c.Kind == KindRun && c.Ticket == "" {
 		errs = append(errs, errors.New("run tokens need a ticket"))
 	}
-	if c.Kind == KindPlanner && (c.Session == "" || c.ActingFor == "") {
-		errs = append(errs, errors.New("planner tokens need a session and the human they act for"))
+	// The planner acts for a human in a chat, or unattended on a ticket
+	// (answering a question).
+	if c.Kind == KindPlanner && (c.Session == "" || (c.ActingFor == "" && c.Ticket == "")) {
+		errs = append(errs, errors.New("planner tokens need a session and the human they act for or their ticket"))
 	}
 	for _, capability := range c.Capabilities {
 		if !slices.Contains(knownCapabilities, capability) {

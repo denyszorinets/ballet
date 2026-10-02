@@ -102,7 +102,7 @@ func (c *Client) Stream(ctx context.Context, req app.LLMRequest, onText func(str
 	token, err := c.Tokens.Issue(runtoken.Claims{
 		Kind: runtoken.KindPlanner, Subject: "planner:" + req.Caller.SessionID, Audience: []string{"gateway"},
 		Customer: req.Caller.CustomerKey, Project: req.Caller.ProjectKey, Session: req.Caller.SessionID,
-		ActingFor: req.Caller.ActingFor, Capabilities: []string{runtoken.CapLLMInvoke},
+		ActingFor: req.Caller.ActingFor, Ticket: req.Caller.TicketKey, Capabilities: []string{runtoken.CapLLMInvoke},
 	}, ttl)
 	if err != nil {
 		return app.LLMResponse{}, err
