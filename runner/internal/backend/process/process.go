@@ -41,6 +41,18 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return -1, fmt.Errorf("create workspace: %w", err)
 	}
+	for name, content := range spec.Files {
+		p, err := inside(ws, name)
+		if err != nil {
+			return -1, err
+		}
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return -1, fmt.Errorf("write %s: %w", name, err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			return -1, fmt.Errorf("write %s: %w", name, err)
+		}
+	}
 	dir, err := workdir(ws, spec.Workdir)
 	if err != nil {
 		return -1, err
@@ -125,6 +137,15 @@ func pump(wg *sync.WaitGroup, r io.Reader, stream string, out func(stream, text 
 func workdir(ws, rel string) (string, error) {
 	rel = strings.TrimPrefix(filepath.Clean("/"+rel), "/")
 	return filepath.Join(ws, rel), nil
+}
+
+// inside resolves a workspace-relative file path, refusing escapes.
+func inside(ws, name string) (string, error) {
+	clean := filepath.Clean(name)
+	if name == "" || filepath.IsAbs(name) || clean == "." || strings.HasPrefix(clean, "..") {
+		return "", fmt.Errorf("file path %q must be relative to the workspace", name)
+	}
+	return filepath.Join(ws, clean), nil
 }
 
 // environment is minimal: the session does not inherit the Runner's

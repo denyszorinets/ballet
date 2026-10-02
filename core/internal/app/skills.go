@@ -7,6 +7,7 @@ import (
 	"maps"
 	"time"
 
+	"github.com/denyszorinets/ballet/core/internal/domain/agent"
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
 	"github.com/denyszorinets/ballet/core/internal/domain/skill"
 )
@@ -339,4 +340,35 @@ func (sk *Skills) ProjectSkillBody(ctx context.Context, projectKey, name string)
 		return v.Content.Body, nil
 	}
 	return "", nil
+}
+
+// SessionSkills returns the skills a project's agent sessions get: the
+// resolved version of each effective skill. It performs no authorization;
+// it is for Core building runs, not for callers.
+func (sk *Skills) SessionSkills(ctx context.Context, projectKey string) ([]agent.Skill, error) {
+	projectID, _, chain, err := sk.projectScope(ctx, projectKey)
+	if err != nil {
+		return nil, err
+	}
+	all, err := sk.Store.SkillsInScopes(ctx, chain)
+	if err != nil {
+		return nil, err
+	}
+	pins, err := sk.Store.SkillPins(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	var out []agent.Skill
+	for _, r := range skill.Resolve(all, pins) {
+		if r.Version == 0 || r.Problem != "" {
+			continue
+		}
+		v, err := sk.Store.SkillVersion(ctx, r.Skill.ID, r.Version)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, agent.Skill{Name: r.Name, Description: v.Content.Description, Body: v.Content.Body,
+			Files: v.Content.Files})
+	}
+	return out, nil
 }

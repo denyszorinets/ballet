@@ -11,21 +11,23 @@ import (
 )
 
 type runJSON struct {
-	ID         string     `json:"id"`
-	Project    string     `json:"project"`
-	Ticket     string     `json:"ticket"`
-	Stage      string     `json:"stage"`
-	Status     run.Status `json:"status"`
-	Spec       run.Spec   `json:"spec"`
-	Branch     string     `json:"branch,omitempty"`
-	Runner     string     `json:"runner,omitempty"`
-	ExitCode   *int       `json:"exit_code,omitempty"`
-	Error      string     `json:"error,omitempty"`
-	CreatedBy  string     `json:"created_by"`
-	CreatedAt  time.Time  `json:"created_at"`
-	StartedAt  *time.Time `json:"started_at,omitempty"`
-	FinishedAt *time.Time `json:"finished_at,omitempty"`
-	Version    int64      `json:"version"`
+	ID         string      `json:"id"`
+	Project    string      `json:"project"`
+	Ticket     string      `json:"ticket"`
+	Stage      string      `json:"stage"`
+	Status     run.Status  `json:"status"`
+	Spec       run.Spec    `json:"spec"`
+	Branch     string      `json:"branch,omitempty"`
+	Adapter    string      `json:"adapter,omitempty"`
+	Result     *run.Result `json:"result,omitempty"`
+	Runner     string      `json:"runner,omitempty"`
+	ExitCode   *int        `json:"exit_code,omitempty"`
+	Error      string      `json:"error,omitempty"`
+	CreatedBy  string      `json:"created_by"`
+	CreatedAt  time.Time   `json:"created_at"`
+	StartedAt  *time.Time  `json:"started_at,omitempty"`
+	FinishedAt *time.Time  `json:"finished_at,omitempty"`
+	Version    int64       `json:"version"`
 }
 
 func timePtr(t time.Time) *time.Time {
@@ -41,7 +43,7 @@ func toRunJSON(v app.RunView) runJSON {
 		spec.Command = []string{}
 	}
 	return runJSON{ID: v.ID, Project: v.ProjectKey, Ticket: v.TicketKey, Stage: v.Stage, Status: v.Status, Spec: spec,
-		Branch: v.Branch, Runner: v.Runner, ExitCode: v.ExitCode, Error: v.Error, CreatedBy: v.CreatedBy, CreatedAt: v.CreatedAt,
+		Branch: v.Branch, Adapter: v.Adapter, Result: v.Result, Runner: v.Runner, ExitCode: v.ExitCode, Error: v.Error, CreatedBy: v.CreatedBy, CreatedAt: v.CreatedAt,
 		StartedAt: timePtr(v.StartedAt), FinishedAt: timePtr(v.FinishedAt), Version: v.Version}
 }
 
@@ -68,14 +70,29 @@ func registerRuns(mux *router, rs *app.Runs) {
 
 	mux.handle("POST /api/v1/items/{item}/runs", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Stage string   `json:"stage"`
-			Spec  run.Spec `json:"spec"`
+			Stage string    `json:"stage"`
+			Spec  *run.Spec `json:"spec"`
+			Agent *struct {
+				Adapter        string `json:"adapter"`
+				Prompt         string `json:"prompt"`
+				TimeoutSeconds int    `json:"timeout_seconds"`
+			} `json:"agent"`
 		}
 		if err := decode(r, &in); err != nil {
 			writeError(w, err)
 			return
 		}
-		v, err := rs.Create(r.Context(), r.PathValue("item"), in.Stage, in.Spec)
+		var v app.RunView
+		var err error
+		switch {
+		case (in.Spec == nil) == (in.Agent == nil):
+			err = fmt.Errorf("%w: give either spec or agent", app.ErrInvalid)
+		case in.Agent != nil:
+			v, err = rs.CreateAgent(r.Context(), r.PathValue("item"), in.Stage, app.AgentInput{
+				Adapter: in.Agent.Adapter, Prompt: in.Agent.Prompt, TimeoutSeconds: in.Agent.TimeoutSeconds})
+		default:
+			v, err = rs.Create(r.Context(), r.PathValue("item"), in.Stage, *in.Spec)
+		}
 		if err != nil {
 			writeError(w, err)
 			return

@@ -61,7 +61,7 @@ type conn struct{ c *rpc.Conn }
 func (rc conn) Start(ctx context.Context, r run.Run, secretEnv map[string]string) error {
 	return rc.c.Call(ctx, runnerproto.MethodStart, runnerproto.Start{Run: r.ID, Spec: runnerproto.Spec{
 		Image: r.Spec.Image, Command: r.Spec.Command, Env: r.Spec.Env, SecretEnv: secretEnv, Workdir: r.Spec.Workdir,
-		TimeoutSeconds: r.Spec.TimeoutSeconds,
+		TimeoutSeconds: r.Spec.TimeoutSeconds, Files: r.Spec.Files,
 	}}, nil)
 }
 

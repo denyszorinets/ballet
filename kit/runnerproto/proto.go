@@ -36,8 +36,11 @@ type Spec struct {
 	Env     map[string]string `json:"env,omitempty" msgpack:"env,omitempty"`
 	// SecretEnv is added to Env for the session; it holds tokens and must
 	// never be logged or persisted by the Runner.
-	SecretEnv      map[string]string `json:"secret_env,omitempty" msgpack:"secret_env,omitempty"`
-	Workdir        string            `json:"workdir,omitempty" msgpack:"workdir,omitempty"`                 // relative to the run's workspace
+	SecretEnv map[string]string `json:"secret_env,omitempty" msgpack:"secret_env,omitempty"`
+	Workdir   string            `json:"workdir,omitempty" msgpack:"workdir,omitempty"` // relative to the run's workspace
+	// Files are written into the workspace before the session starts:
+	// relative path → content. HOME is <workspace>/.home in every backend.
+	Files          map[string]string `json:"files,omitempty" msgpack:"files,omitempty"`
 	TimeoutSeconds int               `json:"timeout_seconds,omitempty" msgpack:"timeout_seconds,omitempty"` // 0: Runner default
 }
 

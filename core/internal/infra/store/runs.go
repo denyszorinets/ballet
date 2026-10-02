@@ -16,7 +16,7 @@ import (
 )
 
 const runCols = `id, project_id, ticket_id, stage, status, spec, runner, exit_code, error, created_by, created_at,
-	started_at, finished_at, version, branch`
+	started_at, finished_at, version, branch, adapter, result`
 
 // CreateRun inserts a queued run and records e.
 func (s *Store) CreateRun(ctx context.Context, r run.Run, e event.Event) error {
@@ -25,10 +25,10 @@ func (s *Store) CreateRun(ctx context.Context, r run.Run, e event.Event) error {
 		return fmt.Errorf("create run: %w", err)
 	}
 	return mapWriteErr("create run", s.db.Batch(ctx,
-		sqlstore.Exec(`INSERT INTO runs (`+runCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sqlstore.Exec(`INSERT INTO runs (`+runCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			r.ID, r.ProjectID, r.TicketID, r.Stage, string(r.Status), string(spec), r.Runner, nullableInt(r.ExitCode),
 			r.Error, r.CreatedBy, formatTime(r.CreatedAt), nullableTime(r.StartedAt), nullableTime(r.FinishedAt), r.Version,
-			r.Branch),
+			r.Branch, r.Adapter, resultJSON(r.Result)),
 		s.AppendEvent(e),
 	))
 }
@@ -37,9 +37,9 @@ func (s *Store) CreateRun(ctx context.Context, r run.Run, e event.Event) error {
 // when it is not nil.
 func (s *Store) UpdateRun(ctx context.Context, r run.Run, expectedVersion int64, e *event.Event) error {
 	stmts := []sqlstore.Stmt{sqlstore.ExecOne(`UPDATE runs SET status = ?, runner = ?, exit_code = ?, error = ?,
-			started_at = ?, finished_at = ?, version = ? WHERE id = ? AND version = ?`,
+			started_at = ?, finished_at = ?, result = ?, version = ? WHERE id = ? AND version = ?`,
 		string(r.Status), r.Runner, nullableInt(r.ExitCode), r.Error, nullableTime(r.StartedAt), nullableTime(r.FinishedAt),
-		r.Version, r.ID, expectedVersion)}
+		resultJSON(r.Result), r.Version, r.ID, expectedVersion)}
 	if e != nil {
 		stmts = append(stmts, s.AppendEvent(*e))
 	}
@@ -134,9 +134,16 @@ func scanRun(r scanner) (run.Run, error) {
 	var status, spec, created string
 	var exit sql.NullInt64
 	var started, finished sql.NullString
+	var result string
 	if err := r.Scan(&x.ID, &x.ProjectID, &x.TicketID, &x.Stage, &status, &spec, &x.Runner, &exit, &x.Error,
-		&x.CreatedBy, &created, &started, &finished, &x.Version, &x.Branch); err != nil {
+		&x.CreatedBy, &created, &started, &finished, &x.Version, &x.Branch, &x.Adapter, &result); err != nil {
 		return run.Run{}, err
+	}
+	if result != "" {
+		x.Result = &run.Result{}
+		if err := json.Unmarshal([]byte(result), x.Result); err != nil {
+			return run.Run{}, err
+		}
 	}
 	x.Status = run.Status(status)
 	if err := json.Unmarshal([]byte(spec), &x.Spec); err != nil {
@@ -161,6 +168,14 @@ func scanRun(r scanner) (run.Run, error) {
 		}
 	}
 	return x, nil
+}
+
+func resultJSON(r *run.Result) string {
+	if r == nil {
+		return ""
+	}
+	b, _ := json.Marshal(r)
+	return string(b)
 }
 
 func nullableInt(p *int) any {

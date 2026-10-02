@@ -1,9 +1,11 @@
 package docker_test
 
 import (
+	"archive/tar"
 	"context"
 	"encoding/binary"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,6 +26,7 @@ type engine struct {
 	mu      sync.Mutex
 	calls   []string
 	created map[string]any
+	archive map[string]string // extracted files: path → content
 	removed bool
 	pulled  string
 	stop    chan struct{}
@@ -65,6 +68,20 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		e.created["name"] = r.URL.Query().Get("name")
 		e.mu.Unlock()
 		_, _ = w.Write([]byte(`{"Id":"c0ffee1234567890"}`))
+	case strings.HasSuffix(p, "/archive") && r.Method == http.MethodPut:
+		tr := tar.NewReader(r.Body)
+		e.mu.Lock()
+		e.archive = map[string]string{}
+		for {
+			h, err := tr.Next()
+			if err != nil {
+				break
+			}
+			data, _ := io.ReadAll(tr)
+			e.archive[h.Name] = string(data)
+		}
+		e.mu.Unlock()
+		w.WriteHeader(http.StatusOK)
 	case strings.HasSuffix(p, "/start"):
 		w.WriteHeader(http.StatusNoContent)
 	case strings.HasSuffix(p, "/logs"):
@@ -124,7 +141,7 @@ func TestDocker_RunsAContainer(t *testing.T) {
 	e, b := setup(t, false)
 	var o output
 	code, err := b.Run(t.Context(), "run-1", runnerproto.Spec{Image: "missing/img:2", Command: []string{"make", "test"},
-		Env: map[string]string{"A": "1"}, Workdir: "repo"}, o.write)
+		Env: map[string]string{"A": "1"}, Workdir: "repo", Files: map[string]string{".ballet/mcp.json": "{}"}}, o.write)
 	require.NoError(t, err)
 	assert.Equal(t, 3, code)
 	assert.Equal(t, "hello\n", o.text["stdout"])
@@ -134,7 +151,9 @@ func TestDocker_RunsAContainer(t *testing.T) {
 
 	assert.Equal(t, "ballet-run-run-1", e.created["name"])
 	assert.Equal(t, []any{"make", "test"}, e.created["Cmd"])
-	assert.Equal(t, []any{"A=1"}, e.created["Env"])
+	assert.Equal(t, []any{"HOME=/workspace/.home", "BALLET_WORKSPACE=/workspace", "A=1"}, e.created["Env"])
+	assert.Equal(t, "{}", e.archive["workspace/.ballet/mcp.json"])
+	assert.Contains(t, e.archive, "workspace/.home/")
 	assert.Equal(t, "/workspace/repo", e.created["WorkingDir"])
 	assert.Equal(t, map[string]any{"ballet.run": "run-1"}, e.created["Labels"])
 	host := e.created["HostConfig"].(map[string]any)
@@ -192,11 +211,11 @@ func TestDocker_Integration(t *testing.T) {
 
 	var o output
 	code, err := b.Run(t.Context(), "it-1", runnerproto.Spec{Image: "alpine:3.20",
-		Command: []string{"sh", "-c", `echo "pwd=$(pwd) a=$A"; echo oops >&2; exit 3`}, Env: map[string]string{"A": "1"},
-		Workdir: "repo"}, o.write)
+		Command: []string{"sh", "-c", `echo "pwd=$(pwd) a=$A home=$HOME"; cat ../.ballet/f.txt; echo oops >&2; exit 3`},
+		Env:     map[string]string{"A": "1"}, Workdir: "repo", Files: map[string]string{".ballet/f.txt": "file\n"}}, o.write)
 	require.NoError(t, err)
 	assert.Equal(t, 3, code)
-	assert.Equal(t, "pwd=/workspace/repo a=1\n", o.text["stdout"])
+	assert.Equal(t, "pwd=/workspace/repo a=1 home=/workspace/.home\nfile\n", o.text["stdout"])
 	assert.Equal(t, "oops\n", o.text["stderr"])
 
 	ctx, cancel := context.WithCancel(t.Context())

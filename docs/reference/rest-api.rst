@@ -452,14 +452,17 @@ Runs
 
 Agent sessions executed by Runners (:doc:`/reference/runners`).
 Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
+"branch"?, "adapter"?, "result"?: {"summary", "turns", "cost_usd"},
 "runner"?, "exit_code"?, "error"?, "created_by", "created_at",
 "started_at"?, "finished_at"?, "version"}``.
 
-``POST /api/v1/items/{item}/runs`` — ``{"stage", "spec": {"command", "env"?, "image"?, "workdir"?, "timeout_seconds"?}}`` → ``201``
-   Queues a run of a ticket by hand. Needs ``run.manage`` on the project
-   (organization and customer admins). ``400`` for non-tickets, an empty
-   command, a stage not matching ``[a-z][a-z0-9_-]{0,31}`` or invalid
-   environment variable names.
+``POST /api/v1/items/{item}/runs`` — ``{"stage", "spec": {"command", "env"?, "image"?, "workdir"?, "timeout_seconds"?, "files"?}}`` or ``{"stage", "agent": {"adapter": "claude-code", "prompt", "timeout_seconds"?}}`` → ``201``
+   Queues a run of a ticket by hand: a command (``spec``) or a coding
+   agent session (``agent``, :ref:`reference-runners-agents`). Needs
+   ``run.manage`` on the project (organization and customer admins).
+   ``400`` for non-tickets, both or neither of ``spec`` and ``agent``, an
+   unknown adapter, an empty command or prompt, a stage not matching
+   ``[a-z][a-z0-9_-]{0,31}`` or invalid environment variable names.
 
 ``GET /api/v1/items/{item}/runs`` → ``200`` list, oldest first (``tracker.read``)
 

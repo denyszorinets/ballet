@@ -947,6 +947,15 @@ components:
         env: { type: object, additionalProperties: { type: string } }
         workdir: { type: string }
         timeout_seconds: { type: integer, minimum: 0, description: "0: the Runner's default" }
+        files: { type: object, additionalProperties: { type: string }, description: "Workspace-relative path → content, written first" }
+    RunResult:
+      type: object
+      additionalProperties: false
+      required: [summary, turns, cost_usd]
+      properties:
+        summary: { type: string, description: The agent's final message }
+        turns: { type: integer }
+        cost_usd: { type: number }
     Run:
       type: object
       additionalProperties: false
@@ -959,6 +968,8 @@ components:
         status: { $ref: "#/components/schemas/RunStatus" }
         spec: { $ref: "#/components/schemas/RunSpec" }
         branch: { type: string, description: The ticket branch the run works on }
+        adapter: { type: string, description: Agent adapter that built the session }
+        result: { $ref: "#/components/schemas/RunResult" }
         runner: { type: string }
         exit_code: { type: integer }
         error: { type: string }
@@ -975,10 +986,19 @@ components:
     CreateRun:
       type: object
       additionalProperties: false
-      required: [stage, spec]
+      required: [stage]
+      description: Exactly one of spec (a command) or agent (a coding agent session).
       properties:
         stage: { type: string, description: "Pipeline stage, e.g. implement" }
         spec: { $ref: "#/components/schemas/RunSpec" }
+        agent:
+          type: object
+          additionalProperties: false
+          required: [adapter, prompt]
+          properties:
+            adapter: { type: string, enum: [claude-code] }
+            prompt: { type: string }
+            timeout_seconds: { type: integer, minimum: 0 }
     RunLog:
       type: object
       additionalProperties: false

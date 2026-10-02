@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,8 @@ import (
 
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/app/plannertools"
+	"github.com/denyszorinets/ballet/core/internal/domain/agent"
+	"github.com/denyszorinets/ballet/core/internal/domain/agent/claudecode"
 	"github.com/denyszorinets/ballet/core/internal/domain/credential"
 	"github.com/denyszorinets/ballet/core/internal/domain/execution"
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
@@ -40,6 +43,9 @@ import (
 	"github.com/denyszorinets/ballet/kit/service"
 )
 
+// runTokenEnv carries a run's token to its session (secret env).
+const runTokenEnv = "BALLET_RUN_TOKEN"
+
 const (
 	serviceName = "core"
 	envPrefix   = "BALLET_CORE"
@@ -58,6 +64,7 @@ type serviceConfig struct {
 	Knowledge knowledgeConfig `toml:"knowledge"`
 	Gateway   gatewayConfig   `toml:"gateway"`
 	Planner   plannerConfig   `toml:"planner"`
+	Agents    agentsConfig    `toml:"agents"`
 }
 
 // gatewayConfig locates the LLM gateway (ADR-0011), used by the planner.
@@ -74,6 +81,18 @@ type plannerConfig struct {
 	// CompactAtTokens: estimated context size above which older messages
 	// are summarized for the model; 0 disables compaction.
 	CompactAtTokens int `toml:"compact_at_tokens"`
+}
+
+// agentsConfig configures coding-agent runs (ADR-0003).
+type agentsConfig struct {
+	// GatewayURL and KnowledgeMCPURL as reached from inside run sessions
+	// (containers may see other host names); empty: gateway.url and
+	// knowledge.url + "/mcp".
+	GatewayURL      string        `toml:"gateway_url"`
+	KnowledgeMCPURL string        `toml:"knowledge_mcp_url"`
+	ClaudeCommand   string        `toml:"claude_command"`
+	Model           string        `toml:"model"`
+	RunTokenTTL     time.Duration `toml:"run_token_ttl"`
 }
 
 // knowledgeConfig locates the Knowledge service (ADR-0022).
@@ -138,6 +157,7 @@ func defaultConfig() serviceConfig {
 		Secrets:   secretsConfig{KeyFile: "data/secrets.key"},
 		Knowledge: knowledgeConfig{URL: "http://localhost:8081"},
 		Gateway:   gatewayConfig{URL: "http://localhost:8082"},
+		Agents:    agentsConfig{ClaudeCommand: "claude", RunTokenTTL: 3 * time.Hour},
 		Planner: plannerConfig{
 			Model: "claude-sonnet-5-5", MaxTokens: 8192, MaxRounds: 20, Skill: "planner", CompactAtTokens: 100_000,
 		},
@@ -154,6 +174,9 @@ func (c serviceConfig) Validate() error {
 	}
 	if c.Storage.Path == "" {
 		errs = append(errs, errors.New("storage.path must not be empty"))
+	}
+	if c.Agents.RunTokenTTL < 10*time.Minute {
+		errs = append(errs, errors.New("agents.run_token_ttl must be at least 10m"))
 	}
 	if c.Planner.Model == "" || c.Planner.MaxTokens < 1 || c.Planner.MaxRounds < 1 || c.Planner.CompactAtTokens < 0 {
 		errs = append(errs, errors.New("planner.model must be set; planner.max_tokens and planner.max_rounds at least 1; "+
@@ -263,8 +286,20 @@ func run() error {
 		CompactAt: cfg.Planner.CompactAtTokens, OnCompact: compactions.Inc,
 		Now: time.Now, NewID: store.NewID, Logger: svc.Logger, Context: ctx,
 	}
-	dispatcher := &app.Dispatcher{Store: st, Tenancy: st, Now: time.Now, Logger: svc.Logger,
-		// The project's git token reaches the Runner with the run's start only.
+	agentGateway := cfg.Agents.GatewayURL
+	if agentGateway == "" {
+		agentGateway = cfg.Gateway.URL
+	}
+	knowledgeMCP := cfg.Agents.KnowledgeMCPURL
+	if knowledgeMCP == "" {
+		knowledgeMCP = strings.TrimSuffix(cfg.Knowledge.URL, "/") + "/mcp"
+	}
+	agents := map[string]agent.Adapter{
+		claudecode.Name: claudecode.Adapter{Command: cfg.Agents.ClaudeCommand, GatewayURL: agentGateway, APIKeyEnv: runTokenEnv},
+	}
+	dispatcher := &app.Dispatcher{Store: st, Tenancy: st, Now: time.Now, Logger: svc.Logger, Adapters: agents,
+		// Secrets reach the Runner with the run's start only: the run's own
+		// token and the project's git token.
 		SecretEnv: func(ctx context.Context, r domainrun.Run) (map[string]string, error) {
 			p, err := st.ProjectByID(ctx, r.ProjectID)
 			if err != nil {
@@ -274,14 +309,28 @@ func run() error {
 			if err != nil {
 				return nil, err
 			}
-			cred, err := credentials.Resolve(ctx, c.Key, p.Key, credential.ProviderGit)
-			if errors.Is(err, app.ErrNotFound) {
-				return nil, nil
-			}
+			it, err := st.ItemByID(ctx, r.TicketID)
 			if err != nil {
 				return nil, err
 			}
-			return map[string]string{execution.TokenEnv: cred.APIKey}, nil
+			tok, err := tokenIssuer.Issue(runtoken.Claims{
+				Kind: runtoken.KindRun, Subject: "run:" + r.ID, Audience: []string{"gateway", "knowledge", "core"},
+				Customer: c.Key, Project: p.Key, Ticket: it.Key,
+				Capabilities: []string{runtoken.CapLLMInvoke, runtoken.CapKnowledgeRead, runtoken.CapKnowledgeWrite,
+					runtoken.CapTrackerRead, runtoken.CapTrackerReport},
+			}, cfg.Agents.RunTokenTTL)
+			if err != nil {
+				return nil, err
+			}
+			secrets := map[string]string{runTokenEnv: tok}
+			cred, err := credentials.Resolve(ctx, c.Key, p.Key, credential.ProviderGit)
+			switch {
+			case err == nil:
+				secrets[execution.TokenEnv] = cred.APIKey
+			case !errors.Is(err, app.ErrNotFound):
+				return nil, err
+			}
+			return secrets, nil
 		},
 	}
 	go dispatcher.Run(ctx)
@@ -306,6 +355,8 @@ func run() error {
 		Changesets: changesets,
 		Planner:    plannerSvc,
 		Runs: &app.Runs{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Dispatcher: dispatcher,
+			Agents: agents, SessionSkills: skills.SessionSkills, Model: cfg.Agents.Model,
+			MCP: []agent.MCPServer{{Name: "knowledge", URL: knowledgeMCP, TokenEnv: runTokenEnv}},
 			Now: time.Now, NewID: store.NewID},
 		Execution: &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 	})

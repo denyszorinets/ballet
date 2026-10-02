@@ -293,6 +293,29 @@ Read at start-up; changes need a restart.
    ``0`` disables compaction. Default ``100000``;
    ``BALLET_CORE_PLANNER_COMPACT_AT_TOKENS``.
 
+``[agents]`` (core)
+-------------------
+
+Coding-agent runs (:ref:`reference-runners-agents`).
+
+``gateway_url`` / ``knowledge_mcp_url``
+   The LLM gateway and the knowledge MCP endpoint **as reached from inside
+   run sessions** (containers may need other host names than Core).
+   Default ``gateway.url`` and ``knowledge.url`` + ``/mcp``;
+   ``BALLET_CORE_AGENTS_GATEWAY_URL``, ``…_KNOWLEDGE_MCP_URL``.
+
+``claude_command``
+   The Claude Code executable in the session. Default ``"claude"``;
+   ``BALLET_CORE_AGENTS_CLAUDE_COMMAND``.
+
+``model``
+   Model of agent sessions; ``""`` (default) lets the agent choose.
+   ``BALLET_CORE_AGENTS_MODEL``.
+
+``run_token_ttl``
+   Validity of run tokens (at least ``10m``; cover the longest run).
+   Default ``3h``; ``BALLET_CORE_AGENTS_RUN_TOKEN_TTL``.
+
 ``[core]`` and ``[storage]`` (knowledge)
 ----------------------------------------
 

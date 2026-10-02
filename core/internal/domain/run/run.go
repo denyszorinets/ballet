@@ -48,6 +48,13 @@ func CanTransition(from, to Status) bool {
 	return false
 }
 
+// Result is what an agent session reported.
+type Result struct {
+	Summary string  `json:"summary"`
+	Turns   int     `json:"turns"`
+	CostUSD float64 `json:"cost_usd"`
+}
+
 // Spec is what the Runner executes.
 type Spec struct {
 	Image          string            `json:"image,omitempty"`
@@ -55,6 +62,7 @@ type Spec struct {
 	Env            map[string]string `json:"env,omitempty"`
 	Workdir        string            `json:"workdir,omitempty"`
 	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
+	Files          map[string]string `json:"files,omitempty"` // written into the workspace first
 }
 
 // Run is one session.
@@ -66,6 +74,8 @@ type Run struct {
 	Status     Status
 	Spec       Spec
 	Branch     string // the ticket branch the run works on ("": no repository)
+	Adapter    string // agent adapter that built the session ("": a plain command)
+	Result     *Result
 	Runner     string // the Runner executing it
 	ExitCode   *int
 	Error      string // why it failed or was cancelled
