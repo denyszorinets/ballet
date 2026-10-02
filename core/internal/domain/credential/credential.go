@@ -20,9 +20,13 @@ type Provider string
 const (
 	ProviderAnthropic Provider = "anthropic" // messages
 	ProviderOpenAI    Provider = "openai"    // OpenAI-compatible API (embeddings)
+	ProviderGit       Provider = "git"       // token for cloning and pushing the project repository
 )
 
-var providers = []Provider{ProviderAnthropic, ProviderOpenAI}
+var providers = []Provider{ProviderAnthropic, ProviderOpenAI, ProviderGit}
+
+// LLM reports whether p is an LLM provider (served to the gateway).
+func (p Provider) LLM() bool { return p == ProviderAnthropic || p == ProviderOpenAI }
 
 // Credential is a provider API key at customer or project scope. APIKey is
 // only populated when resolved for the gateway.
@@ -53,7 +57,7 @@ func Fingerprint(key string) string {
 func Validate(p Provider, key, baseURL string) error {
 	var errs []error
 	if !slices.Contains(providers, p) {
-		errs = append(errs, fmt.Errorf("provider %q must be anthropic or openai", p))
+		errs = append(errs, fmt.Errorf("provider %q must be anthropic, openai or git", p))
 	}
 	if strings.TrimSpace(key) == "" || len(key) > 1000 {
 		errs = append(errs, errors.New("api_key must be 1-1000 characters"))

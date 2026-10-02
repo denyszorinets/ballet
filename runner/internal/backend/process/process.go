@@ -51,7 +51,7 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 
 	cmd := exec.Command(spec.Command[0], spec.Command[1:]...)
 	cmd.Dir = dir
-	cmd.Env = environment(ws, home, spec.Env)
+	cmd.Env = environment(ws, home, spec.Env, spec.SecretEnv)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -129,15 +129,17 @@ func workdir(ws, rel string) (string, error) {
 
 // environment is minimal: the session does not inherit the Runner's
 // configuration or secrets.
-func environment(ws, home string, env map[string]string) []string {
+func environment(ws, home string, envs ...map[string]string) []string {
 	out := []string{"HOME=" + home, "BALLET_WORKSPACE=" + ws}
 	for _, k := range []string{"PATH", "LANG", "TZ"} {
 		if v, ok := os.LookupEnv(k); ok {
 			out = append(out, k+"="+v)
 		}
 	}
-	for k, v := range env {
-		out = append(out, k+"="+v)
+	for _, env := range envs {
+		for k, v := range env {
+			out = append(out, k+"="+v)
+		}
 	}
 	return out
 }

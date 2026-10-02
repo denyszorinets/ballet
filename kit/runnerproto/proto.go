@@ -31,9 +31,12 @@ type Hello struct {
 
 // Spec is what a Runner executes for a run.
 type Spec struct {
-	Image          string            `json:"image,omitempty" msgpack:"image,omitempty"` // container image (container backends)
-	Command        []string          `json:"command" msgpack:"command"`
-	Env            map[string]string `json:"env,omitempty" msgpack:"env,omitempty"`
+	Image   string            `json:"image,omitempty" msgpack:"image,omitempty"` // container image (container backends)
+	Command []string          `json:"command" msgpack:"command"`
+	Env     map[string]string `json:"env,omitempty" msgpack:"env,omitempty"`
+	// SecretEnv is added to Env for the session; it holds tokens and must
+	// never be logged or persisted by the Runner.
+	SecretEnv      map[string]string `json:"secret_env,omitempty" msgpack:"secret_env,omitempty"`
 	Workdir        string            `json:"workdir,omitempty" msgpack:"workdir,omitempty"`                 // relative to the run's workspace
 	TimeoutSeconds int               `json:"timeout_seconds,omitempty" msgpack:"timeout_seconds,omitempty"` // 0: Runner default
 }

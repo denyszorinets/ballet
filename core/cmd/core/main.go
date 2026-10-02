@@ -17,7 +17,10 @@ import (
 
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/app/plannertools"
+	"github.com/denyszorinets/ballet/core/internal/domain/credential"
+	"github.com/denyszorinets/ballet/core/internal/domain/execution"
 	"github.com/denyszorinets/ballet/core/internal/domain/rbac"
+	domainrun "github.com/denyszorinets/ballet/core/internal/domain/run"
 	"github.com/denyszorinets/ballet/core/internal/infra/anthropic"
 	"github.com/denyszorinets/ballet/core/internal/infra/knowledge"
 	"github.com/denyszorinets/ballet/core/internal/infra/secrets"
@@ -260,7 +263,27 @@ func run() error {
 		CompactAt: cfg.Planner.CompactAtTokens, OnCompact: compactions.Inc,
 		Now: time.Now, NewID: store.NewID, Logger: svc.Logger, Context: ctx,
 	}
-	dispatcher := &app.Dispatcher{Store: st, Tenancy: st, Now: time.Now, Logger: svc.Logger}
+	dispatcher := &app.Dispatcher{Store: st, Tenancy: st, Now: time.Now, Logger: svc.Logger,
+		// The project's git token reaches the Runner with the run's start only.
+		SecretEnv: func(ctx context.Context, r domainrun.Run) (map[string]string, error) {
+			p, err := st.ProjectByID(ctx, r.ProjectID)
+			if err != nil {
+				return nil, err
+			}
+			c, err := st.CustomerByID(ctx, p.CustomerID)
+			if err != nil {
+				return nil, err
+			}
+			cred, err := credentials.Resolve(ctx, c.Key, p.Key, credential.ProviderGit)
+			if errors.Is(err, app.ErrNotFound) {
+				return nil, nil
+			}
+			if err != nil {
+				return nil, err
+			}
+			return map[string]string{execution.TokenEnv: cred.APIKey}, nil
+		},
+	}
 	go dispatcher.Run(ctx)
 	runnerapi.Register(svc.Mux, runnerapi.Deps{
 		Verifier: runtoken.NewRingVerifier(tokenKeys, time.Now), Dispatcher: dispatcher,
@@ -282,8 +305,9 @@ func run() error {
 		Tracker:    tracker,
 		Changesets: changesets,
 		Planner:    plannerSvc,
-		Runs: &app.Runs{Store: st, Items: st, Tenancy: st, Authz: authz, Dispatcher: dispatcher,
+		Runs: &app.Runs{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Dispatcher: dispatcher,
 			Now: time.Now, NewID: store.NewID},
+		Execution: &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 	})
 
 	searchIndexer := &app.SearchIndexer{

@@ -17,6 +17,7 @@ type runJSON struct {
 	Stage      string     `json:"stage"`
 	Status     run.Status `json:"status"`
 	Spec       run.Spec   `json:"spec"`
+	Branch     string     `json:"branch,omitempty"`
 	Runner     string     `json:"runner,omitempty"`
 	ExitCode   *int       `json:"exit_code,omitempty"`
 	Error      string     `json:"error,omitempty"`
@@ -40,7 +41,7 @@ func toRunJSON(v app.RunView) runJSON {
 		spec.Command = []string{}
 	}
 	return runJSON{ID: v.ID, Project: v.ProjectKey, Ticket: v.TicketKey, Stage: v.Stage, Status: v.Status, Spec: spec,
-		Runner: v.Runner, ExitCode: v.ExitCode, Error: v.Error, CreatedBy: v.CreatedBy, CreatedAt: v.CreatedAt,
+		Branch: v.Branch, Runner: v.Runner, ExitCode: v.ExitCode, Error: v.Error, CreatedBy: v.CreatedBy, CreatedAt: v.CreatedAt,
 		StartedAt: timePtr(v.StartedAt), FinishedAt: timePtr(v.FinishedAt), Version: v.Version}
 }
 

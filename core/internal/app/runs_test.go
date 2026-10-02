@@ -23,12 +23,14 @@ type fakeRunner struct {
 	cancelled []string
 	refuse    bool
 	attempts  int
+	secrets   []map[string]string
 }
 
-func (f *fakeRunner) Start(_ context.Context, r run.Run) error {
+func (f *fakeRunner) Start(_ context.Context, r run.Run, secrets map[string]string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.attempts++
+	f.secrets = append(f.secrets, secrets)
 	if f.refuse {
 		return errors.New("busy")
 	}

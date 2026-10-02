@@ -16,7 +16,7 @@ import (
 )
 
 const runCols = `id, project_id, ticket_id, stage, status, spec, runner, exit_code, error, created_by, created_at,
-	started_at, finished_at, version`
+	started_at, finished_at, version, branch`
 
 // CreateRun inserts a queued run and records e.
 func (s *Store) CreateRun(ctx context.Context, r run.Run, e event.Event) error {
@@ -25,9 +25,10 @@ func (s *Store) CreateRun(ctx context.Context, r run.Run, e event.Event) error {
 		return fmt.Errorf("create run: %w", err)
 	}
 	return mapWriteErr("create run", s.db.Batch(ctx,
-		sqlstore.Exec(`INSERT INTO runs (`+runCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sqlstore.Exec(`INSERT INTO runs (`+runCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			r.ID, r.ProjectID, r.TicketID, r.Stage, string(r.Status), string(spec), r.Runner, nullableInt(r.ExitCode),
-			r.Error, r.CreatedBy, formatTime(r.CreatedAt), nullableTime(r.StartedAt), nullableTime(r.FinishedAt), r.Version),
+			r.Error, r.CreatedBy, formatTime(r.CreatedAt), nullableTime(r.StartedAt), nullableTime(r.FinishedAt), r.Version,
+			r.Branch),
 		s.AppendEvent(e),
 	))
 }
@@ -134,7 +135,7 @@ func scanRun(r scanner) (run.Run, error) {
 	var exit sql.NullInt64
 	var started, finished sql.NullString
 	if err := r.Scan(&x.ID, &x.ProjectID, &x.TicketID, &x.Stage, &status, &spec, &x.Runner, &exit, &x.Error,
-		&x.CreatedBy, &created, &started, &finished, &x.Version); err != nil {
+		&x.CreatedBy, &created, &started, &finished, &x.Version, &x.Branch); err != nil {
 		return run.Run{}, err
 	}
 	x.Status = run.Status(status)

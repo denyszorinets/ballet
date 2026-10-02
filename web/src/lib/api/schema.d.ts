@@ -325,6 +325,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project}/execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        /** How the project's runs execute (version 0 when never set) */
+        get: operations["getExecutionSettings"];
+        /** Replace the project's execution settings (project.update) */
+        put: operations["setExecutionSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run}": {
         parameters: {
             query?: never;
@@ -1016,6 +1037,44 @@ export interface components {
             /** @description Key of the other item */
             item: string;
         };
+        ExecutionSettings: {
+            project: string;
+            /** @description https, ssh, git@host:path or file URL; empty: no repository */
+            repo_url: string;
+            default_branch: string;
+            /** @description Devcontainer image of the runs */
+            image: string;
+            /** @description Shell commands run in the repository before each session */
+            setup: string[];
+            env: {
+                [key: string]: string;
+            };
+            /** @description {ticket}, {slug}, {type} */
+            branch_template: string;
+            git_name: string;
+            git_email: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /** Format: int64 */
+            version: number;
+        };
+        SetExecutionSettings: {
+            repo_url?: string;
+            default_branch?: string;
+            image?: string;
+            setup?: string[];
+            env?: {
+                [key: string]: string;
+            };
+            branch_template?: string;
+            git_name?: string;
+            git_email?: string;
+            /**
+             * Format: int64
+             * @description The version read (0 the first time)
+             */
+            version: number;
+        };
         /** @enum {string} */
         RunStatus: "queued" | "starting" | "running" | "succeeded" | "failed" | "cancelled";
         RunSpec: {
@@ -1036,6 +1095,8 @@ export interface components {
             stage: string;
             status: components["schemas"]["RunStatus"];
             spec: components["schemas"]["RunSpec"];
+            /** @description The ticket branch the run works on */
+            branch?: string;
             runner?: string;
             exit_code?: number;
             error?: string;
@@ -1226,7 +1287,7 @@ export interface components {
         };
         Credential: {
             /** @enum {string} */
-            provider: "anthropic" | "openai";
+            provider: "anthropic" | "openai" | "git";
             /** @description Project key of an override; absent for the customer default */
             project?: string;
             base_url: string;
@@ -1467,7 +1528,7 @@ export interface components {
         Changeset: string;
         /** @description Knowledge entry ID */
         Entry: string;
-        Provider: "anthropic" | "openai";
+        Provider: "anthropic" | "openai" | "git";
         /** @description Item key, e.g. WEB-42 */
         Item: string;
     };
@@ -2124,6 +2185,58 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getExecutionSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setExecutionSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetExecutionSettings"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionSettings"];
                 };
             };
             default: components["responses"]["Error"];
