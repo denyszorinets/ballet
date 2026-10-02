@@ -83,6 +83,10 @@ type Repo struct {
 // ErrUnsupported is returned for operations a forge cannot do.
 var ErrUnsupported = errors.New("not supported by this forge")
 
+// ErrNoBranch is returned when the ticket branch does not exist on the
+// forge (nothing was pushed).
+var ErrNoBranch = errors.New("the branch does not exist on the forge")
+
 // Forge is a git platform adapter.
 type Forge interface {
 	Name() string

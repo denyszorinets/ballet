@@ -32,6 +32,7 @@ type Deps struct {
 	AgentTracker *app.AgentTracker
 	PullRequests *app.PullRequests
 	Pipelines    *app.Pipelines
+	Flows        *app.Flows
 	Credentials  *app.Credentials
 	Usage        *app.Usage
 	Knowledge    *KnowledgeProxy // nil: knowledge routes not served
@@ -63,6 +64,7 @@ func Register(mux *http.ServeMux, d Deps) []string {
 	registerReports(r, d.AgentTracker)
 	registerPullRequests(r, d.PullRequests)
 	registerPipelines(r, d.Pipelines)
+	registerFlows(r, d.Flows)
 	registerCredentials(r, d.Credentials)
 	registerUsage(r, d.Usage)
 	registerKnowledge(r, d.Knowledge)

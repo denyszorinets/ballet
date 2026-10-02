@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -92,26 +93,74 @@ func (rs *Runs) CreateAgent(ctx context.Context, ticketKey, stage string, in Age
 		return RunView{}, fmt.Errorf("%w: the prompt must be at most 20000 characters", ErrInvalid)
 	}
 	return rs.create(ctx, ticketKey, stage, func(it tracker.Item, p tenancy.Project) (run.Spec, string, error) {
-		bundle, err := rs.Bundle(ctx, it, p, stage, in.Prompt)
+		return rs.agentSpec(ctx, a, it, p, stage, in, StageOptions{})
+	})
+}
+
+// StageOptions shape an agent run of a pipeline stage.
+type StageOptions struct {
+	Instructions string   // the stage's instructions; "": Ballet's default for the stage
+	Skills       []string // project skills to include; empty: all
+	Model        string   // "": Runs.Model
+	Artifacts    string   // what earlier stages handed over (their reports)
+}
+
+// agentSpec builds an agent run's spec: the onboarding bundle as prompt,
+// the project's skills, the MCP servers.
+func (rs *Runs) agentSpec(ctx context.Context, a agent.Adapter, it tracker.Item, p tenancy.Project, stage string,
+	in AgentInput, opts StageOptions) (run.Spec, string, error) {
+	extra := strings.TrimSpace(strings.Join([]string{opts.Artifacts, in.Prompt}, "\n\n"))
+	bundle, err := rs.Bundle(ctx, it, p, stage, extra)
+	if err != nil {
+		return run.Spec{}, "", err
+	}
+	if opts.Instructions != "" {
+		bundle.StageInstructions = opts.Instructions
+	}
+	var skills []agent.Skill
+	if rs.SessionSkills != nil {
+		all, err := rs.SessionSkills(ctx, p.Key)
 		if err != nil {
 			return run.Spec{}, "", err
 		}
-		var skills []agent.Skill
-		if rs.SessionSkills != nil {
-			var err error
-			if skills, err = rs.SessionSkills(ctx, p.Key); err != nil {
-				return run.Spec{}, "", err
+		for _, sk := range all {
+			if len(opts.Skills) == 0 || slices.Contains(opts.Skills, sk.Name) {
+				skills = append(skills, sk)
 			}
 		}
-		built, err := a.Build(agent.Session{
-			Prompt: bundle.Render(onboarding.DefaultMaxBytes), Skills: skills, MCP: rs.MCP, Model: rs.Model,
-			Instructions: sessionInstructions,
-		})
-		if err != nil {
-			return run.Spec{}, "", invalid(err)
-		}
-		return run.Spec{Command: built.Command, Files: built.Files, Env: built.Env, TimeoutSeconds: in.TimeoutSeconds}, a.Name(), nil
+	}
+	model := rs.Model
+	if opts.Model != "" {
+		model = opts.Model
+	}
+	built, err := a.Build(agent.Session{
+		Prompt: bundle.Render(onboarding.DefaultMaxBytes), Skills: skills, MCP: rs.MCP, Model: model,
+		Instructions: sessionInstructions,
 	})
+	if err != nil {
+		return run.Spec{}, "", invalid(err)
+	}
+	return run.Spec{Command: built.Command, Files: built.Files, Env: built.Env, TimeoutSeconds: in.TimeoutSeconds}, a.Name(), nil
+}
+
+// CreateForStage queues the agent run of a pipeline stage for Core's
+// orchestrator: no caller, no authorization.
+func (rs *Runs) CreateForStage(ctx context.Context, it tracker.Item, stage, adapter string, opts StageOptions, timeoutSeconds int) (RunView, error) {
+	a, ok := rs.Agents[adapter]
+	if !ok {
+		return RunView{}, fmt.Errorf("%w: unknown agent adapter %q", ErrPermanent, adapter)
+	}
+	p, err := rs.Tenancy.ProjectByID(ctx, it.ProjectID)
+	if err != nil {
+		return RunView{}, err
+	}
+	c, err := rs.Tenancy.CustomerByID(ctx, p.CustomerID)
+	if err != nil {
+		return RunView{}, err
+	}
+	return rs.insert(ctx, it, p, c, stage, func(it tracker.Item, p tenancy.Project) (run.Spec, string, error) {
+		return rs.agentSpec(ctx, a, it, p, stage, AgentInput{TimeoutSeconds: timeoutSeconds}, opts)
+	}, event.System, "ballet")
 }
 
 // sessionInstructions are the standing instructions of every agent session.
@@ -219,19 +268,24 @@ func (rs *Runs) create(ctx context.Context, ticketKey, stage string,
 	if it.Kind != tracker.KindTicket {
 		return RunView{}, fmt.Errorf("%w: runs execute tickets, not %ss", ErrInvalid, it.Kind)
 	}
+	return rs.insert(ctx, it, p, c, stage, build, actorIn(ctx, id), id.Subject)
+}
+
+func (rs *Runs) insert(ctx context.Context, it tracker.Item, p tenancy.Project, c tenancy.Customer, stage string,
+	build func(tracker.Item, tenancy.Project) (run.Spec, string, error), actor event.Actor, createdBy string) (RunView, error) {
 	spec, adapter, err := build(it, p)
 	if err != nil {
 		return RunView{}, err
 	}
 	r := run.Run{ID: rs.NewID(), ProjectID: p.ID, TicketID: it.ID, Stage: stage, Status: run.StatusQueued, Spec: spec,
-		Adapter: adapter, CreatedBy: id.Subject, CreatedAt: rs.Now(), Version: 1}
+		Adapter: adapter, CreatedBy: createdBy, CreatedAt: rs.Now(), Version: 1}
 	if err := r.Validate(); err != nil {
 		return RunView{}, invalid(err)
 	}
 	if err := rs.prepare(ctx, &r, it); err != nil {
 		return RunView{}, err
 	}
-	e := runEvent(r, c.ID, "run.queued", actorIn(ctx, id), map[string]any{"ticket": it.Key, "stage": stage, "adapter": r.Adapter})
+	e := runEvent(r, c.ID, "run.queued", actor, map[string]any{"ticket": it.Key, "stage": stage, "adapter": r.Adapter})
 	if err := rs.Store.CreateRun(ctx, r, e); err != nil {
 		return RunView{}, err
 	}
@@ -428,6 +482,9 @@ type Dispatcher struct {
 	SecretEnv func(ctx context.Context, r run.Run) (map[string]string, error)
 	// Adapters read agent runs' results, by adapter name.
 	Adapters map[string]agent.Adapter
+	// OnFinished is called after a run ended (the pipeline continues);
+	// optional.
+	OnFinished func(ctx context.Context, r run.Run)
 
 	mu      sync.Mutex
 	runners map[string]*runnerState
@@ -802,6 +859,9 @@ func (d *Dispatcher) finishRun(ctx context.Context, r run.Run, status run.Status
 	}
 	d.mu.Unlock()
 	d.Kick()
+	if d.OnFinished != nil {
+		d.OnFinished(ctx, next)
+	}
 	return next, nil
 }
 

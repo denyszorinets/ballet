@@ -42,17 +42,26 @@ func (a *api) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p := strings.TrimPrefix(r.URL.Path, "/repos/acme/web")
 	switch {
 	case r.Method == http.MethodGet && p == "/pulls":
-		if r.URL.Query().Get("head") != "acme:ballet/WEB-1-login" {
-			w.WriteHeader(http.StatusBadRequest)
-			return
+		matching := []map[string]any{}
+		for _, pr := range a.pulls {
+			if "acme:"+pr["head"].(map[string]any)["ref"].(string) == r.URL.Query().Get("head") {
+				matching = append(matching, pr)
+			}
 		}
-		_ = json.NewEncoder(w).Encode(a.pulls)
+		_ = json.NewEncoder(w).Encode(matching)
 	case r.Method == http.MethodPost && p == "/pulls":
 		pr := map[string]any{"number": 7, "html_url": "https://github.com/acme/web/pull/7", "title": body["title"],
 			"state": "open", "head": map[string]any{"ref": body["head"], "sha": "abc"}, "base": map[string]any{"ref": body["base"]}}
 		a.pulls = append(a.pulls, pr)
 		w.WriteHeader(http.StatusCreated)
 		_ = json.NewEncoder(w).Encode(pr)
+	case r.Method == http.MethodGet && strings.HasPrefix(p, "/branches/"):
+		if strings.Contains(p, "missing") {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"Branch not found"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"name":"b"}`))
 	case r.Method == http.MethodGet && strings.HasPrefix(p, "/pulls/") && strings.HasSuffix(p, "/reviews"):
 		_, _ = w.Write([]byte(a.reviews))
 	case r.Method == http.MethodGet && strings.HasPrefix(p, "/pulls/"):
@@ -99,6 +108,9 @@ func TestGitHub_EnsureOpensOrReusesAPullRequest(t *testing.T) {
 	assert.Equal(t, "Bearer ghp_x", a.authSeen)
 	assert.Equal(t, map[string]any{"title": "WEB-1 Login", "head": "ballet/WEB-1-login", "base": "main", "body": "Body"},
 		a.bodies["POST /repos/acme/web/pulls"])
+
+	_, err = gh.Ensure(t.Context(), repo, "ballet/missing", "main", "x", "y")
+	assert.ErrorIs(t, err, forge.ErrNoBranch)
 
 	again, err := gh.Ensure(t.Context(), repo, "ballet/WEB-1-login", "main", "x", "y")
 	require.NoError(t, err)

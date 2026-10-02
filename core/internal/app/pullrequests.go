@@ -145,6 +145,55 @@ func (ps *PullRequests) Open(ctx context.Context, ticketKey string) (PRView, err
 	if err != nil {
 		return PRView{}, err
 	}
+	return ps.ensure(ctx, s, actorIn(ctx, id))
+}
+
+// EnsureForTicket opens or refreshes a ticket's pull request for Core's
+// orchestrator (no caller, no authorization).
+func (ps *PullRequests) EnsureForTicket(ctx context.Context, it tracker.Item) (PRView, error) {
+	s, err := ps.load(ctx, it)
+	if err != nil {
+		return PRView{}, err
+	}
+	cur, err := ps.Store.PullRequest(ctx, it.ID)
+	switch {
+	case errors.Is(err, ErrNotFound):
+		return ps.ensure(ctx, s, event.System)
+	case err != nil:
+		return PRView{}, err
+	}
+	pr, err := s.forge.Get(ctx, s.repo, cur.PullRequest)
+	if err != nil {
+		return PRView{}, ps.forgeErr(err)
+	}
+	if pr.State == cur.State && pr.Checks == cur.Checks && pr.Review == cur.Review && pr.HeadSHA == cur.HeadSHA {
+		return PRView{TicketPR: cur, TicketKey: it.Key}, nil
+	}
+	return ps.save(ctx, s, pr, event.System)
+}
+
+// MergeForTicket squash-merges a ticket's open pull request for Core's
+// orchestrator, when the ticket's policy allows it.
+func (ps *PullRequests) MergeForTicket(ctx context.Context, it tracker.Item) (PRView, error) {
+	s, err := ps.load(ctx, it)
+	if err != nil {
+		return PRView{}, err
+	}
+	cur, err := ps.Store.PullRequest(ctx, it.ID)
+	if err != nil {
+		return PRView{}, err
+	}
+	if err := s.forge.Merge(ctx, s.repo, cur.PullRequest, fmt.Sprintf("%s %s (#%d)", it.Key, it.Title, cur.Number)); err != nil {
+		return PRView{}, ps.forgeErr(err)
+	}
+	pr, err := s.forge.Get(ctx, s.repo, cur.PullRequest)
+	if err != nil {
+		return PRView{}, ps.forgeErr(err)
+	}
+	return ps.save(ctx, s, pr, event.System)
+}
+
+func (ps *PullRequests) ensure(ctx context.Context, s prScope, actor event.Actor) (PRView, error) {
 	branch, err := execution.BranchName(s.settings.BranchTemplate, s.ticket.Key, string(s.ticket.Type), s.ticket.Title)
 	if err != nil {
 		return PRView{}, invalid(err)
@@ -158,7 +207,7 @@ func (ps *PullRequests) Open(ctx context.Context, ticketKey string) (PRView, err
 	if err != nil {
 		return PRView{}, ps.forgeErr(err)
 	}
-	return ps.save(ctx, s, pr, actorIn(ctx, id))
+	return ps.save(ctx, s, pr, actor)
 }
 
 // Refresh reads the pull request's current state from the forge
@@ -221,6 +270,9 @@ func (ps *PullRequests) save(ctx context.Context, s prScope, pr forge.PullReques
 }
 
 func (ps *PullRequests) forgeErr(err error) error {
+	if errors.Is(err, forge.ErrNoBranch) {
+		return fmt.Errorf("%w: %w", ErrConflict, err)
+	}
 	if errors.Is(err, forge.ErrUnsupported) {
 		return fmt.Errorf("%w: %v", ErrInvalid, err)
 	}

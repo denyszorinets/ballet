@@ -123,6 +123,16 @@ func (a Adapter) Ensure(ctx context.Context, r forge.Repo, head, base, title, bo
 			return a.Get(ctx, r, p.pr())
 		}
 	}
+	// GitHub refuses a pull request of a missing head branch (422).
+	var branch struct {
+		Name string `json:"name"`
+	}
+	if err := a.do(ctx, r, http.MethodGet, repoPath(r)+"/branches/"+url.PathEscape(head), nil, &branch); err != nil {
+		if strings.Contains(err.Error(), ": 404 ") {
+			return forge.PullRequest{}, fmt.Errorf("%w: %s", forge.ErrNoBranch, head)
+		}
+		return forge.PullRequest{}, err
+	}
 	var created pullJSON
 	if err := a.do(ctx, r, http.MethodPost, repoPath(r)+"/pulls",
 		map[string]any{"title": title, "head": head, "base": base, "body": body}, &created); err != nil {

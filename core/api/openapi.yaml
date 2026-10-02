@@ -409,6 +409,50 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { type: object, additionalProperties: false, required: [yaml], properties: { yaml: { type: string } } } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/items/{item}/flow:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    get:
+      operationId: getFlow
+      tags: [pipelines]
+      summary: The ticket's way through its pipeline (404 before it started)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Flow" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/items/{item}/flow/start:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    post:
+      operationId: startFlow
+      tags: [pipelines]
+      summary: Start a ready ticket's pipeline by hand (run.manage)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Flow" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/items/{item}/flow/approve:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    post:
+      operationId: approveFlowStage
+      tags: [pipelines]
+      summary: Approve the human stage the ticket waits in (humans, tracker.write)
+      requestBody:
+        content: { application/json: { schema: { $ref: "#/components/schemas/FlowDecision" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Flow" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/items/{item}/flow/reject:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    post:
+      operationId: rejectFlowStage
+      tags: [pipelines]
+      summary: Reject the human stage the ticket waits in (humans, tracker.write)
+      requestBody:
+        content: { application/json: { schema: { $ref: "#/components/schemas/FlowDecision" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Flow" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/runs/{run}:
     parameters: [{ $ref: "#/components/parameters/Run" }]
     get:
@@ -1124,6 +1168,39 @@ components:
         checks: { type: string, enum: [none, pending, success, failure] }
         review: { type: string, enum: [none, approved, changes_requested, commented] }
         updated_at: { type: string, format: date-time }
+    Flow:
+      type: object
+      additionalProperties: false
+      required: [ticket, pipeline, pipeline_version, stages, stage, iteration, max_iterations, status, started_at, updated_at, version]
+      properties:
+        ticket: { type: string }
+        pipeline: { type: string }
+        pipeline_version: { type: integer, format: int64 }
+        stages:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, kind]
+            properties:
+              id: { type: string }
+              kind: { type: string, enum: [agent, human, platform] }
+              name: { type: string }
+        stage: { type: string }
+        iteration: { type: integer }
+        max_iterations: { type: integer }
+        status: { type: string, enum: [running, waiting, done, failed, stopped] }
+        waiting: { type: string, description: "question, approval, checks, review or merge" }
+        run: { type: string, description: The current stage's agent run }
+        outcome: { type: string, description: Of the previous stage }
+        report: { type: string, description: "The previous stage's report, handed to the next" }
+        started_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+    FlowDecision:
+      type: object
+      additionalProperties: false
+      properties: { comment: { type: string } }
     PipelineStage:
       type: object
       additionalProperties: false
