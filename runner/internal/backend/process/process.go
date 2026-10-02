@@ -30,6 +30,12 @@ type Backend struct {
 
 // Run executes spec.Command in a fresh workspace and streams its output.
 func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, out func(stream, text string)) (int, error) {
+	if b.WorkRoot != "" {
+		// A configured work directory may not exist yet.
+		if err := os.MkdirAll(b.WorkRoot, 0o700); err != nil {
+			return -1, fmt.Errorf("create work directory: %w", err)
+		}
+	}
 	ws, err := os.MkdirTemp(b.WorkRoot, "ballet-run-"+safe(runID)+"-")
 	if err != nil {
 		return -1, fmt.Errorf("create workspace: %w", err)

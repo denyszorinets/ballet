@@ -18,7 +18,7 @@ import (
 
 func newOrchestrator(t *testing.T, st *store.Store) (*app.Orchestrator, func()) {
 	t.Helper()
-	o := &app.Orchestrator{Store: st, Now: time.Now, Interval: 10 * time.Millisecond, Lease: 200 * time.Millisecond,
+	o := &app.Orchestrator{Store: st, Now: time.Now, Interval: 10 * time.Millisecond, Lease: 30 * time.Second, // never expires in a test run
 		Backoff: func(int) time.Duration { return 10 * time.Millisecond }}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

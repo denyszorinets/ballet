@@ -57,6 +57,10 @@ test-standalone: ## Test every module without the workspace (GOWORK=off)
 runner-docker-test: ## Test the Runner's Docker backend against the local Docker engine
 	cd runner && BALLET_DOCKER_TESTS=1 go test -race -count=1 -run Integration -v ./internal/backend/docker/
 
+.PHONY: failure-test
+failure-test: ## Crash Core, Runner and gateway mid-stage with the real binaries and check recovery
+	cd core && BALLET_FAILURE_TESTS=1 go test -count=1 -v ./test/failure/
+
 .PHONY: build
 build: ## Build all service binaries into bin/
 	@mkdir -p $(BIN_DIR)
