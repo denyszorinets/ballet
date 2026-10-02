@@ -38,3 +38,29 @@ func TestClient_ResolvesWithServiceTokenAndCaches(t *testing.T) {
 	_, err := c.ResolveCredential(t.Context(), "acme", "NONE", "anthropic")
 	assert.ErrorIs(t, err, core.ErrNoCredential)
 }
+
+func TestClient_ChecksBudgetsAndCachesVerdicts(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		assert.Equal(t, "/internal/v1/budget/check", r.URL.Path)
+		if r.URL.Query().Get("ticket") == "WEB-1" {
+			_, _ = w.Write([]byte(`{"allowed":false,"reason":"used up"}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"allowed":true}`))
+	}))
+	t.Cleanup(srv.Close)
+	c := &core.Client{BaseURL: srv.URL, Token: func(context.Context) (string, error) { return "svc", nil }}
+
+	for range 2 {
+		ok, reason, err := c.CheckBudget(t.Context(), "acme", "WEB", "WEB-1")
+		require.NoError(t, err)
+		assert.False(t, ok)
+		assert.Equal(t, "used up", reason)
+	}
+	ok, _, err := c.CheckBudget(t.Context(), "acme", "WEB", "WEB-2")
+	require.NoError(t, err)
+	assert.True(t, ok)
+	assert.Equal(t, int32(2), calls.Load(), "verdicts are cached per ticket")
+}

@@ -122,6 +122,13 @@ Stopping
    run (when the stage's next step runs, at the latest at the reconciler's
    next pass).
 
+Budgets
+   An agent stage starts only within budget: a used-up ticket budget
+   raises a blocking question, a used-up daily budget makes the flow wait
+   (``waiting: budget``) until the reconciler finds budget again
+   (:ref:`concepts-unattended-budgets`). A stage whose run failed while
+   over budget waits too, instead of failing.
+
 Project and organization pauses
    While the project or organization is paused, a flow waits before
    entering its next stage or merging (``waiting: pause``); a stage

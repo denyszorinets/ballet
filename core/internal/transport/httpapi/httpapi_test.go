@@ -100,6 +100,7 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		AgentTracker: &app.AgentTracker{Reports: st, RunStore: st, Items: st, Tenancy: st, Authz: authz,
 			Now: time.Now, NewID: store.NewID},
 		Flows:   &app.Flows{Store: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
+		Budgets: &app.Budgets{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 		Control: &app.Control{Store: st, Tenancy: st, Authz: authz, RunStore: st, Now: time.Now},
 		Assumptions: &app.Assumptions{Store: st, Questions: st, Reports: st, Items: st, Tenancy: st, Authz: authz,
 			Now: time.Now, NewID: store.NewID},
@@ -754,4 +755,20 @@ func TestControlAPI_PauseAndResume(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, code)
 	code, _ = call(t, api, "DELETE", "/api/v1/projects/WEB/pause", "alice", "")
 	assert.Equal(t, http.StatusNotFound, code)
+}
+
+func TestBudgetAPI_SetAndRead(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	code, out := call(t, api, "GET", "/api/v1/projects/WEB/budget", "alice", "")
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, float64(0), out["version"])
+	code, out = call(t, api, "PUT", "/api/v1/projects/WEB/budget", "alice", `{"ticket_tokens":1000,"daily_tokens":5000,"version":0}`)
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, float64(1000), out["ticket_tokens"])
+	code, _ = call(t, api, "PUT", "/api/v1/projects/WEB/budget", "alice", `{"ticket_tokens":1,"daily_tokens":1,"version":0}`)
+	assert.Equal(t, http.StatusConflict, code)
+	code, _ = call(t, api, "PUT", "/api/v1/customers/acme/budget", "alice", `{"ticket_tokens":-1,"daily_tokens":0,"version":0}`)
+	assert.Equal(t, http.StatusBadRequest, code)
 }

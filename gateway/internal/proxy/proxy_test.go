@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -33,6 +34,19 @@ func (c creds) ResolveCredential(_ context.Context, customer, project, _ string)
 	return core.Credential{}, core.ErrNoCredential
 }
 
+// budgets refuses project FULL and fails for project BROKEN.
+type budgets struct{}
+
+func (budgets) CheckBudget(_ context.Context, _, project, _ string) (bool, string, error) {
+	switch project {
+	case "FULL":
+		return false, "The daily budget of the project is used up.", nil
+	case "BROKEN":
+		return false, "", errors.New("core unavailable")
+	}
+	return true, "", nil
+}
+
 type fixture struct {
 	client   *http.Client
 	url      string
@@ -47,7 +61,8 @@ func setup(t *testing.T) fixture {
 	prov := fakeprovider.New(t, "sk-real")
 	gw := &proxy.Anthropic{
 		Verifier:   runtoken.NewStaticVerifier(ring.PublicKeys(), time.Now),
-		Core:       creds{"acme/WEB": {APIKey: "sk-real", BaseURL: prov.URL}},
+		Core:       creds{"acme/WEB": {APIKey: "sk-real", BaseURL: prov.URL}, "acme/BROKEN": {APIKey: "sk-real", BaseURL: prov.URL}},
+		Budget:     budgets{},
 		DefaultURL: "http://127.0.0.1:1",
 		// A transport per test: no pooled connections shared between tests.
 		Transport: &http.Transport{DialContext: closeTracer(t)},
@@ -204,4 +219,18 @@ func TestProxy_RejectsOversizedRequests(t *testing.T) {
 	resp := post(t, f, map[string]string{"Authorization": "Bearer " + f.issue("WEB", runtoken.CapLLMInvoke)}, body)
 	assert.Equal(t, http.StatusRequestEntityTooLarge, resp.StatusCode)
 	assert.Empty(t, f.provider.Requests(), "nothing is forwarded")
+}
+
+func TestProxy_RefusesWorkOverBudget(t *testing.T) {
+	f := setup(t)
+	body := `{"model":"m","max_tokens":10,"messages":[{"role":"user","content":"hi"}]}`
+	resp := post(t, f, map[string]string{"x-api-key": f.issue("FULL", runtoken.CapLLMInvoke)}, body)
+	defer func() { _ = resp.Body.Close() }()
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+	data, _ := io.ReadAll(resp.Body)
+	assert.Contains(t, string(data), "Ballet budget exhausted: The daily budget of the project is used up.")
+
+	ok := post(t, f, map[string]string{"x-api-key": f.issue("BROKEN", runtoken.CapLLMInvoke)}, body)
+	defer func() { _ = ok.Body.Close() }()
+	assert.Equal(t, http.StatusOK, ok.StatusCode, "a failed budget check lets the call through")
 }

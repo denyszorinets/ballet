@@ -302,6 +302,8 @@ func run() error {
 	internalapi.RegisterCredentials(internalAPI, credentials)
 	usage := &app.Usage{Store: st, Tenancy: st, Authz: authz}
 	internalapi.RegisterUsage(internalAPI, usage)
+	budgets := &app.Budgets{Store: st, Tenancy: st, Authz: authz, Now: time.Now}
+	internalapi.RegisterBudgets(internalAPI, budgets)
 	tracker := &app.Tracker{
 		Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 	}
@@ -430,7 +432,8 @@ func run() error {
 	control := &app.Control{Store: st, Tenancy: st, Authz: authz, RunStore: st, Dispatcher: dispatcher, Flows: flows,
 		Now: time.Now, Logger: svc.Logger}
 	flows.Paused, dispatcher.Held = control.Paused, control.Paused
-	scheduler := &app.Scheduler{Store: st, Start: flows.StartTicket, Paused: control.Paused, Logger: svc.Logger, MaxActive: cfg.Scheduler.MaxActive,
+	flows.Budget = budgets.CheckTicket
+	scheduler := &app.Scheduler{Store: st, Start: flows.StartTicket, Paused: control.Paused, Budget: budgets.CheckTicket, Logger: svc.Logger, MaxActive: cfg.Scheduler.MaxActive,
 		MaxActivePerProject: cfg.Scheduler.MaxActivePerProject, Interval: cfg.Scheduler.Interval}
 	flows.Changed = scheduler.Kick
 	// Start once every job kind has its handler: a job claimed without one
@@ -466,6 +469,7 @@ func run() error {
 		Flows:        flows,
 		Questions:    questions,
 		Control:      control,
+		Budgets:      budgets,
 		Assumptions: &app.Assumptions{Store: st, Questions: st, Reports: st, Items: st, Tenancy: st, Authz: authz,
 			Changesets: changesets, Now: time.Now, NewID: store.NewID},
 	})

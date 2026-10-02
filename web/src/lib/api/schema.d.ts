@@ -537,6 +537,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customers/{customer}/budget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+            };
+            cookie?: never;
+        };
+        /** The customer's token budgets and today's use (customer.read) */
+        get: operations["getCustomerBudget"];
+        /** Set the customer's token budgets (customer.update) */
+        put: operations["setCustomerBudget"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project}/budget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        /** The project's token budgets and today's use (tracker.read) */
+        get: operations["getProjectBudget"];
+        /** Set the project's token budgets (project.update) */
+        put: operations["setProjectBudget"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/questions/{question}/answer": {
         parameters: {
             query?: never;
@@ -1687,6 +1729,42 @@ export interface components {
             pause: components["schemas"]["Pause"];
             /** @description Runs cancelled */
             cancelled: number;
+        };
+        Budget: {
+            /**
+             * Format: int64
+             * @description Per ticket over its lifetime; 0: no limit
+             */
+            ticket_tokens: number;
+            /**
+             * Format: int64
+             * @description Per UTC day; 0: no limit
+             */
+            daily_tokens: number;
+            /**
+             * Format: int64
+             * @description Counted tokens used today in the scope
+             */
+            used_today: number;
+            updated_by?: string;
+            /** Format: date-time */
+            updated_at?: string;
+            /**
+             * Format: int64
+             * @description 0 when never set
+             */
+            version: number;
+        };
+        SetBudget: {
+            /** Format: int64 */
+            ticket_tokens: number;
+            /** Format: int64 */
+            daily_tokens: number;
+            /**
+             * Format: int64
+             * @description The version read; 0 for the first
+             */
+            version: number;
         };
         QuestionAnswer: {
             answer: string;
@@ -3290,6 +3368,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KillResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getCustomerBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setCustomerBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Customer key */
+                customer: components["parameters"]["Customer"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetBudget"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getProjectBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setProjectBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Project key */
+                project: components["parameters"]["Project"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetBudget"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Budget"];
                 };
             };
             default: components["responses"]["Error"];

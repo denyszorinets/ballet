@@ -31,8 +31,47 @@ type Client struct {
 	// CacheTTL bounds how long resolved credentials are reused (default 1m).
 	CacheTTL time.Duration
 
-	mu    sync.Mutex
-	cache map[string]cached
+	// BudgetTTL bounds how long a budget verdict is reused (default 30s).
+	BudgetTTL time.Duration
+
+	mu      sync.Mutex
+	cache   map[string]cached
+	budgets map[string]budgetVerdict
+}
+
+type budgetVerdict struct {
+	Allowed bool   `json:"allowed"`
+	Reason  string `json:"reason"`
+	expires time.Time
+}
+
+// CheckBudget asks Core whether work of a customer/project (and ticket)
+// may still call the LLM, cached for BudgetTTL.
+func (c *Client) CheckBudget(ctx context.Context, customer, project, ticket string) (bool, string, error) {
+	key := customer + "/" + project + "/" + ticket
+	c.mu.Lock()
+	if v, ok := c.budgets[key]; ok && time.Now().Before(v.expires) {
+		c.mu.Unlock()
+		return v.Allowed, v.Reason, nil
+	}
+	c.mu.Unlock()
+	q := url.Values{"customer": {customer}, "project": {project}, "ticket": {ticket}}
+	var v budgetVerdict
+	if _, err := c.get(ctx, "/internal/v1/budget/check?"+q.Encode(), &v); err != nil {
+		return false, "", err
+	}
+	ttl := c.BudgetTTL
+	if ttl <= 0 {
+		ttl = 30 * time.Second
+	}
+	v.expires = time.Now().Add(ttl)
+	c.mu.Lock()
+	if c.budgets == nil {
+		c.budgets = map[string]budgetVerdict{}
+	}
+	c.budgets[key] = v
+	c.mu.Unlock()
+	return v.Allowed, v.Reason, nil
 }
 
 type cached struct {

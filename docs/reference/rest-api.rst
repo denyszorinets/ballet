@@ -524,6 +524,27 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
    (its status changes when the Runner reports). ``409`` if the run has
    ended. Needs ``run.manage``.
 
+.. _reference-rest-budgets:
+
+Budgets
+-------
+
+See :ref:`concepts-unattended-budgets`.
+
+``GET /api/v1/projects/{project}/budget`` → ``200``
+   ``{"ticket_tokens", "daily_tokens", "used_today", "updated_by"?,
+   "updated_at"?, "version"}`` — limits (0: none) and the counted tokens
+   used today; ``version`` 0 when never set. Needs ``tracker.read``.
+
+``PUT /api/v1/projects/{project}/budget`` — ``{"ticket_tokens", "daily_tokens", "version"}`` → ``200``
+   Sets the limits if the budget is at ``version``. Needs
+   ``project.update``; ``400`` for negative limits, ``409`` when it
+   changed meanwhile.
+
+``GET`` and ``PUT /api/v1/customers/{customer}/budget``
+   The same for a customer (``customer.read`` / ``customer.update``); its
+   ``ticket_tokens`` applies to projects without their own.
+
 .. _reference-rest-control:
 
 Pause and kill switch

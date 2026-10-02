@@ -24,14 +24,41 @@ Keep going
 Stay within bounds
 ------------------
 
-- **Budgets** in tokens or cost per ticket, per project per day and per
-  customer per month. Reaching a ticket budget raises a question;
-  reaching a project or customer budget pauses scheduling for that scope
-  and notifies.
+- **Budgets** in tokens per ticket, per project per day and per customer
+  per day (:ref:`concepts-unattended-budgets`).
 - **Concurrency limits** globally, per customer and per project.
 - **Iteration limits** on pipeline loops.
 - **Pause and kill switch** per project and for the whole organization
   (:ref:`concepts-unattended-pause`).
+
+.. _concepts-unattended-budgets:
+
+Budgets
+-------
+
+Budgets bound the tokens unattended work uses, as the LLM gateway reports
+them. Counted are input, output and cache-write tokens; cache reads are
+not (they cost a fraction). Set them on the customer page and in the
+project settings (0: no limit):
+
+- **per ticket**, over the ticket's lifetime — the project's limit, else
+  the customer's;
+- **per day** (UTC) for a project, and for a customer across its
+  projects.
+
+When work runs out of budget:
+
+- no new stage starts: a used-up **ticket** budget raises a blocking
+  question ("raise the budget, then answer"); a used-up **daily** budget
+  makes the flow wait (``waiting: budget``) until there is budget again —
+  the next day or a raised limit — and the scheduler starts no tickets
+  there;
+- the **gateway refuses** LLM calls of that scope (``403
+  permission_error`` "Ballet budget exhausted: …"; it rechecks at most
+  every 30 seconds), so a running session stops; its stage then waits for
+  budget instead of failing.
+
+Usage today is shown next to each budget.
 
 .. _concepts-unattended-pause:
 
