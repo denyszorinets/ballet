@@ -346,6 +346,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/{item}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        /** What agent runs reported on the ticket, oldest first */
+        get: operations["listReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{item}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        /** Questions agent runs raised on the ticket, oldest first */
+        get: operations["listQuestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run}": {
         parameters: {
             query?: never;
@@ -1074,6 +1114,44 @@ export interface components {
              * @description The version read (0 the first time)
              */
             version: number;
+        };
+        Report: {
+            id: string;
+            run: string;
+            /** @enum {string} */
+            kind: "progress" | "stage_report" | "assumption";
+            /**
+             * @description Stage reports
+             * @enum {string}
+             */
+            outcome?: "done" | "blocked" | "failed";
+            /** @description Markdown */
+            text: string;
+            /** @description Stage reports: details; assumptions: rationale */
+            detail?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        ReportList: {
+            items: components["schemas"]["Report"][];
+        };
+        Question: {
+            id: string;
+            run?: string;
+            text: string;
+            context?: string;
+            blocking: boolean;
+            /** @enum {string} */
+            status: "open" | "answered";
+            answer?: string;
+            answered_by?: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            answered_at?: string;
+        };
+        QuestionList: {
+            items: components["schemas"]["Question"][];
         };
         /** @enum {string} */
         RunStatus: "queued" | "starting" | "running" | "succeeded" | "failed" | "cancelled";
@@ -2257,6 +2335,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ExecutionSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listReports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listQuestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionList"];
                 };
             };
             default: components["responses"]["Error"];

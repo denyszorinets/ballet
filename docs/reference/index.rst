@@ -13,4 +13,5 @@ Exact, exhaustive descriptions of configuration and interfaces.
    runners
    llm-gateway
    knowledge-mcp
+   tracker-mcp
    run-tokens

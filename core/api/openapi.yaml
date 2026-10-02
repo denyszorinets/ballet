@@ -284,6 +284,26 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ExecutionSettings" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/items/{item}/reports:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    get:
+      operationId: listReports
+      tags: [runs]
+      summary: What agent runs reported on the ticket, oldest first
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ReportList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/items/{item}/questions:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    get:
+      operationId: listQuestions
+      tags: [runs]
+      summary: Questions agent runs raised on the ticket, oldest first
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/QuestionList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/runs/{run}:
     parameters: [{ $ref: "#/components/parameters/Run" }]
     get:
@@ -936,6 +956,43 @@ components:
         git_name: { type: string }
         git_email: { type: string }
         version: { type: integer, format: int64, description: "The version read (0 the first time)" }
+    Report:
+      type: object
+      additionalProperties: false
+      required: [id, run, kind, text, created_at]
+      properties:
+        id: { type: string }
+        run: { type: string }
+        kind: { type: string, enum: [progress, stage_report, assumption] }
+        outcome: { type: string, enum: [done, blocked, failed], description: Stage reports }
+        text: { type: string, description: Markdown }
+        detail: { type: string, description: "Stage reports: details; assumptions: rationale" }
+        created_at: { type: string, format: date-time }
+    ReportList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Report" } } }
+    Question:
+      type: object
+      additionalProperties: false
+      required: [id, text, blocking, status, created_at]
+      properties:
+        id: { type: string }
+        run: { type: string }
+        text: { type: string }
+        context: { type: string }
+        blocking: { type: boolean }
+        status: { type: string, enum: [open, answered] }
+        answer: { type: string }
+        answered_by: { type: string }
+        created_at: { type: string, format: date-time }
+        answered_at: { type: string, format: date-time }
+    QuestionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Question" } } }
     RunStatus: { type: string, enum: [queued, starting, running, succeeded, failed, cancelled] }
     RunSpec:
       type: object

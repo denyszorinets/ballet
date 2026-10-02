@@ -34,6 +34,8 @@ export interface FakeCore {
 	execution: Record<string, Record<string, unknown>>;
 	/** Git tokens by project key (as the fake received them). */
 	gitTokens: Record<string, string>;
+	/** Agent activity by item key: runs, reports, questions (API shapes). */
+	activity: Record<string, { runs?: unknown[]; reports?: unknown[]; questions?: unknown[] }>;
 }
 
 export interface FakePlannerSession {
@@ -208,6 +210,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		changesets: [],
 		execution: {},
 		gitTokens: {},
+		activity: {},
 		...state
 	};
 	const itemJSON = (i: FakeItem) => withTimes(i);
@@ -358,6 +361,12 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			const it = core.items.find((i) => i.key === m![1]);
 			if (!it) return err(r, 404, 'not_found', 'item not found');
 			const sub = m[2] ?? '';
+			if (sub === '/runs' || sub === '/reports' || sub === '/questions') {
+				const a = core.activity[it.key] ?? {};
+				return r.fulfill({
+					json: { items: a[sub.slice(1) as 'runs' | 'reports' | 'questions'] ?? [] }
+				});
+			}
 			if (sub === '' && method === 'PATCH') {
 				if (body.version !== it.version) return err(r, 409, 'conflict', 'stale version');
 				const changes = { ...body };

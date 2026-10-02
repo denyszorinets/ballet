@@ -100,3 +100,78 @@ test('the board fits a phone screen without page-level horizontal scrolling', as
 	);
 	expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test('the item page shows agent activity', async ({ page }) => {
+	await fakeOIDC(page);
+	const at = '2026-10-01T10:00:00Z';
+	await fakeCore(page, {
+		me: [{ role: 'viewer', scope: 'customer:acme' }],
+		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		projects: [
+			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web shop', description: '', version: 1 }
+		],
+		items: [ticket(1, 'in_progress', 'Login')],
+		activity: {
+			'WEB-1': {
+				runs: [
+					{
+						id: 'r1',
+						project: 'WEB',
+						ticket: 'WEB-1',
+						stage: 'implement',
+						status: 'succeeded',
+						spec: { command: ['x'] },
+						adapter: 'claude-code',
+						result: { summary: 'Login works.', turns: 4, cost_usd: 0.3 },
+						created_by: 'alice',
+						created_at: at,
+						started_at: at,
+						version: 3
+					}
+				],
+				reports: [
+					{
+						id: 'p1',
+						run: 'r1',
+						kind: 'assumption',
+						text: 'Sessions last 8 hours.',
+						detail: 'Common default.',
+						created_at: at
+					},
+					{
+						id: 'p2',
+						run: 'r1',
+						kind: 'stage_report',
+						outcome: 'done',
+						text: 'Implemented login.',
+						created_at: at
+					}
+				],
+				questions: [
+					{
+						id: 'q1',
+						run: 'r1',
+						text: 'Which IdP for staff?',
+						context: 'Keycloak or Entra.',
+						blocking: true,
+						status: 'open',
+						created_at: at
+					}
+				]
+			}
+		}
+	});
+	await page.goto('/items/WEB-1');
+	await page.getByRole('button', { name: 'Sign in' }).click();
+
+	await expect(page.getByRole('heading', { name: 'Agent activity' })).toBeVisible();
+	await expect(page.getByRole('list', { name: 'Open questions' })).toContainText(
+		'Blocking question: Which IdP for staff?'
+	);
+	const runs = page.getByRole('table', { name: 'Runs' });
+	await expect(runs).toContainText('implement · claude-code');
+	await expect(runs).toContainText('Login works.');
+	const reports = page.getByRole('list', { name: 'Agent reports' });
+	await expect(reports.getByRole('listitem').first()).toContainText('stage report: done');
+	await expect(reports).toContainText('Sessions last 8 hours.');
+});

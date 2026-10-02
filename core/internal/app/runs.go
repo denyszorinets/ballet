@@ -92,7 +92,7 @@ func (rs *Runs) CreateAgent(ctx context.Context, ticketKey, stage string, in Age
 		return RunView{}, fmt.Errorf("%w: the prompt must be at most 20000 characters", ErrInvalid)
 	}
 	return rs.create(ctx, ticketKey, stage, func(it tracker.Item, p tenancy.Project) (run.Spec, string, error) {
-		bundle, err := rs.bundle(ctx, it, p, stage, in.Prompt)
+		bundle, err := rs.Bundle(ctx, it, p, stage, in.Prompt)
 		if err != nil {
 			return run.Spec{}, "", err
 		}
@@ -121,9 +121,9 @@ Use the knowledge tools to look up and record what the project knows.
 Work in the current repository on the current branch, commit and push.
 End with a short summary of what you did and what is left.`
 
-// bundle gathers a run's onboarding bundle (best effort: missing context
+// Bundle gathers a run's onboarding bundle (best effort: missing context
 // does not stop the run).
-func (rs *Runs) bundle(ctx context.Context, it tracker.Item, p tenancy.Project, stage, extra string) (onboarding.Bundle, error) {
+func (rs *Runs) Bundle(ctx context.Context, it tracker.Item, p tenancy.Project, stage, extra string) (onboarding.Bundle, error) {
 	b := onboarding.Bundle{
 		Project: p.Key, Stage: stage, StageInstructions: onboarding.DefaultStageInstructions(stage),
 		Ticket: onboarding.Item{Key: it.Key, Kind: string(it.Kind), Title: it.Title, State: string(it.State), Description: it.Description},

@@ -17,6 +17,9 @@
 	let deps = $state<Dependency[]>([]);
 	let history = $state<Event[]>([]);
 	let knowledge = $state<Schemas['KnowledgeEntry'][]>([]);
+	let runs = $state<Schemas['Run'][]>([]);
+	let reports = $state<Schemas['Report'][]>([]);
+	let questions = $state<Schemas['Question'][]>([]);
 	const itemQuery = $derived(`?item=${encodeURIComponent(key)}`);
 	let error = $state<string>();
 	let actionError = $state<string>();
@@ -40,10 +43,13 @@
 
 	async function load(s: Session, k: string) {
 		const path = { params: { path: { item: k } } };
-		const [it, d, h] = await Promise.all([
+		const [it, d, h, rn, rp, q] = await Promise.all([
 			s.api.GET('/api/v1/items/{item}', path),
 			s.api.GET('/api/v1/items/{item}/dependencies', path),
-			s.api.GET('/api/v1/items/{item}/history', path)
+			s.api.GET('/api/v1/items/{item}/history', path),
+			s.api.GET('/api/v1/items/{item}/runs', path),
+			s.api.GET('/api/v1/items/{item}/reports', path),
+			s.api.GET('/api/v1/items/{item}/questions', path)
 		]);
 		if (!it.data) {
 			error = apiError(it.error);
@@ -52,6 +58,9 @@
 		item = it.data;
 		deps = d.data?.items ?? [];
 		history = h.data?.items ?? [];
+		runs = rn.data?.items ?? [];
+		reports = rp.data?.items ?? [];
+		questions = q.data?.items ?? [];
 		if (!customer || containers.length === 0) {
 			const pp = { params: { path: { project: it.data.project } } };
 			const [p, list] = await Promise.all([
@@ -347,6 +356,55 @@
 		{/if}
 	{/if}
 
+	{#if runs.length || reports.length || questions.length}
+		<h2>Agent activity</h2>
+		{#if questions.some((q) => q.status === 'open')}
+			<ul class="activity" aria-label="Open questions">
+				{#each questions.filter((q) => q.status === 'open') as q (q.id)}
+					<li class="question" class:blocking={q.blocking}>
+						<strong>{q.blocking ? 'Blocking question' : 'Question'}:</strong>
+						{q.text}
+						{#if q.context}<div class="muted small">{q.context}</div>{/if}
+					</li>
+				{/each}
+			</ul>
+		{/if}
+		{#if runs.length}
+			<div class="table-wrap">
+				<table aria-label="Runs">
+					<thead><tr><th>Stage</th><th>Status</th><th>Result</th><th>Started</th></tr></thead>
+					<tbody>
+						{#each [...runs].reverse() as r (r.id)}
+							<tr>
+								<td>{r.stage}{r.adapter ? ` · ${r.adapter}` : ''}</td>
+								<td><span class="badge" data-status={r.status}>{r.status}</span></td>
+								<td class="small">{r.result?.summary ?? r.error ?? ''}</td>
+								<td class="muted small"
+									>{r.started_at ? new Date(r.started_at).toLocaleString() : ''}</td
+								>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
+		{#if reports.length}
+			<ul class="activity" aria-label="Agent reports">
+				{#each [...reports].reverse() as r (r.id)}
+					<li>
+						<span class="badge">{r.kind.replace('_', ' ')}{r.outcome ? `: ${r.outcome}` : ''}</span>
+						{r.text}
+						{#if r.detail}<details>
+								<summary class="muted small">Details</summary>
+								<div class="markdown">{r.detail}</div>
+							</details>{/if}
+						<span class="muted small">{new Date(r.created_at).toLocaleString()}</span>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	{/if}
+
 	<h2>History</h2>
 	<ol class="history">
 		{#each history as e (e.seq)}
@@ -360,6 +418,23 @@
 {/if}
 
 <style>
+	.activity {
+		list-style: none;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+	.activity .question {
+		border-left: 3px solid var(--warn);
+		padding-left: 0.5rem;
+	}
+	.activity .question.blocking {
+		border-left-color: var(--danger);
+	}
+	.small {
+		font-size: 0.85rem;
+	}
 	.crumbs {
 		margin-bottom: 0.75rem;
 		font-size: 0.9rem;

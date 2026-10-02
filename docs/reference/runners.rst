@@ -96,9 +96,9 @@ repository, so agents cannot commit it:
 - ``.claude/skills/<name>/SKILL.md`` and the skill's files — the
   project's skills in the versions it resolves (pins apply);
 - ``.claude/CLAUDE.md`` — standing instructions (ticket, stage);
-- ``.claude.json`` — MCP servers: the customer's knowledge
-  (:doc:`knowledge-mcp`), authenticated with the run's token
-  (``Bearer ${BALLET_RUN_TOKEN}``, expanded by Claude Code).
+- ``.claude.json`` — MCP servers: the tracker (:doc:`tracker-mcp`) and
+  the customer's knowledge (:doc:`knowledge-mcp`), authenticated with the
+  run's token (``Bearer ${BALLET_RUN_TOKEN}``, expanded by Claude Code).
 
 **Onboarding bundle.** The prompt is the run's onboarding bundle, built
 by Core when the run is queued (Markdown, at most 60 000 bytes):
