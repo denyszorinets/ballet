@@ -48,3 +48,23 @@ test('viewers see the budget read-only', async ({ page }) => {
 	await expect(budget.getByRole('spinbutton', { name: 'Per day' })).toBeDisabled();
 	await expect(budget.getByRole('button', { name: 'Save budget' })).toHaveCount(0);
 });
+
+test('customer admins store an LLM key without seeing it again', async ({ page }) => {
+	await fakeOIDC(page);
+	const core = await fakeCore(page, {
+		me: [{ role: 'customer-admin', scope: 'customer:acme' }],
+		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }]
+	});
+	await fakeRealtime(page, async () => ({}));
+	await page.goto('/customers/acme');
+	await page.getByRole('button', { name: 'Sign in' }).click();
+
+	const creds = page.getByRole('region', { name: 'LLM credentials' });
+	await expect(creds).toContainText('No key yet');
+	await creds.getByLabel('API key').fill('sk-ant-secret-1234');
+	await creds.getByRole('button', { name: 'Save key' }).click();
+	await expect(creds.getByRole('status')).toHaveText('Saved the anthropic key.');
+	await expect(creds).toContainText('sha256:1234');
+	await expect(creds).not.toContainText('sk-ant-secret');
+	expect(core.llmKeys['acme/anthropic']).toBe('sk-ant-secret-1234');
+});

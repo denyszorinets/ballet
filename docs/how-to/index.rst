@@ -7,4 +7,5 @@ Focused recipes for operating and developing Ballet.
    :maxdepth: 1
 
    run-locally
+   install-single-host
    configure-oidc

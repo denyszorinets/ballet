@@ -30,7 +30,9 @@ make run          # build the web UI into Core, build all services, run everythi
 
 Open http://localhost:8080 and sign in as `alice` / `alice`. Needs Go,
 Bun and Java 21+ (for the development Keycloak); see
-[Run Ballet locally](docs/how-to/run-locally.rst).
+[Run Ballet locally](docs/how-to/run-locally.rst). To install it with
+containers on one host, see
+[Install Ballet on one host](docs/how-to/install-single-host.rst).
 
 ## Development
 

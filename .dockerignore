@@ -1,8 +1,12 @@
+# Build context of deploy/Containerfile: sources only.
 .git
-.devcontainer
-docs/_build
-docs/.venv
+.run
+bin
 **/node_modules
 web/build
 web/.svelte-kit
-**/*.db
+web/test-results
+web/playwright-report
+docs
+core/internal/transport/webui/dist
+*.db

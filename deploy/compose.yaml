@@ -1,0 +1,72 @@
+# Ballet on one host (Linux):
+#   docker compose -f deploy/compose.yaml up -d --build
+# See docs/how-to/install-single-host.rst. Every service uses the host's
+# network, so they find each other — and the browser finds them — on
+# localhost with the same ports as `make run`. Agent sessions run as
+# sibling containers through the host's Docker engine.
+name: ballet
+
+x-service: &service
+  network_mode: host
+  restart: unless-stopped
+
+services:
+  keycloak:
+    <<: *service
+    profiles: ["keycloak"] # the development realm; production uses its own IdP
+    image: quay.io/keycloak/keycloak:26.7.5
+    command: ["start-dev", "--http-port", "8180", "--hostname", "http://localhost:8180", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    volumes:
+      - ./dev/keycloak/ballet-realm.json:/opt/keycloak/data/import/ballet-realm.json:ro
+
+  core:
+    <<: *service
+    build: { context: .., dockerfile: deploy/Containerfile, target: core }
+    image: ballet-core
+    environment:
+      BALLET_CORE_OIDC_ISSUER_URL: ${BALLET_OIDC_ISSUER_URL:-http://localhost:8180/realms/ballet}
+      BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS: ${BALLET_ORG_ADMINS:-groups:ballet-admins}
+      BALLET_CORE_LOG_LEVEL: ${BALLET_LOG_LEVEL:-info}
+    volumes:
+      - ballet-data:/var/lib/ballet/data
+
+  knowledge:
+    <<: *service
+    build: { context: .., dockerfile: deploy/Containerfile, target: knowledge }
+    image: ballet-knowledge
+    depends_on: [core]
+    volumes:
+      # Its database and the token Core issues it (data/service-tokens).
+      - ballet-data:/var/lib/ballet/data
+
+  gateway:
+    <<: *service
+    build: { context: .., dockerfile: deploy/Containerfile, target: gateway }
+    image: ballet-gateway
+    depends_on: [core]
+    environment:
+      BALLET_GATEWAY_ANTHROPIC_URL: ${BALLET_ANTHROPIC_URL:-https://api.anthropic.com}
+    volumes:
+      - ballet-data:/var/lib/ballet/data:ro
+
+  runner:
+    <<: *service
+    build: { context: .., dockerfile: deploy/Containerfile, target: runner }
+    image: ballet-runner
+    depends_on: [core]
+    environment:
+      BALLET_RUNNER_RUNNER_NAME: ${BALLET_RUNNER_NAME:-host}
+      BALLET_RUNNER_RUNNER_CAPACITY: ${BALLET_RUNNER_CAPACITY:-2}
+      BALLET_RUNNER_RUNNER_BACKEND: docker
+      # Agent containers share the host network to reach the gateway,
+      # Knowledge and Core's tracker on localhost.
+      BALLET_RUNNER_DOCKER_NETWORK: host
+    volumes:
+      - ballet-data:/var/lib/ballet/data:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  ballet-data:
