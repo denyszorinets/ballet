@@ -70,6 +70,7 @@ type serviceConfig struct {
 	Planner   plannerConfig   `toml:"planner"`
 	Agents    agentsConfig    `toml:"agents"`
 	Forge     forgeConfig     `toml:"forge"`
+	Scheduler schedulerConfig `toml:"scheduler"`
 }
 
 // gatewayConfig locates the LLM gateway (ADR-0011), used by the planner.
@@ -91,6 +92,14 @@ type plannerConfig struct {
 // forgeConfig configures following pull requests (ADR-0007).
 type forgeConfig struct {
 	PollInterval time.Duration `toml:"poll_interval"` // refresh of open pull requests
+}
+
+// schedulerConfig configures starting runnable tickets automatically.
+type schedulerConfig struct {
+	Enabled             bool          `toml:"enabled"`
+	MaxActive           int           `toml:"max_active"`             // flows occupying a slot, globally
+	MaxActivePerProject int           `toml:"max_active_per_project"` // and per project
+	Interval            time.Duration `toml:"interval"`               // how often to look for runnable tickets
 }
 
 // agentsConfig configures coding-agent runs (ADR-0003).
@@ -169,6 +178,7 @@ func defaultConfig() serviceConfig {
 		Knowledge: knowledgeConfig{URL: "http://localhost:8081"},
 		Gateway:   gatewayConfig{URL: "http://localhost:8082"},
 		Forge:     forgeConfig{PollInterval: time.Minute},
+		Scheduler: schedulerConfig{Enabled: true, MaxActive: 4, MaxActivePerProject: 2, Interval: 10 * time.Second},
 		Agents: agentsConfig{ClaudeCommand: "claude", RunTokenTTL: 3 * time.Hour,
 			TrackerMCPURL: "http://localhost:8080" + trackermcp.Path},
 		Planner: plannerConfig{
@@ -190,6 +200,10 @@ func (c serviceConfig) Validate() error {
 	}
 	if c.Forge.PollInterval < 10*time.Second {
 		errs = append(errs, errors.New("forge.poll_interval must be at least 10s"))
+	}
+	if c.Scheduler.MaxActive < 1 || c.Scheduler.MaxActivePerProject < 1 || c.Scheduler.Interval < time.Second {
+		errs = append(errs, errors.New("scheduler.max_active and scheduler.max_active_per_project must be at least 1, "+
+			"scheduler.interval at least 1s"))
 	}
 	if c.Agents.RunTokenTTL < 10*time.Minute {
 		errs = append(errs, errors.New("agents.run_token_ttl must be at least 10m"))
@@ -394,10 +408,16 @@ func run() error {
 		Logger: svc.Logger}
 	flows.Register(orchestrator)
 	dispatcher.OnFinished = flows.RunFinished
+	scheduler := &app.Scheduler{Store: st, Start: flows.StartTicket, Logger: svc.Logger, MaxActive: cfg.Scheduler.MaxActive,
+		MaxActivePerProject: cfg.Scheduler.MaxActivePerProject, Interval: cfg.Scheduler.Interval}
+	flows.Changed = scheduler.Kick
 	// Start once every job kind has its handler: a job claimed without one
 	// would be marked dead.
 	go orchestrator.Run(ctx)
 	go dispatcher.Run(ctx)
+	if cfg.Scheduler.Enabled {
+		go scheduler.Run(ctx)
+	}
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,

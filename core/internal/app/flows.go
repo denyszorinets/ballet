@@ -89,6 +89,9 @@ type Flows struct {
 	// CheckInterval between checks of a pull request waiting for checks,
 	// approval or merge; default 30 s.
 	CheckInterval time.Duration
+	// Changed, when set, is called after flows move on, which may free a
+	// scheduler slot or unblock tickets (Scheduler.Kick).
+	Changed func()
 }
 
 // FlowView is a flow with its ticket's key.
@@ -195,6 +198,9 @@ func (fl *Flows) start(ctx context.Context, it tracker.Item, c tenancy.Customer,
 func (fl *Flows) kick() {
 	if fl.Orchestrator != nil {
 		fl.Orchestrator.Kick()
+	}
+	if fl.Changed != nil {
+		fl.Changed()
 	}
 }
 
@@ -319,7 +325,11 @@ func (fl *Flows) stop(ctx context.Context, f Flow, it tracker.Item, c tenancy.Cu
 	next := f
 	next.Status, next.Waiting, next.UpdatedAt, next.Version = FlowStopped, "", fl.Now(), f.Version+1
 	e := fl.itemEvent(it, c.ID, "flow.stopped", event.System, map[string]any{"stage": f.Stage, "state": it.State})
-	return ignoreConflict(fl.Store.SaveFlow(ctx, next, f.Version, nil, nil, []event.Event{e}))
+	if err := fl.Store.SaveFlow(ctx, next, f.Version, nil, nil, []event.Event{e}); err != nil {
+		return ignoreConflict(err)
+	}
+	fl.kick()
+	return nil
 }
 
 // ignoreConflict treats losing a race as success: another transition
