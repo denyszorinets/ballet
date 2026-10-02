@@ -378,6 +378,11 @@ func run() error {
 		},
 	}
 	go pullRequests.Poll(ctx, cfg.Forge.PollInterval)
+	adapterNames := make([]string, 0, len(agents))
+	for name := range agents {
+		adapterNames = append(adapterNames, name)
+	}
+	pipelines := &app.Pipelines{Store: st, Tenancy: st, Authz: authz, Adapters: adapterNames, Now: time.Now}
 	httpapi.Register(svc.Mux, httpapi.Deps{
 		Authenticate: oidc.Middleware(verifier),
 		TokenKeys:    tokenKeys,
@@ -398,6 +403,7 @@ func run() error {
 		Execution:    &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 		AgentTracker: agentTracker,
 		PullRequests: pullRequests,
+		Pipelines:    pipelines,
 	})
 
 	searchIndexer := &app.SearchIndexer{

@@ -99,6 +99,7 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		Execution:    &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 		AgentTracker: &app.AgentTracker{Reports: st, RunStore: st, Items: st, Tenancy: st, Authz: authz,
 			Now: time.Now, NewID: store.NewID},
+		Pipelines: &app.Pipelines{Store: st, Tenancy: st, Authz: authz, Adapters: []string{"claude-code"}, Now: time.Now},
 		PullRequests: &app.PullRequests{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now,
 			Token: func(context.Context, string, string) (string, error) { return "", nil }},
 		Runs: &app.Runs{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID,
@@ -649,4 +650,41 @@ func TestPullRequestAPI_WithoutRepository(t *testing.T) {
 	code, out := call(t, api, "POST", "/api/v1/items/WEB-1/pull-request", "alice", "")
 	assert.Equal(t, http.StatusBadRequest, code, out)
 	assert.Contains(t, out["message"], "has no repository")
+}
+
+func TestPipelineAPI_TemplateSaveYAML(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+
+	code, p := call(t, api, "GET", "/api/v1/projects/WEB/pipelines/default", "alice", "")
+	require.Equal(t, http.StatusOK, code, p)
+	assert.Equal(t, 0.0, p["version"])
+	def := p["definition"]
+
+	code, y := call(t, api, "POST", "/api/v1/pipelines/render", "alice", toJSON(t, map[string]any{"definition": def}))
+	require.Equal(t, http.StatusOK, code, y)
+	assert.Contains(t, y["yaml"], "id: implement")
+	code, parsed := call(t, api, "POST", "/api/v1/pipelines/parse", "alice", toJSON(t, map[string]any{"yaml": y["yaml"]}))
+	require.Equal(t, http.StatusOK, code, parsed)
+	assert.Empty(t, parsed["errors"])
+	code, parsed = call(t, api, "POST", "/api/v1/pipelines/parse", "alice", `{"yaml":"stages: []\nmax_iterations: 0\n"}`)
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, parsed["errors"], 2)
+
+	code, saved := call(t, api, "PUT", "/api/v1/projects/WEB/pipelines/default", "alice", toJSON(t, map[string]any{"definition": def, "version": 0}))
+	require.Equal(t, http.StatusOK, code, saved)
+	assert.Equal(t, 1.0, saved["version"])
+	code, _ = call(t, api, "PUT", "/api/v1/projects/WEB/pipelines/default", "alice", toJSON(t, map[string]any{"definition": def, "version": 0}))
+	assert.Equal(t, http.StatusConflict, code)
+	code, list := call(t, api, "GET", "/api/v1/projects/WEB/pipelines/default/versions", "alice", "")
+	require.Equal(t, http.StatusOK, code)
+	assert.Len(t, list["items"], 1)
+}
+
+func toJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	require.NoError(t, err)
+	return string(b)
 }
