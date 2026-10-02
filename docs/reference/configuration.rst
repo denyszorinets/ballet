@@ -229,8 +229,10 @@ Public OIDC client the web UI signs in with; published to the browser in
 
 Directory of the built web UI (``make web-build`` → ``web/build``). When
 set, Core serves it at ``/``, falling back to ``index.html`` for
-client-side routes. Empty: the UI is not served (development uses the
-Vite dev server).
+client-side routes. Empty: Core serves the UI embedded in its binary
+when built with the ``bindata`` tag (``make bundle``,
+:doc:`/how-to/run-locally`), else none (development uses the Vite dev
+server).
 
 :Type: string (path)
 :Default: ``""``

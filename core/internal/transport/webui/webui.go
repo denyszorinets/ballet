@@ -1,6 +1,7 @@
 // Package webui serves the web UI: its public runtime configuration
 // (/config.json) and, optionally, the static SPA bundle with a fallback to
-// index.html for client-side routes.
+// index.html for client-side routes. The bundle is a directory, or embedded
+// in the binary when built with the bindata tag (see Bundled).
 package webui
 
 import (
@@ -8,9 +9,7 @@ import (
 	"errors"
 	"io/fs"
 	"net/http"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 )
 
@@ -18,7 +17,7 @@ import (
 type Config struct {
 	OIDCIssuer string // issuer the SPA logs in with
 	ClientID   string // public OIDC client of the SPA
-	Dir        string // built SPA (web/build); empty: not served
+	Assets     fs.FS  // built SPA (web/build); nil: not served
 }
 
 type configJSON struct {
@@ -28,7 +27,7 @@ type configJSON struct {
 	} `json:"oidc"`
 }
 
-// Register mounts /config.json and, with Dir set, the SPA on mux.
+// Register mounts /config.json and, with Assets set, the SPA on mux.
 func Register(mux *http.ServeMux, c Config) {
 	var cfg configJSON
 	cfg.OIDC.Issuer, cfg.OIDC.ClientID = c.OIDCIssuer, c.ClientID
@@ -38,21 +37,28 @@ func Register(mux *http.ServeMux, c Config) {
 		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write(body)
 	})
-	if c.Dir != "" {
-		mux.Handle("GET /", spa(c.Dir))
+	if c.Assets != nil {
+		// "/" rather than "GET /": the latter would conflict with routes
+		// registered for every method on a narrower path.
+		mux.Handle("/", spa(c.Assets))
 	}
 }
 
-// spa serves files from dir; paths without a file extension that do not
-// exist are client-side routes and get index.html.
-func spa(dir string) http.Handler {
-	files := http.FileServer(http.Dir(dir))
+// spa serves files from assets; paths without a file extension that do
+// not exist are client-side routes and get index.html.
+func spa(assets fs.FS) http.Handler {
+	files := http.FileServerFS(assets)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 		clean := path.Clean("/" + r.URL.Path)
-		_, err := os.Stat(filepath.Join(dir, filepath.FromSlash(clean)))
+		_, err := fs.Stat(assets, strings.TrimPrefix(clean, "/"))
 		if errors.Is(err, fs.ErrNotExist) && !strings.Contains(path.Base(clean), ".") {
 			w.Header().Set("Cache-Control", "no-cache")
-			http.ServeFile(w, r, filepath.Join(dir, "index.html"))
+			http.ServeFileFS(w, r, assets, "index.html")
 			return
 		}
 		if strings.HasPrefix(clean, "/_app/immutable/") {

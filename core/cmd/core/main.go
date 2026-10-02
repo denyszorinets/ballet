@@ -142,7 +142,7 @@ type servicesConfig struct {
 // webConfig configures the web UI.
 type webConfig struct {
 	ClientID string `toml:"client_id"` // public OIDC client of the SPA
-	Dir      string `toml:"dir"`       // built SPA to serve; empty: not served
+	Dir      string `toml:"dir"`       // built SPA to serve; empty: the embedded one, if any
 }
 
 // rbacConfig configures authorization.
@@ -483,7 +483,12 @@ func run() error {
 		Options:  rpc.Options{Logger: svc.Logger},
 	})
 
-	webui.Register(svc.Mux, webui.Config{OIDCIssuer: cfg.OIDC.IssuerURL, ClientID: cfg.Web.ClientID, Dir: cfg.Web.Dir})
+	// web.dir overrides the SPA embedded in a bindata build.
+	assets := webui.Bundled()
+	if cfg.Web.Dir != "" {
+		assets = os.DirFS(cfg.Web.Dir)
+	}
+	webui.Register(svc.Mux, webui.Config{OIDCIssuer: cfg.OIDC.IssuerURL, ClientID: cfg.Web.ClientID, Assets: assets})
 
 	return svc.ListenAndServe(ctx)
 }

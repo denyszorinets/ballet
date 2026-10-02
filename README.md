@@ -22,6 +22,16 @@ make docs-serve   # live preview on http://127.0.0.1:8000
 make docs-check   # strict build + link check
 ```
 
+## Run it
+
+```bash
+make run          # build the web UI into Core, build all services, run everything
+```
+
+Open http://localhost:8080 and sign in as `alice` / `alice`. Needs Go,
+Bun and Java 21+ (for the development Keycloak); see
+[Run Ballet locally](docs/how-to/run-locally.rst).
+
 ## Development
 
 Go (backend services) and Svelte (web UI). Run `make help` for all

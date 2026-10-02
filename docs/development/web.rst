@@ -16,6 +16,10 @@ Setup
 Run locally
 -----------
 
+``make run`` builds the UI into Core and runs the whole system on
+http://localhost:8080 (:doc:`/how-to/run-locally`). For UI work, run the
+Vite dev server for hot reload instead:
+
 .. code-block:: bash
 
    go run ./core/cmd/core          # Core on :8080
