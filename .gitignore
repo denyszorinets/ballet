@@ -44,3 +44,4 @@ Thumbs.db
 # Embedded web UI (make bundle) and local run state (make run)
 /core/internal/transport/webui/dist/
 /.run/
+/.run-rehearsal/
