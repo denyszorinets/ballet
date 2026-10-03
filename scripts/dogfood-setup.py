@@ -12,8 +12,14 @@ Environment:
   ANTHROPIC_API_KEY   key for the customer's agent sessions and planner
   GITHUB_TOKEN        token that can push branches and open pull requests
   BALLET_REPO         repository (default https://github.com/denyszorinets/ballet.git)
+  ISSUES_REPO         owner/name whose issues --import-issues reads
+                      (default: from BALLET_REPO)
   BALLET_AGENT_IMAGE  image of agent sessions with the Docker backend
                       (default ballet-dogfood, deploy/agent/ballet.Containerfile)
+  BALLET_FORGE        github (default) or git (a repository without GitHub,
+                      e.g. a local mirror for a rehearsal)
+  ISSUES_TOKEN        token reading GitHub issues for --import-issues
+                      (default GITHUB_TOKEN)
   TICKET_TOKENS, DAILY_TOKENS   budgets (default 3,000,000 and 30,000,000)
 
 --import-issues creates a backlog ticket for every open GitHub issue
@@ -100,7 +106,7 @@ def setup_execution():
         "image": os.environ.get("BALLET_AGENT_IMAGE", "ballet-dogfood"),
         "branch_template": "feature/{ticket}_{slug}",
         "git_name": "Ballet", "git_email": "ballet@users.noreply.github.com",
-        "forge": "github", "version": ex["version"]})
+        "forge": os.environ.get("BALLET_FORGE", "github"), "version": ex["version"]})
 
 
 def frontmatter(text):
@@ -152,9 +158,10 @@ def setup_budget():
 
 def import_issues():
     step("tickets from open GitHub task issues")
-    owner_repo = re.sub(r"(\.git)?$", "", REPO.split("github.com/")[-1])
+    owner_repo = os.environ.get("ISSUES_REPO") or re.sub(r"(\.git)?$", "", REPO.split("github.com/")[-1])
     req = urllib.request.Request(f"https://api.github.com/repos/{owner_repo}/issues?state=open&labels=task&per_page=100",
-                                 headers={"Authorization": "Bearer " + need("GITHUB_TOKEN"),
+                                 headers={"Authorization": "Bearer " + (os.environ.get("ISSUES_TOKEN")
+                                                                        or need("GITHUB_TOKEN")),
                                           "Accept": "application/vnd.github+json"})
     with urllib.request.urlopen(req) as r:
         issues = [i for i in json.load(r) if "pull_request" not in i]

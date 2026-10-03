@@ -49,9 +49,36 @@ after changing skills or settings. It
 - with ``--import-issues``, creates a backlog ticket for every open
   GitHub issue labelled ``task``, with its acceptance criteria.
 
-Other settings: ``BALLET_URL`` (default ``http://localhost:8080``),
+Other settings: ``BALLET_FORGE`` (``github`` or ``git``),
+``ISSUES_TOKEN`` and ``ISSUES_REPO`` (where ``--import-issues`` reads),
+``BALLET_URL`` (default ``http://localhost:8080``),
 ``BALLET_TOKEN`` (an organization admin's bearer token; default: the
 development realm's ``alice``), ``BALLET_REPO``, ``BALLET_AGENT_IMAGE``.
+
+Rehearse first
+--------------
+
+A rehearsal runs the same setup without real credentials and without
+touching GitHub: a local mirror as the repository, the plain git forge,
+and the fake LLM, whose scripted tool call makes each session commit and
+push.
+
+.. code-block:: bash
+
+   git clone --bare . .run-rehearsal/ballet-mirror.git
+   BALLET_RUN_DIR=$PWD/.run-rehearsal BALLET_FAKE_LLM=1 make run &
+   ANTHROPIC_API_KEY=sk-fake GITHUB_TOKEN=placeholder BALLET_FORGE=git \
+     BALLET_REPO=file://$PWD/.run-rehearsal/ballet-mirror.git \
+     ISSUES_TOKEN=$(gh auth token) ISSUES_REPO=denyszorinets/ballet \
+     scripts/dogfood-setup.py --import-issues
+
+Then add tickets whose description is a fake-LLM tool call, e.g. ``/tool
+Bash {"command": "echo x >> docs/note.txt && git add -A && git commit -qm
+note && git push -q origin HEAD"}``, and move them to *Ready*. Each runs
+implement → review → verify as real Claude Code sessions, pushes
+``feature/BAL-N_…`` branches to the mirror and waits for the merge (the
+plain git forge leaves merging to humans); merge one into ``develop`` in
+the mirror and the ticket finishes. The digest then shows the night.
 
 Before the night
 ----------------
