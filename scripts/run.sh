@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
-# Runs Ballet locally in one terminal: the development Keycloak (unless one
-# answers on :8180 already), Core with the embedded web UI, Knowledge, the
-# LLM gateway and a Runner. Build first with `make bundle` (`make run` does
-# both). Ctrl-C stops everything.
+# Runs Ballet locally in one terminal: Core with the embedded web UI,
+# Knowledge, the LLM gateway and a Runner. Build first with `make bundle`
+# (`make run` does both). Ctrl-C stops everything.
+#
+# By default there is no authentication: you are the local user, an
+# organization admin, and Core listens on localhost only. BALLET_AUTH=oidc
+# signs in through the development Keycloak instead (started unless one
+# answers on :8180); BALLET_CORE_OIDC_ISSUER_URL uses another issuer.
 #
 # State (databases, keys, service tokens) and logs live in $BALLET_RUN_DIR
 # (default .run/ in the repository). Every BALLET_* variable set in the
 # environment still configures its service; see docs/how-to/run-locally.rst.
 #
+#   BALLET_AUTH=oidc         multiple users: sign in through the development Keycloak
 #   BALLET_FAKE_LLM=1        route the gateway to a fake Anthropic API
 #   BALLET_RUNNER_BACKEND    docker or process (default: docker when it answers)
 set -euo pipefail
@@ -15,7 +20,10 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 BIN="$ROOT/bin"
 RUN_DIR=${BALLET_RUN_DIR:-$ROOT/.run}
-ISSUER=${BALLET_CORE_OIDC_ISSUER_URL:-http://localhost:8180/realms/ballet}
+ISSUER=${BALLET_CORE_OIDC_ISSUER_URL:-}
+if [[ -z $ISSUER && ${BALLET_AUTH:-} == oidc ]]; then
+  ISSUER=http://localhost:8180/realms/ballet
+fi
 
 for b in core knowledge gateway runner; do
   [[ -x "$BIN/$b" ]] || { echo "run: $BIN/$b is missing: run 'make bundle' first" >&2; exit 1; }
@@ -54,7 +62,7 @@ wait_for() {
   exit 1
 }
 
-if ! curl -fsS -o /dev/null "$ISSUER/.well-known/openid-configuration" 2>/dev/null; then
+if [[ -n $ISSUER ]] && ! curl -fsS -o /dev/null "$ISSUER/.well-known/openid-configuration" 2>/dev/null; then
   if [[ -n ${BALLET_CORE_OIDC_ISSUER_URL:-} ]]; then
     echo "run: the OIDC issuer $ISSUER does not answer" >&2
     exit 1
@@ -64,8 +72,13 @@ if ! curl -fsS -o /dev/null "$ISSUER/.well-known/openid-configuration" 2>/dev/nu
   wait_for keycloak "$ISSUER/.well-known/openid-configuration" 300
 fi
 
-export BALLET_CORE_OIDC_ISSUER_URL=$ISSUER
-export BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS=${BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS:-groups:ballet-admins}
+if [[ -n $ISSUER ]]; then
+  export BALLET_CORE_OIDC_ISSUER_URL=$ISSUER
+  export BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS=${BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS:-groups:ballet-admins}
+  SIGN_IN="Sign in as alice / alice (organization admin of the development realm)."
+else
+  SIGN_IN="No sign-in: you are the local user (BALLET_AUTH=oidc for multiple users)."
+fi
 start core "$BIN/core"
 wait_for core http://localhost:8080/healthz 60
 # Core writes the other services' tokens at start.
@@ -106,7 +119,7 @@ start runner "$BIN/runner"
 cat <<EOF
 
   Ballet is running on http://localhost:8080
-  Sign in as alice / alice (organization admin of the development realm).
+  $SIGN_IN
   Runner backend: $BALLET_RUNNER_RUNNER_BACKEND. State and logs: $RUN_DIR
   Press Ctrl-C to stop.
 

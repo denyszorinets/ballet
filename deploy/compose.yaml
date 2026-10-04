@@ -27,7 +27,10 @@ services:
     build: { context: .., dockerfile: deploy/Containerfile, target: core }
     image: ballet-core
     environment:
-      BALLET_CORE_OIDC_ISSUER_URL: ${BALLET_OIDC_ISSUER_URL:-http://localhost:8180/realms/ballet}
+      # Empty (the default): no authentication — one local user, Core on
+      # localhost only. Set it (e.g. with --profile keycloak:
+      # http://localhost:8180/realms/ballet) for multiple users.
+      BALLET_CORE_OIDC_ISSUER_URL: ${BALLET_OIDC_ISSUER_URL:-}
       BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS: ${BALLET_ORG_ADMINS:-groups:ballet-admins}
       BALLET_CORE_LOG_LEVEL: ${BALLET_LOG_LEVEL:-info}
     volumes:

@@ -7,7 +7,8 @@ Idempotent: run it again to update credentials, settings and skills.
 
 Environment:
   BALLET_URL          Core (default http://localhost:8080)
-  BALLET_TOKEN        bearer token of an organization admin; default: the
+  BALLET_TOKEN        bearer token of an organization admin; default: none
+                      when Core runs without authentication, else the
                       development realm's alice (scripts/dev-token.sh)
   ANTHROPIC_API_KEY   key for the customer's agent sessions and planner
   GITHUB_TOKEN        token that can push branches and open pull requests
@@ -44,6 +45,9 @@ REPO = os.environ.get("BALLET_REPO", "https://github.com/denyszorinets/ballet.gi
 def token() -> str:
     if os.environ.get("BALLET_TOKEN"):
         return os.environ["BALLET_TOKEN"]
+    with urllib.request.urlopen(URL + "/config.json") as r:
+        if not json.load(r)["oidc"]["issuer"]:
+            return "local"  # no authentication: any token is the local user
     return subprocess.check_output([str(ROOT / "scripts" / "dev-token.sh"), "alice"], text=True).strip()
 
 

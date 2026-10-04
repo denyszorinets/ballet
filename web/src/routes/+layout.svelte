@@ -149,7 +149,9 @@
 			</svg>
 		</button>
 		<span class="user" data-testid="user-name">{session.auth.displayName}</span>
-		<button onclick={() => session?.auth.logout()}>Sign out</button>
+		{#if !session.auth.local}
+			<button onclick={() => session?.auth.logout()}>Sign out</button>
+		{/if}
 	</header>
 	<main class="content">
 		{@render children()}

@@ -52,8 +52,9 @@ after changing skills or settings. It
 Other settings: ``BALLET_FORGE`` (``github`` or ``git``),
 ``ISSUES_TOKEN`` and ``ISSUES_REPO`` (where ``--import-issues`` reads),
 ``BALLET_URL`` (default ``http://localhost:8080``),
-``BALLET_TOKEN`` (an organization admin's bearer token; default: the
-development realm's ``alice``), ``BALLET_REPO``, ``BALLET_AGENT_IMAGE``.
+``BALLET_TOKEN`` (an organization admin's bearer token; not needed
+without authentication, else default: the development realm's
+``alice``), ``BALLET_REPO``, ``BALLET_AGENT_IMAGE``.
 
 Rehearse first
 --------------

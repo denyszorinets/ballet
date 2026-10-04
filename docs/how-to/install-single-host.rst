@@ -23,17 +23,17 @@ Start
 .. code-block:: bash
 
    git clone https://github.com/denyszorinets/ballet.git && cd ballet
-   docker compose -f deploy/compose.yaml --profile keycloak up -d --build
+   docker compose -f deploy/compose.yaml up -d --build
    docker build -f deploy/agent/Containerfile -t ballet-agent deploy/agent
 
 The first command builds the images (``make images`` builds them too) and
-starts the services; ``--profile keycloak`` adds the development Keycloak
-with its demo users (:doc:`configure-oidc`). The second builds the image
+starts the services without authentication (see below for several
+users). The second builds the image
 agent sessions run in: git, Claude Code and common build tools — extend
 it for your projects' toolchains.
 
-Open http://localhost:8080 and sign in as ``alice`` / ``alice``. Then, as
-in :doc:`run-locally`:
+Open http://localhost:8080 on the host — no sign-in: you are the local
+user. Then, as in :doc:`run-locally`:
 
 #. create a customer and a project;
 #. store the customer's Anthropic key (customer page → *LLM credentials*);
@@ -51,9 +51,13 @@ installation-specific ones and takes these from the environment or an
 ``.env`` file next to it:
 
 ``BALLET_OIDC_ISSUER_URL``
-   Your identity provider's issuer (default: the development Keycloak).
-   Register the ``ballet-web`` public client with
-   ``http://<host>:8080/*`` as redirect URI.
+   Your identity provider's issuer. Empty (the default): no
+   authentication — one local user, and Core listens on ``localhost``
+   only. Set it for several users: register the ``ballet-web`` public
+   client with ``http://<host>:8080/*`` as redirect URI
+   (:doc:`configure-oidc`). To try it with the development Keycloak and
+   its demo users (``alice`` / ``alice``): ``BALLET_OIDC_ISSUER_URL=http://localhost:8180/realms/ballet
+   docker compose -f deploy/compose.yaml --profile keycloak up -d``.
 
 ``BALLET_ORG_ADMINS``
    Claim matchers that are organization admins, e.g.

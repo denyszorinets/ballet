@@ -21,13 +21,14 @@ type Config struct {
 	Audience  string `toml:"audience"`
 }
 
-// Validate checks that both settings are present.
+// Enabled reports whether an issuer is configured; without one, services
+// run without authentication (kit/auth/local).
+func (c Config) Enabled() bool { return c.IssuerURL != "" }
+
+// Validate checks the settings of an enabled configuration.
 func (c Config) Validate() error {
 	var errs []error
-	if c.IssuerURL == "" {
-		errs = append(errs, errors.New("oidc.issuer_url must not be empty"))
-	}
-	if c.Audience == "" {
+	if c.Enabled() && c.Audience == "" {
 		errs = append(errs, errors.New("oidc.audience must not be empty"))
 	}
 	return errors.Join(errs...)

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
@@ -39,6 +41,7 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/transport/runnerapi"
 	"github.com/denyszorinets/ballet/core/internal/transport/trackermcp"
 	"github.com/denyszorinets/ballet/core/internal/transport/webui"
+	"github.com/denyszorinets/ballet/kit/auth/local"
 	"github.com/denyszorinets/ballet/kit/auth/oidc"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 	"github.com/denyszorinets/ballet/kit/config"
@@ -250,9 +253,21 @@ func run() error {
 		return err
 	}
 
+	localMode := !cfg.OIDC.Enabled()
+	if localMode {
+		// Without authentication, listen on this machine only unless the
+		// address names a host explicitly.
+		if host, port, err := net.SplitHostPort(cfg.Server.Addr); err == nil && host == "" {
+			cfg.Server.Addr = net.JoinHostPort("localhost", port)
+		}
+	}
 	svc, err := service.New(serviceName, cfg.Config, os.Stdout)
 	if err != nil {
 		return err
+	}
+	if localMode {
+		svc.Logger.Warn("authentication is disabled (no oidc.issuer_url): every caller is the local user, an "+
+			"organization admin; set oidc.issuer_url for multiple users", "addr", cfg.Server.Addr)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -268,9 +283,14 @@ func run() error {
 	defer st.Close()
 	svc.AddReadinessCheck(health.Check{Name: "database", Func: st.DB().Ping})
 
-	verifier, err := oidc.NewVerifier(ctx, cfg.OIDC)
-	if err != nil {
-		return err
+	authenticate, tokenVerifier := func(h http.Handler) http.Handler { return local.Middleware(h) },
+		realtime.TokenVerifier(local.Authenticator{})
+	if !localMode {
+		verifier, err := oidc.NewVerifier(ctx, cfg.OIDC)
+		if err != nil {
+			return err
+		}
+		authenticate, tokenVerifier = oidc.Middleware(verifier), verifier
 	}
 	tokenKeys, err := runtoken.LoadKeyRing(cfg.Tokens.KeyFile, time.Now)
 	if err != nil {
@@ -291,7 +311,10 @@ func run() error {
 	}
 
 	bootstrap, _ := cfg.RBAC.bindings() // validated with the configuration
-	if len(bootstrap) == 0 {
+	if localMode {
+		admin, _ := rbac.ParseBootstrap("sub:" + local.Subject)
+		bootstrap = append(bootstrap, admin)
+	} else if len(bootstrap) == 0 {
 		svc.Logger.WarnContext(ctx, "no rbac.bootstrap_org_admins configured; only stored role bindings grant access")
 	}
 	authz := &app.RBAC{Store: st, Bootstrap: bootstrap}
@@ -450,7 +473,7 @@ func run() error {
 	go (&app.Delivery{Log: st, Flows: st, Runs: st, Reports: st, Tenancy: st, Observer: delivery,
 		Logger: svc.Logger}).Run(ctx)
 	httpapi.Register(svc.Mux, httpapi.Deps{
-		Authenticate: oidc.Middleware(verifier),
+		Authenticate: authenticate,
 		TokenKeys:    tokenKeys,
 		Tenancy:      &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		RBAC:         authz,
@@ -491,7 +514,7 @@ func run() error {
 		}
 	}()
 	realtime.Register(svc.Mux, realtime.Deps{
-		Verifier: verifier,
+		Verifier: tokenVerifier,
 		Streams:  &app.Streams{Feed: feed, Log: st, Items: st, Tenancy: st, Authz: authz},
 		Planner:  plannerSvc,
 		Now:      time.Now,

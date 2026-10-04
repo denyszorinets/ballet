@@ -14,7 +14,6 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
 
 	"github.com/denyszorinets/ballet/kit/auth"
-	"github.com/denyszorinets/ballet/kit/auth/oidc"
 	"github.com/denyszorinets/ballet/kit/rpc"
 )
 
@@ -23,7 +22,7 @@ const Path = "/rpc"
 
 // Deps are the collaborators of the realtime API.
 type Deps struct {
-	Verifier *oidc.Verifier
+	Verifier TokenVerifier
 	Streams  *app.Streams
 	Planner  *app.Planner // nil: planner methods not served
 	Options  rpc.Options
@@ -44,7 +43,13 @@ func Register(mux *http.ServeMux, d Deps) {
 
 // authenticator accepts OIDC access tokens; the connection must refresh
 // before the token's exp.
-func authenticator(v *oidc.Verifier) rpc.Authenticator {
+// TokenVerifier verifies access tokens (oidc.Verifier, or local.Authenticator
+// without authentication).
+type TokenVerifier interface {
+	Verify(ctx context.Context, raw string) (auth.Identity, error)
+}
+
+func authenticator(v TokenVerifier) rpc.Authenticator {
 	return func(ctx context.Context, token string) (auth.Identity, time.Time, error) {
 		id, err := v.Verify(ctx, token)
 		if err != nil {
