@@ -7,9 +7,13 @@ One command builds and runs the whole system on your machine:
 
    make run
 
-Then open http://localhost:8080 and sign in as ``alice`` / ``alice``
-(organization admin of the development realm, see
-:doc:`configure-oidc`). Press :kbd:`Ctrl-C` to stop everything.
+Then open http://localhost:8080 — there is no sign-in: you are the local
+user, an organization admin, and Ballet only listens on ``localhost``.
+Press :kbd:`Ctrl-C` to stop everything.
+
+For several users, run ``BALLET_AUTH=oidc make run``: it starts the
+development Keycloak and you sign in as ``alice`` / ``alice``
+(organization admin of the development realm, see :doc:`configure-oidc`).
 
 What it does
 ------------
@@ -27,8 +31,9 @@ What it does
 ``scripts/run.sh``
    Starts, in order, waiting for each to answer:
 
-   #. the development Keycloak on ``:8180`` (unless an OIDC issuer answers
-      there already; the first start downloads it and needs Java 21+);
+   #. with ``BALLET_AUTH=oidc``, the development Keycloak on ``:8180``
+      (unless an OIDC issuer answers there already; the first start
+      downloads it and needs Java 21+);
    #. Core on ``:8080`` (API, realtime, web UI), which writes the other
       services' tokens;
    #. Knowledge on ``:8081``;
@@ -66,10 +71,14 @@ Environment variables of ``scripts/run.sh``:
 ``BALLET_RUN_DIR``
    Directory for state and logs instead of ``.run``.
 
+``BALLET_AUTH=oidc``
+   Sign in through the development Keycloak (multiple users) instead of
+   running without authentication.
+
 Any ``BALLET_*`` configuration variable
 (:doc:`/reference/configuration`) still applies to its service, e.g.
 ``BALLET_CORE_OIDC_ISSUER_URL`` for another identity provider (it must
-answer; Keycloak is then not started).
+answer; Keycloak is then not started; implies authentication).
 
 Working on the UI
 -----------------

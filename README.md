@@ -28,8 +28,10 @@ make docs-check   # strict build + link check
 make run          # build the web UI into Core, build all services, run everything
 ```
 
-Open http://localhost:8080 and sign in as `alice` / `alice`. Needs Go,
-Bun and Java 21+ (for the development Keycloak); see
+Open http://localhost:8080 — no sign-in needed: locally you are the single
+user. `BALLET_AUTH=oidc make run` enables multi-user sign-in through the
+development Keycloak (`alice` / `alice`; needs Java 21+). Needs Go and
+Bun; see
 [Run Ballet locally](docs/how-to/run-locally.rst). To install it with
 containers on one host, see
 [Install Ballet on one host](docs/how-to/install-single-host.rst).

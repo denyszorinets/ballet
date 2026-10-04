@@ -5,6 +5,12 @@ Ballet does not manage passwords. Humans authenticate with an external
 OpenID Connect provider; Ballet validates the provider's access tokens
 (:doc:`/architecture/decisions/0006-oidc-claims-rbac-and-scoped-run-tokens`).
 
+Authentication is **off by default**: without ``[oidc] issuer_url``
+everyone is the single local user, an organization admin, and Core only
+listens on ``localhost`` (:ref:`reference-config-oidc`). Configure an
+issuer as below when several people, customers or roles share an
+installation.
+
 Requirements for the identity provider
 --------------------------------------
 

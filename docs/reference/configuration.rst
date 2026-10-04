@@ -97,9 +97,16 @@ URL of the OIDC issuer; its discovery document must be at
 ``<issuer_url>/.well-known/openid-configuration``. Read at startup; the
 service does not start if the issuer is unreachable.
 
+**Empty (the default): no authentication.** Every caller — the web UI,
+REST and realtime clients — is the same *local user*, an organization
+admin (subject ``local``), and Core listens on ``localhost`` only unless
+``[server] addr`` names a host. This suits one person on their own
+machine; set an issuer for several users, tenants and role-based access
+(:doc:`/how-to/configure-oidc`).
+
 :Type: string (URL)
-:Required: yes
-:Default: none
+:Required: no
+:Default: ``""`` (no authentication)
 :Environment: ``BALLET_CORE_OIDC_ISSUER_URL``
 
 ``audience``
