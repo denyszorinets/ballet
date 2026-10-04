@@ -8,7 +8,8 @@
         "vscode": {
             "extensions": [
                 "golang.go",
-                "anthropic.claude-code"
+                "anthropic.claude-code",
+                "svelte.svelte-vscode"
             ],
             "mcp": {
                 "servers": {
