@@ -26,5 +26,8 @@ type Driver interface {
 	Setup(s runnerproto.Session) (Setup, error)
 	// Message encodes a user message as a line for standard input.
 	Message(text string) []byte
+	// Interrupt encodes a request to stop the current turn, which then
+	// ends with a result; nil when the runtime cannot be interrupted.
+	Interrupt() []byte
 	Parse(line []byte) Parsed
 }

@@ -484,7 +484,14 @@
 			</ul>
 		{/if}
 		{#if runs.length}
-			<SessionTimeline {runs} {reports} {questions} {history} {usage} />
+			<SessionTimeline
+				{runs}
+				{reports}
+				{questions}
+				{history}
+				{usage}
+				canManage={!!session?.permissions.can('run.manage', { customer, project: item.project })}
+			/>
 		{/if}
 		{#if reports.length}
 			<ul class="activity" aria-label="Agent reports">

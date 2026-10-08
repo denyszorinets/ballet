@@ -173,6 +173,8 @@ func (d fakeDriver) Setup(s runnerproto.Session) (driver.Setup, error) {
 
 func (fakeDriver) Message(text string) []byte { return []byte(text + "\n") }
 
+func (fakeDriver) Interrupt() []byte { return []byte("INTERRUPT\n") }
+
 func (fakeDriver) Parse(line []byte) driver.Parsed {
 	l := string(line)
 	switch {
@@ -235,4 +237,66 @@ func TestProcess_UnknownRuntimeFails(t *testing.T) {
 	var o output
 	_, _, err := b.Run(t.Context(), "run-r", runnerproto.Spec{Session: &runnerproto.Session{Runtime: "nope", Prompt: "x"}}, o.write)
 	assert.ErrorContains(t, err, `unknown agent runtime "nope"`)
+}
+
+// running starts a session of the fake driver in the background; done
+// receives its result.
+func running(t *testing.T, script string) (*process.Backend, *output, chan *runnerproto.Result) {
+	t.Helper()
+	b := &process.Backend{WorkRoot: t.TempDir(), Drivers: map[string]driver.Driver{"fake": fakeDriver{script: script}}}
+	o := &output{}
+	done := make(chan *runnerproto.Result, 1)
+	go func() {
+		_, res, err := b.Run(t.Context(), "run-i", runnerproto.Spec{
+			Session: &runnerproto.Session{Runtime: "fake", Prompt: "go"}}, o.write)
+		assert.NoError(t, err)
+		done <- res
+	}()
+	return b, o, done
+}
+
+func (o *output) waitFor(t *testing.T, text string) {
+	t.Helper()
+	require.Eventually(t, func() bool { o.mu.Lock(); defer o.mu.Unlock(); return strings.Contains(o.event.String(), text) },
+		5*time.Second, 10*time.Millisecond)
+}
+
+func TestProcess_MessagesWaitForTheEndOfTheTurn(t *testing.T) {
+	b, o, done := running(t, `
+read p
+echo "EV started"
+read gate
+echo "RESULT one"
+read m
+echo "EV got $m"
+echo "RESULT two"
+cat >/dev/null`)
+	o.waitFor(t, "started")
+	require.NoError(t, b.Input("run-i", runnerproto.InputMessage, "more please"))
+	assert.ErrorIs(t, b.Input("run-i", runnerproto.InputMessage, ""), process.ErrInvalidInput)
+	assert.ErrorIs(t, b.Input("run-i", "shout", "x"), process.ErrInvalidInput)
+	// The interrupt line releases the script's gate; nothing is queued with it.
+	require.NoError(t, b.Input("run-i", runnerproto.InputInterrupt, ""))
+	res := <-done
+	assert.Equal(t, &runnerproto.Result{Success: true, Summary: "two"}, res)
+	assert.Equal(t, []string{"started", "more please", "got more please"}, o.events(t),
+		"the message is shown when it reaches the session")
+	assert.ErrorIs(t, b.Input("run-i", runnerproto.InputMessage, "late"), process.ErrNoSession)
+}
+
+func TestProcess_InterruptStopsTheTurnThenDelivers(t *testing.T) {
+	b, o, done := running(t, `
+read p
+echo "EV started"
+read x
+echo "EV saw $x"
+echo "RESULT stopped"
+read m
+echo "EV got $m"
+echo "RESULT two"
+cat >/dev/null`)
+	o.waitFor(t, "started")
+	require.NoError(t, b.Input("run-i", runnerproto.InputInterrupt, "do this instead"))
+	<-done
+	assert.Equal(t, []string{"started", "saw INTERRUPT", "do this instead", "got do this instead"}, o.events(t))
 }

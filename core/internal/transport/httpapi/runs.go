@@ -134,6 +134,22 @@ func registerRuns(mux *router, rs *app.Runs) {
 		writeJSON(w, http.StatusOK, out)
 	})
 
+	mux.handle("POST /api/v1/runs/{run}/input", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Kind string `json:"kind"`
+			Text string `json:"text"`
+		}
+		if err := decode(r, &in); err != nil {
+			writeError(w, err)
+			return
+		}
+		if err := rs.Input(r.Context(), r.PathValue("run"), in.Kind, in.Text); err != nil {
+			writeError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+
 	mux.handle("POST /api/v1/runs/{run}/cancel", func(w http.ResponseWriter, r *http.Request) {
 		v, err := rs.Cancel(r.Context(), r.PathValue("run"))
 		if err != nil {

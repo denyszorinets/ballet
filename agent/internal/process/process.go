@@ -36,6 +36,20 @@ type Backend struct {
 	StopGrace time.Duration
 	// Drivers run coding-agent sessions (spec.Session), by runtime.
 	Drivers map[string]driver.Driver
+
+	mu   sync.Mutex
+	live map[string]*session // running sessions by run
+}
+
+// Input delivers a human's input to the running session of a run.
+func (b *Backend) Input(runID, kind, text string) error {
+	b.mu.Lock()
+	s := b.live[runID]
+	b.mu.Unlock()
+	if s == nil {
+		return ErrNoSession
+	}
+	return s.input(kind, text)
 }
 
 // Run executes a run in a fresh workspace and streams its output: the
@@ -109,7 +123,18 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 	for k, v := range setup.Env {
 		env = append(env, k+"="+os.Expand(v, func(name string) string { return vars[name] }))
 	}
-	s := &session{drv: drv, prompt: spec.Session.Prompt}
+	s := &session{drv: drv, prompt: spec.Session.Prompt, out: out}
+	b.mu.Lock()
+	if b.live == nil {
+		b.live = map[string]*session{}
+	}
+	b.live[runID] = s
+	b.mu.Unlock()
+	defer func() {
+		b.mu.Lock()
+		delete(b.live, runID)
+		b.mu.Unlock()
+	}()
 	code, err := b.exec(ctx, proc{argv: setup.Command, dir: sdir, env: env, cred: cred}, out, s)
 	return code, s.result(), err
 }
@@ -196,7 +221,7 @@ func (b *Backend) exec(ctx context.Context, p proc, out func(stream, text string
 		go pump(&wg, stdout, runnerproto.StreamStdout, out)
 	} else {
 		s.begin(stdin)
-		go s.read(&wg, stdout, out)
+		go s.read(&wg, stdout)
 	}
 	go pump(&wg, stderr, runnerproto.StreamStderr, out)
 

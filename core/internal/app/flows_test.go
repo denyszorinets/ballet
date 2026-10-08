@@ -74,6 +74,8 @@ func (s *scriptedRunner) Start(_ context.Context, r run.Run, _ map[string]string
 	return nil
 }
 
+func (s *scriptedRunner) Input(context.Context, string, string, string) error { return nil }
+
 func (s *scriptedRunner) Cancel(ctx context.Context, runID string) error {
 	go func() { _ = s.d.Finished(context.Background(), "r1", runID, -1, "", true, nil) }()
 	return nil

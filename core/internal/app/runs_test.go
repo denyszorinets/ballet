@@ -26,6 +26,8 @@ type fakeRunner struct {
 	refuse    bool
 	attempts  int
 	secrets   []map[string]string
+	inputs    []string
+	inputErr  error
 }
 
 func (f *fakeRunner) Start(_ context.Context, r run.Run, secrets map[string]string) error {
@@ -37,6 +39,16 @@ func (f *fakeRunner) Start(_ context.Context, r run.Run, secrets map[string]stri
 		return errors.New("busy")
 	}
 	f.started = append(f.started, r.ID)
+	return nil
+}
+
+func (f *fakeRunner) Input(_ context.Context, runID, kind, text string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.inputErr != nil {
+		return f.inputErr
+	}
+	f.inputs = append(f.inputs, runID+" "+kind+": "+text)
 	return nil
 }
 
@@ -323,4 +335,33 @@ func TestRuns_AgentPromptIsTheOnboardingBundle(t *testing.T) {
 		assert.Contains(t, prompt, want)
 	}
 	assert.Equal(t, []string{"acme", "WEB", login.Key, "Login"}, asked[len(asked)-4:], "knowledge for the ticket")
+}
+
+func TestRuns_InputReachesTheRunningSession(t *testing.T) {
+	e := newRuns(t, time.Minute)
+	dave := user(t, "dave", "acme-admins")
+	tk := mk(t, e.tr, tracker.KindTicket, "t")
+	fr := &fakeRunner{}
+	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 2}, fr))
+	v, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "claude-code", Prompt: "p"})
+	require.NoError(t, err)
+	e.eventually(t, v.ID, run.StatusStarting)
+
+	assert.ErrorIs(t, e.runs.Input(dave, v.ID, app.InputMessage, "hi"), app.ErrConflict, "not running yet")
+	require.NoError(t, e.d.Running(t.Context(), "r1", v.ID))
+
+	require.NoError(t, e.runs.Input(dave, v.ID, app.InputMessage, "Use Postgres."))
+	require.NoError(t, e.runs.Input(dave, v.ID, app.InputInterrupt, ""))
+	assert.Equal(t, []string{v.ID + " message: Use Postgres.", v.ID + " interrupt: "}, fr.inputs)
+
+	assert.ErrorIs(t, e.runs.Input(dave, v.ID, app.InputMessage, " "), app.ErrInvalid)
+	assert.ErrorIs(t, e.runs.Input(dave, v.ID, "shout", "x"), app.ErrInvalid)
+	assert.ErrorIs(t, e.runs.Input(user(t, "bob", "acme-devs"), v.ID, app.InputMessage, "x"), app.ErrForbidden)
+
+	fr.inputErr = errors.New("the session has ended")
+	assert.ErrorIs(t, e.runs.Input(dave, v.ID, app.InputMessage, "x"), app.ErrConflict)
+
+	plain, err := e.runs.Create(dave, tk.Key, "verify", run.Spec{Command: []string{"make"}})
+	require.NoError(t, err)
+	assert.ErrorIs(t, e.runs.Input(dave, plain.ID, app.InputMessage, "x"), app.ErrInvalid, "plain commands take no input")
 }

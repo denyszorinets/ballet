@@ -8,8 +8,8 @@ package runnerproto
 // Path is where Core serves the Runner API.
 const Path = "/runner/rpc"
 
-// Methods. Runner → Core: Hello, Status, Log, Finished. Core → Runner:
-// Start, Cancel.
+// Methods. Agent → Core: Hello, Status, Log, Finished. Core → agent:
+// Start, Cancel, Input.
 const (
 	MethodHello    = "runner.hello"
 	MethodStatus   = "run.status"
@@ -17,6 +17,7 @@ const (
 	MethodFinished = "run.finished"
 	MethodStart    = "run.start"
 	MethodCancel   = "run.cancel"
+	MethodInput    = "run.input"
 )
 
 // Hello introduces a Runner. Active lists runs it is still executing
@@ -93,6 +94,19 @@ type Cancel struct {
 	Run string `json:"run" msgpack:"run"`
 }
 
+// Input kinds.
+const (
+	InputMessage   = "message"   // delivered when the current turn ends
+	InputInterrupt = "interrupt" // stop the current turn, then deliver Text, if any
+)
+
+// Input is a human's input to a running coding-agent session.
+type Input struct {
+	Run  string `json:"run" msgpack:"run"`
+	Kind string `json:"kind" msgpack:"kind"`
+	Text string `json:"text,omitempty" msgpack:"text,omitempty"`
+}
+
 // Status reports that a run's session is running.
 type Status struct {
 	Run    string `json:"run" msgpack:"run"`
@@ -111,6 +125,7 @@ const (
 
 // Event kinds.
 const (
+	EventUser       = "user"        // a human's message reached the session: Text
 	EventText       = "text"        // the agent's text
 	EventToolUse    = "tool_use"    // the agent calls a tool: Tool, Input
 	EventToolResult = "tool_result" // what the tool returned: Text, Error

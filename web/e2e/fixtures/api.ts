@@ -49,6 +49,8 @@ export interface FakeCore {
 	>;
 	/** Run output by run ID (API shape: seq, stream, text, at). */
 	runLogs: Record<string, { seq: number; stream: string; text: string; at: string }[]>;
+	/** Input sent to runs, by run ID. */
+	runInputs: Record<string, { kind: string; text?: string }[]>;
 	/** Pull requests by ticket key (API shape). */
 	pullRequests: Record<string, Record<string, unknown>>;
 	/** Flows by ticket key (API shape). */
@@ -256,6 +258,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		llmKeys: {},
 		activity: {},
 		runLogs: {},
+		runInputs: {},
 		pullRequests: {},
 		flows: {},
 		inbox: [],
@@ -538,6 +541,16 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				return r.fulfill({ json: { items: views } });
 			}
 			return r.fulfill({ json: itemJSON(it) });
+		}
+		if ((m = path.match(/^\/runs\/([^/]+)$/)) && method === 'GET') {
+			const run = Object.values(core.activity)
+				.flatMap((a) => (a.runs ?? []) as { id: string }[])
+				.find((x) => x.id === m![1]);
+			return run ? r.fulfill({ json: run }) : err(r, 404, 'not_found', 'run not found');
+		}
+		if ((m = path.match(/^\/runs\/([^/]+)\/input$/)) && method === 'POST') {
+			(core.runInputs[m[1]] ??= []).push(body);
+			return r.fulfill({ status: 204 });
 		}
 		if ((m = path.match(/^\/runs\/([^/]+)\/logs$/))) {
 			const after = Number(url.searchParams.get('after') ?? 0);

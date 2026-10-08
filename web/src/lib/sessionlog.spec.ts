@@ -17,13 +17,14 @@ describe('transcript', () => {
 				'{"kind":"text","text":"Looking"}\n{"kind":"tool_use","tool":"Bash","input":"{\\"command\\":\\"ls\\"}"}\n'
 			),
 			log(2, 'event', '{"kind":"tool_result","text":"a.go","error":true}\n'),
-			log(3, 'event', '{"kind":"result","text":"Done."}\n')
+			log(3, 'event', '{"kind":"result","text":"Done."}\n{"kind":"user","text":"More tests"}\n')
 		]);
 		expect(t).toEqual([
 			{ kind: 'text', text: 'Looking' },
 			{ kind: 'tool_use', tool: 'Bash', input: 'command: ls' },
 			{ kind: 'tool_result', text: 'a.go', error: true },
-			{ kind: 'result', text: 'Done.', error: false }
+			{ kind: 'result', text: 'Done.', error: false },
+			{ kind: 'user', text: 'More tests' }
 		]);
 	});
 
