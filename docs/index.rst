@@ -12,8 +12,20 @@ humans in control.
 
 .. note::
 
-   Ballet is in the design phase. These pages describe the intended
-   system; decisions marked *Proposed* are open for discussion.
+   Ballet is young: its first version targets an unattended night of work
+   on a real project. New here? Start with :doc:`getting-started/quickstart`.
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Getting started
+
+   getting-started/index
+
+.. toctree::
+   :maxdepth: 2
+   :caption: User guide
+
+   user-guide/index
 
 .. toctree::
    :maxdepth: 2

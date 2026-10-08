@@ -14,6 +14,8 @@ Website and documentation: https://denyszorinets.github.io/ballet/
 (published from `develop`). The documentation is a Sphinx site under
 [`docs/`](docs/index.rst):
 
+- [Quickstart](docs/getting-started/quickstart.rst) — Ballet, a demo project and a first ticket done by agents, without an API key
+- [User guide](docs/user-guide/index.rst)
 - [Vision](docs/concepts/vision.rst)
 - [Architecture overview](docs/architecture/overview.rst)
 - [Architecture decisions](docs/architecture/decisions/index.rst)
