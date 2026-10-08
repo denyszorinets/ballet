@@ -456,7 +456,7 @@ Runs
 Agent sessions executed by agents (:doc:`/reference/agents`).
 Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
 "branch"?, "adapter"?, "result"?: {"summary", "turns", "cost_usd", "parked"?, "session_id"?},
-"runner"?, "exit_code"?, "error"?, "created_by", "created_at",
+"agent"?, "exit_code"?, "error"?, "created_by", "created_at",
 "started_at"?, "finished_at"?, "version"}``.
 
 ``POST /api/v1/items/{item}/runs`` — ``{"stage", "spec": {"command", "env"?, "image"?, "workdir"?, "timeout_seconds"?, "files"?}}`` or ``{"stage", "agent": {"adapter": "claude-code"|"opencode", "prompt", "timeout_seconds"?}}`` → ``201``

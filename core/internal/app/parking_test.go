@@ -18,7 +18,7 @@ import (
 // parkingEnv has a running agent session on a ticket.
 type parkingEnv struct {
 	runsEnv
-	fr  *fakeRunner
+	fr  *fakeAgent
 	tk  app.ItemView
 	run app.RunView
 }
@@ -29,8 +29,8 @@ func newParking(t *testing.T) parkingEnv {
 	e.runs.Questions = e.st
 	dave := user(t, "dave", "acme-admins")
 	tk := mk(t, e.tr, tracker.KindTicket, "Login")
-	fr := &fakeRunner{}
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 3}, fr))
+	fr := &fakeAgent{}
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 3}, fr))
 	v, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "claude-code", Prompt: "p"})
 	require.NoError(t, err)
 	e.eventually(t, v.ID, run.StatusStarting)

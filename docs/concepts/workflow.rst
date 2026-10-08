@@ -46,7 +46,8 @@ Execution: autonomous pipeline
 When a ticket becomes ready (:doc:`scheduling`), Ballet runs it through
 the ticket pipeline (:doc:`pipeline`). Every stage session:
 
-#. gets a fresh devcontainer from the project's template;
+#. runs on an agent of the project's pool — built from its devcontainer —
+   in a fresh workspace;
 #. gets the repository checked out on the ticket's branch, named by the
    project's branch convention;
 #. gets the skills for its stage and the MCP configuration

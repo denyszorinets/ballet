@@ -1619,8 +1619,6 @@ export interface components {
             /** @description https, ssh, git@host:path or file URL; empty: no repository */
             repo_url: string;
             default_branch: string;
-            /** @description Recorded; not used by agents */
-            image: string;
             /** @description Shell commands run in the repository before each session */
             setup: string[];
             env: {
@@ -1651,7 +1649,6 @@ export interface components {
         SetExecutionSettings: {
             repo_url?: string;
             default_branch?: string;
-            image?: string;
             setup?: string[];
             env?: {
                 [key: string]: string;
@@ -1988,8 +1985,6 @@ export interface components {
         /** @enum {string} */
         RunStatus: "queued" | "starting" | "running" | "succeeded" | "failed" | "cancelled";
         RunSpec: {
-            /** @description Recorded; not used by agents */
-            image?: string;
             command: string[];
             env?: {
                 [key: string]: string;
@@ -2026,7 +2021,8 @@ export interface components {
             /** @description The coding-agent runtime of a session run, e.g. claude-code */
             adapter?: string;
             result?: components["schemas"]["RunResult"];
-            runner?: string;
+            /** @description The agent executing the run */
+            agent?: string;
             exit_code?: number;
             error?: string;
             created_by: string;

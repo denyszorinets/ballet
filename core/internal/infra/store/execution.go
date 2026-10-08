@@ -19,7 +19,7 @@ func (s *Store) ExecutionSettings(ctx context.Context, projectID string) (execut
 			git_name, git_email, updated_at, version, forge, forge_api_url, link_template, answer_window_minutes, pool
 			FROM project_execution
 			WHERE project_id = ?`, projectID).
-		Scan(&x.ProjectID, &x.RepoURL, &x.DefaultBranch, &x.Image, &setup, &env, &x.BranchTemplate, &x.GitName,
+		Scan(&x.ProjectID, &x.RepoURL, &x.DefaultBranch, new(string), &setup, &env, &x.BranchTemplate, &x.GitName,
 			&x.GitEmail, &updated, &x.Version, &x.Forge, &x.ForgeAPIURL, &x.LinkTemplate, &x.AnswerWindowMinutes, &x.Pool)
 	if err != nil {
 		return execution.Settings{}, mapReadErr("execution settings", err)
@@ -48,7 +48,7 @@ func (s *Store) SetExecutionSettings(ctx context.Context, x execution.Settings, 
 	if err != nil {
 		return fmt.Errorf("set execution settings: %w", err)
 	}
-	args := []any{x.RepoURL, x.DefaultBranch, x.Image, string(setup), string(env), x.BranchTemplate, x.GitName, x.GitEmail,
+	args := []any{x.RepoURL, x.DefaultBranch, "", string(setup), string(env), x.BranchTemplate, x.GitName, x.GitEmail,
 		formatTime(x.UpdatedAt), x.Version, x.Forge, x.ForgeAPIURL, x.LinkTemplate, x.AnswerWindowMinutes, x.Pool}
 	var stmt sqlstore.Stmt
 	if expectedVersion == 0 {

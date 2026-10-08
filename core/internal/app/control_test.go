@@ -54,7 +54,7 @@ func TestControl_PausingAProjectStopsNewStagesUntilResumed(t *testing.T) {
 	n, err := s.Tick(t.Context())
 	require.NoError(t, err)
 	assert.Zero(t, n, "the scheduler starts nothing in a paused project")
-	assert.Empty(t, e.runner.ran())
+	assert.Empty(t, e.agent.ran())
 
 	require.NoError(t, ct.Resume(dave, "WEB"))
 	e.waitFlow(t, started.Key, func(f app.FlowView) bool { return f.Status == app.FlowDone })

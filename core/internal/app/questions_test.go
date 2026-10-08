@@ -64,8 +64,8 @@ func newQuestions(t *testing.T, script func(string, int) report.Outcome) questio
 	qs.Register(e.flows.Orchestrator)
 	at := &app.AgentTracker{Reports: e.st, RunStore: e.st, Items: e.st, Tenancy: e.st, Authz: e.flows.Authz,
 		Now: time.Now, NewID: store.NewID, OnQuestion: qs.Route}
-	e.runner.mu.Lock()
-	e.runner.ask = func(r run.Run, n int) {
+	e.agent.mu.Lock()
+	e.agent.ask = func(r run.Run, n int) {
 		if r.Stage != "implement" || n != 1 {
 			return
 		}
@@ -76,7 +76,7 @@ func newQuestions(t *testing.T, script func(string, int) report.Outcome) questio
 		_, _, _ = at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB", Ticket: it.Key},
 			"Which identity provider do we use?", "Keycloak or Okta.", true)
 	}
-	e.runner.mu.Unlock()
+	e.agent.mu.Unlock()
 	return questionEnv{flowEnv: e, qs: qs, llm: llm, knowledge: k}
 }
 
@@ -113,11 +113,11 @@ func TestQuestions_PlannerAnswersFromSourcesAndTheStageResumes(t *testing.T) {
 	assert.Equal(t, report.QuestionAnswered, q.Status)
 	assert.Equal(t, "planner", q.AnsweredBy)
 	assert.Equal(t, "Keycloak.\n\nSources: k1", q.Answer)
-	assert.Equal(t, []string{"implement", "implement", "review", "verify"}, e.runner.ran(), "a new implement session")
-	e.runner.mu.Lock()
-	assert.Contains(t, e.runner.prompts["implement#2"], "**Question:** Which identity provider do we use?")
-	assert.Contains(t, e.runner.prompts["implement#2"], "Keycloak.")
-	e.runner.mu.Unlock()
+	assert.Equal(t, []string{"implement", "implement", "review", "verify"}, e.agent.ran(), "a new implement session")
+	e.agent.mu.Lock()
+	assert.Contains(t, e.agent.prompts["implement#2"], "**Question:** Which identity provider do we use?")
+	assert.Contains(t, e.agent.prompts["implement#2"], "Keycloak.")
+	e.agent.mu.Unlock()
 	assert.Equal(t, []string{tk.Key + " planner: Keycloak.\n\nSources: k1"}, e.knowledge.recorded)
 	history := e.events(t, tk.Key)
 	assert.Contains(t, history, "item.question_answered")
@@ -164,35 +164,35 @@ func TestQuestions_EscalatedQuestionsWaitForAHuman(t *testing.T) {
 	assert.ErrorIs(t, err, app.ErrConflict)
 
 	e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Status == app.FlowDone })
-	e.runner.mu.Lock()
-	assert.Contains(t, e.runner.prompts["implement#2"], "Keycloak, see the platform docs.")
-	e.runner.mu.Unlock()
+	e.agent.mu.Lock()
+	assert.Contains(t, e.agent.prompts["implement#2"], "Keycloak, see the platform docs.")
+	e.agent.mu.Unlock()
 	assert.Equal(t, []string{tk.Key + " bob: Keycloak, see the platform docs."}, e.knowledge.recorded)
 }
 
 func TestQuestions_NonBlockingQuestionsDoNotStopTheStage(t *testing.T) {
 	e := newQuestions(t, always(report.OutcomeDone))
-	e.runner.mu.Lock()
-	ask := e.runner.ask
-	e.runner.ask = nil
-	e.runner.mu.Unlock()
+	e.agent.mu.Lock()
+	ask := e.agent.ask
+	e.agent.ask = nil
+	e.agent.mu.Unlock()
 	_ = ask
 	e.llm.script(toolUse("escalate", `{"reason":"unknown"}`))
 	tk := e.ticket(t, auto)
 	at := &app.AgentTracker{Reports: e.st, RunStore: e.st, Items: e.st, Tenancy: e.st, Authz: e.flows.Authz,
 		Now: time.Now, NewID: store.NewID, OnQuestion: e.qs.Route}
-	e.runner.mu.Lock()
-	e.runner.ask = func(r run.Run, n int) {
+	e.agent.mu.Lock()
+	e.agent.ask = func(r run.Run, n int) {
 		if r.Stage == "implement" {
 			_, _, _ = at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB",
 				Ticket: tk.Key}, "Should the button be blue?", "", false)
 		}
 	}
-	e.runner.mu.Unlock()
+	e.agent.mu.Unlock()
 	_, err := e.flows.Start(user(t, "dave", "acme-admins"), tk.Key)
 	require.NoError(t, err)
 	e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Status == app.FlowDone })
-	assert.Equal(t, []string{"implement", "review", "verify"}, e.runner.ran())
+	assert.Equal(t, []string{"implement", "review", "verify"}, e.agent.ran())
 }
 
 func TestQuestions_IterationLimitAnswerResumesTheLoop(t *testing.T) {
@@ -202,9 +202,9 @@ func TestQuestions_IterationLimitAnswerResumesTheLoop(t *testing.T) {
 		}
 		return report.OutcomeDone
 	})
-	e.runner.mu.Lock()
-	e.runner.ask = nil
-	e.runner.mu.Unlock()
+	e.agent.mu.Lock()
+	e.agent.ask = nil
+	e.agent.mu.Unlock()
 	dave := user(t, "dave", "acme-admins")
 	def := pipeline.Default()
 	def.MaxIterations = 1
@@ -222,10 +222,10 @@ func TestQuestions_IterationLimitAnswerResumesTheLoop(t *testing.T) {
 	require.NoError(t, err)
 
 	e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Status == app.FlowDone })
-	assert.Equal(t, []string{"implement", "review", "implement", "review", "implement", "review", "verify"}, e.runner.ran())
-	e.runner.mu.Lock()
-	assert.True(t, strings.Contains(e.runner.prompts["implement#3"], "Use the simpler design from the review."))
-	e.runner.mu.Unlock()
+	assert.Equal(t, []string{"implement", "review", "implement", "review", "implement", "review", "verify"}, e.agent.ran())
+	e.agent.mu.Lock()
+	assert.True(t, strings.Contains(e.agent.prompts["implement#3"], "Use the simpler design from the review."))
+	e.agent.mu.Unlock()
 }
 
 func TestQuestions_InboxOrdersByImpactAndHidesOtherCustomers(t *testing.T) {
@@ -329,8 +329,8 @@ func TestQuestions_AnAnswerGivenOnlineLetsTheSessionFinishItsStage(t *testing.T)
 	e := newQuestions(t, always(report.OutcomeDone))
 	at := &app.AgentTracker{Reports: e.st, RunStore: e.st, Items: e.st, Tenancy: e.st, Authz: e.flows.Authz,
 		Now: time.Now, NewID: store.NewID}
-	e.runner.mu.Lock()
-	e.runner.ask = func(r run.Run, n int) {
+	e.agent.mu.Lock()
+	e.agent.ask = func(r run.Run, n int) {
 		if r.Stage != "implement" {
 			return
 		}
@@ -346,11 +346,11 @@ func TestQuestions_AnAnswerGivenOnlineLetsTheSessionFinishItsStage(t *testing.T)
 		// A human answers while the session waits; it goes on and finishes.
 		_, _ = e.qs.Answer(user(t, "bob", "acme-devs"), q.ID, "8080")
 	}
-	e.runner.mu.Unlock()
+	e.agent.mu.Unlock()
 	tk := e.ticket(t, auto)
 	_, err := e.flows.Start(user(t, "dave", "acme-admins"), tk.Key)
 	require.NoError(t, err)
 
 	e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Status == app.FlowDone })
-	assert.Equal(t, []string{"implement", "review", "verify"}, e.runner.ran(), "no second implement session")
+	assert.Equal(t, []string{"implement", "review", "verify"}, e.agent.ran(), "no second implement session")
 }

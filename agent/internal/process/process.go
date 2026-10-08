@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/denyszorinets/ballet/agent/internal/driver"
-	"github.com/denyszorinets/ballet/kit/runnerproto"
+	"github.com/denyszorinets/ballet/kit/agentproto"
 )
 
 // Backend executes runs as processes.
@@ -57,7 +57,7 @@ func (b *Backend) Input(runID, kind, text string) error {
 // Run executes a run in a fresh workspace and streams its output: the
 // spec's command, then its coding-agent session, if any. The result is
 // the session's (nil without one, or when it reported none).
-func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, out func(stream, text string)) (int, *runnerproto.Result, error) {
+func (b *Backend) Run(ctx context.Context, runID string, spec agentproto.Spec, out func(stream, text string)) (int, *agentproto.Result, error) {
 	var drv driver.Driver
 	var setup driver.Setup
 	if spec.Session != nil {
@@ -72,7 +72,7 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 			if err != nil {
 				return -1, nil, fmt.Errorf("session state: %w", err)
 			}
-			sess.Resume = &runnerproto.Resume{SessionID: sess.Resume.SessionID, State: state}
+			sess.Resume = &agentproto.Resume{SessionID: sess.Resume.SessionID, State: state}
 		}
 		if setup, err = drv.Setup(sess); err != nil {
 			return -1, nil, err
@@ -112,7 +112,7 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 			return -1, nil, fmt.Errorf("hand the workspace to the session user: %w", err)
 		}
 	}
-	out(runnerproto.StreamSystem, fmt.Sprintf("agent: workspace %s\n", ws))
+	out(agentproto.StreamSystem, fmt.Sprintf("agent: workspace %s\n", ws))
 
 	env := environment(ws, home, spec.Env, spec.SecretEnv)
 	if len(spec.Command) > 0 {
@@ -154,18 +154,18 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 	if _, err := os.Stat(filepath.Join(sdir, ".git")); err == nil {
 		_, _ = b.exec(ctx, proc{argv: []string{"sh", "-c", pushWIP}, dir: sdir, env: env, cred: cred}, out, nil)
 	}
-	parkedRes := runnerproto.Result{Success: true, Parked: true, SessionID: sessionID}
+	parkedRes := agentproto.Result{Success: true, Parked: true, SessionID: sessionID}
 	if res != nil {
 		parkedRes.Summary, parkedRes.Turns, parkedRes.CostUSD = res.Summary, res.Turns, res.CostUSD
 	}
 	if state, err := drv.State(home, sessionID); err != nil {
-		out(runnerproto.StreamSystem, fmt.Sprintf("agent: session state not saved: %v\n", err))
+		out(agentproto.StreamSystem, fmt.Sprintf("agent: session state not saved: %v\n", err))
 	} else if gz, err := gzipState(state); err != nil {
-		out(runnerproto.StreamSystem, fmt.Sprintf("agent: session state not saved: %v\n", err))
+		out(agentproto.StreamSystem, fmt.Sprintf("agent: session state not saved: %v\n", err))
 	} else {
 		parkedRes.State = gz
 	}
-	out(runnerproto.StreamSystem, "agent: session parked\n")
+	out(agentproto.StreamSystem, "agent: session parked\n")
 	return code, &parkedRes, nil
 }
 
@@ -280,12 +280,12 @@ func (b *Backend) exec(ctx context.Context, p proc, out func(stream, text string
 	var wg sync.WaitGroup
 	wg.Add(2)
 	if s == nil {
-		go pump(&wg, stdout, runnerproto.StreamStdout, out)
+		go pump(&wg, stdout, agentproto.StreamStdout, out)
 	} else {
 		s.begin(stdin)
 		go s.read(&wg, stdout)
 	}
-	go pump(&wg, stderr, runnerproto.StreamStderr, out)
+	go pump(&wg, stderr, agentproto.StreamStderr, out)
 
 	stopped := make(chan struct{})
 	go func() {

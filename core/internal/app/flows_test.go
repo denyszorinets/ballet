@@ -21,9 +21,9 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
 )
 
-// scriptedRunner finishes every run it gets with a stage report whose
+// scriptedAgent finishes every run it gets with a stage report whose
 // outcome the script decides.
-type scriptedRunner struct {
+type scriptedAgent struct {
 	d       *app.Dispatcher
 	st      *store.Store
 	mu      sync.Mutex
@@ -36,7 +36,7 @@ type scriptedRunner struct {
 	ask func(r run.Run, n int)
 }
 
-func (s *scriptedRunner) Start(_ context.Context, r run.Run, _ map[string]string) error {
+func (s *scriptedAgent) Start(_ context.Context, r run.Run, _ map[string]string) error {
 	s.mu.Lock()
 	s.stages = append(s.stages, r.Stage)
 	n := 0
@@ -74,25 +74,25 @@ func (s *scriptedRunner) Start(_ context.Context, r run.Run, _ map[string]string
 	return nil
 }
 
-func (s *scriptedRunner) Input(context.Context, string, string, string) error { return nil }
+func (s *scriptedAgent) Input(context.Context, string, string, string) error { return nil }
 
-func (s *scriptedRunner) Cancel(ctx context.Context, runID string) error {
+func (s *scriptedAgent) Cancel(ctx context.Context, runID string) error {
 	go func() { _ = s.d.Finished(context.Background(), "r1", runID, -1, "", true, nil) }()
 	return nil
 }
 
-func (s *scriptedRunner) ran() []string {
+func (s *scriptedAgent) ran() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string(nil), s.stages...)
 }
 
 type flowEnv struct {
-	flows  *app.Flows
-	tr     *app.Tracker
-	runner *scriptedRunner
-	forge  *memForge
-	st     *store.Store
+	flows *app.Flows
+	tr    *app.Tracker
+	agent *scriptedAgent
+	forge *memForge
+	st    *store.Store
 }
 
 // newFlows builds a flow environment; setup runs before the orchestrator
@@ -119,20 +119,20 @@ func newFlows(t *testing.T, script func(string, int) report.Outcome, setup ...fu
 	for _, f := range setup {
 		f(o, d, fl)
 	}
-	sr := &scriptedRunner{d: d, st: st, prompts: map[string]string{}, script: script}
+	sr := &scriptedAgent{d: d, st: st, prompts: map[string]string{}, script: script}
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() { defer wg.Done(); o.Run(ctx) }()
 	go func() { defer wg.Done(); d.Run(ctx) }()
 	t.Cleanup(func() { cancel(); wg.Wait() })
-	require.NoError(t, d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 4}, sr))
+	require.NoError(t, d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 4}, sr))
 
 	ex := &app.Execution{Store: st, Tenancy: st, Authz: env.rbac, Now: time.Now}
 	_, err := ex.Set(user(t, "dave", "acme-admins"), "WEB", execution.Settings{RepoURL: "https://github.com/acme/web.git",
 		DefaultBranch: "main"}, 0)
 	require.NoError(t, err)
-	return flowEnv{flows: fl, tr: tr, runner: sr, forge: mf, st: st}
+	return flowEnv{flows: fl, tr: tr, agent: sr, forge: mf, st: st}
 }
 
 func (e flowEnv) ticket(t *testing.T, policy tracker.Policy) app.ItemView {
@@ -156,7 +156,7 @@ func (e flowEnv) waitFlow(t *testing.T, key string, ok func(app.FlowView) bool) 
 		}
 		if time.Now().After(deadline) {
 			t.Fatalf("flow never reached the expected state: err=%v stage=%s iteration=%d status=%s waiting=%s run=%s outcome=%s ran=%v",
-				err, f.Stage, f.Iteration, f.Status, f.Waiting, f.RunID, f.Outcome, e.runner.ran())
+				err, f.Stage, f.Iteration, f.Status, f.Waiting, f.RunID, f.Outcome, e.agent.ran())
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -188,14 +188,14 @@ func TestFlows_DefaultPipelineRunsUnattended(t *testing.T) {
 	assert.ErrorIs(t, err, app.ErrConflict)
 
 	done := e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Status == app.FlowDone })
-	assert.Equal(t, []string{"implement", "review", "verify"}, e.runner.ran(), "a separate session per agent stage")
+	assert.Equal(t, []string{"implement", "review", "verify"}, e.agent.ran(), "a separate session per agent stage")
 	assert.Equal(t, tracker.StateDone, e.state(t, tk.Key))
 	assert.Contains(t, done.Report, "Merged: https://forge/pr")
 	assert.Equal(t, []int{1}, e.forge.merged, "auto merge")
-	e.runner.mu.Lock()
-	assert.Contains(t, e.runner.prompts["review#1"], "Report of the implement stage (done):\n\nimplement done #1",
+	e.agent.mu.Lock()
+	assert.Contains(t, e.agent.prompts["review#1"], "Report of the implement stage (done):\n\nimplement done #1",
 		"stages hand over their reports")
-	e.runner.mu.Unlock()
+	e.agent.mu.Unlock()
 }
 
 func TestFlows_FailedReviewLoopsBackUntilTheLimit(t *testing.T) {
@@ -210,11 +210,11 @@ func TestFlows_FailedReviewLoopsBackUntilTheLimit(t *testing.T) {
 	_, err := e.flows.Start(user(t, "dave", "acme-admins"), tk.Key)
 	require.NoError(t, err)
 	done := e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Status == app.FlowDone })
-	assert.Equal(t, []string{"implement", "review", "implement", "review", "verify"}, e.runner.ran())
+	assert.Equal(t, []string{"implement", "review", "implement", "review", "verify"}, e.agent.ran())
 	assert.Equal(t, 1, done.Iteration)
-	e.runner.mu.Lock()
-	assert.Contains(t, e.runner.prompts["implement#2"], "Report of the review stage (failed)", "findings go back to implement")
-	e.runner.mu.Unlock()
+	e.agent.mu.Lock()
+	assert.Contains(t, e.agent.prompts["implement#2"], "Report of the review stage (failed)", "findings go back to implement")
+	e.agent.mu.Unlock()
 
 	// A review that always fails exceeds the iteration limit and asks.
 	e2 := newFlows(t, func(stage string, _ int) report.Outcome {
@@ -235,7 +235,7 @@ func TestFlows_FailedReviewLoopsBackUntilTheLimit(t *testing.T) {
 	require.Len(t, qs, 1)
 	assert.True(t, qs[0].Blocking)
 	assert.Contains(t, qs[0].Context, "more than its limit of 3")
-	assert.Len(t, e2.runner.ran(), 8, "implement and review four times each")
+	assert.Len(t, e2.agent.ran(), 8, "implement and review four times each")
 }
 
 func TestFlows_ManualMergeWaitsForAHuman(t *testing.T) {
@@ -268,10 +268,10 @@ func TestFlows_FailingChecksGoBackToImplement(t *testing.T) {
 	require.NoError(t, err)
 	// Checks keep failing, so the loop ends at the iteration limit.
 	e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Waiting == "question" })
-	assert.Equal(t, []string{"implement", "review", "verify", "implement"}, e.runner.ran()[:4])
-	e.runner.mu.Lock()
-	defer e.runner.mu.Unlock()
-	assert.Contains(t, e.runner.prompts["implement#2"], "Checks failed", "check failures go back to implement")
+	assert.Equal(t, []string{"implement", "review", "verify", "implement"}, e.agent.ran()[:4])
+	e.agent.mu.Lock()
+	defer e.agent.mu.Unlock()
+	assert.Contains(t, e.agent.prompts["implement#2"], "Checks failed", "check failures go back to implement")
 }
 
 func TestFlows_HumanStagesAndStopping(t *testing.T) {
@@ -299,9 +299,9 @@ func TestFlows_HumanStagesAndStopping(t *testing.T) {
 	assert.Equal(t, tracker.StatePaused, e.state(t, tk.Key))
 
 	// A human pauses a ticket mid-stage: its run is cancelled, the flow stops.
-	e.runner.mu.Lock()
-	e.runner.hold = true
-	e.runner.mu.Unlock()
+	e.agent.mu.Lock()
+	e.agent.hold = true
+	e.agent.mu.Unlock()
 	tk2 := e.ticket(t, auto)
 	_, err = e.flows.Start(dave, tk2.Key)
 	require.NoError(t, err)
@@ -314,10 +314,10 @@ func TestFlows_HumanStagesAndStopping(t *testing.T) {
 		r, _ := e.st.Run(t.Context(), running.RunID)
 		return r.Status == run.StatusStarting || r.Status == run.StatusRunning
 	}, 5*time.Second, 10*time.Millisecond)
-	e.runner.mu.Lock()
-	held := e.runner.held[len(e.runner.held)-1]
-	e.runner.mu.Unlock()
-	require.NoError(t, e.runner.d.Finished(t.Context(), "r1", held.ID, 0, "", false, nil))
+	e.agent.mu.Lock()
+	held := e.agent.held[len(e.agent.held)-1]
+	e.agent.mu.Unlock()
+	require.NoError(t, e.agent.d.Finished(t.Context(), "r1", held.ID, 0, "", false, nil))
 	stopped := e.waitFlow(t, tk2.Key, func(f app.FlowView) bool { return f.Status == app.FlowStopped })
 	assert.Equal(t, "build", stopped.Stage)
 }
@@ -334,8 +334,8 @@ func TestFlows_NothingPushedGoesBackToImplement(t *testing.T) {
 	_, err := e.flows.Start(user(t, "dave", "acme-admins"), tk.Key)
 	require.NoError(t, err)
 	e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Waiting == "question" })
-	assert.Equal(t, []string{"implement", "review", "verify", "implement"}, e.runner.ran()[:4])
-	e.runner.mu.Lock()
-	defer e.runner.mu.Unlock()
-	assert.Contains(t, e.runner.prompts["implement#2"], "was not pushed", "a missing branch goes back to implement")
+	assert.Equal(t, []string{"implement", "review", "verify", "implement"}, e.agent.ran()[:4])
+	e.agent.mu.Lock()
+	defer e.agent.mu.Unlock()
+	assert.Contains(t, e.agent.prompts["implement#2"], "was not pushed", "a missing branch goes back to implement")
 }

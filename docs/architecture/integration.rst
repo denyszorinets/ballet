@@ -17,9 +17,10 @@ Which interface uses which protocol
      - WebSocket, JSON-RPC 2.0, MessagePack
      - Planner chat, sub-chats, live session output, board/inbox
        updates
-   * - Runner ↔ Core
+   * - Agent ↔ Core
      - WebSocket, JSON-RPC 2.0, MessagePack
-     - Session commands, log streaming, session liveness
+     - Runs, human input, session events and output, results, liveness
+       (:doc:`/reference/agents`)
    * - Agent → Core (tracker), Agent → Knowledge
      - MCP
      - Ticket context, progress, questions, proposals; knowledge
@@ -42,7 +43,7 @@ Stateful connections
 - **Encoding:** WebSocket subprotocol ``ballet.v1.msgpack`` (default) or
   ``ballet.v1.json`` (debugging).
 - **Authentication:** the first message carries the access token (OIDC
-  for humans, a service token for Runners); refreshed in-band.
+  for humans, a service token for agents); refreshed in-band.
 - **Subscriptions:** clients subscribe to streams; every event has a
   sequence number.
 - **Heartbeats:** ``$/heartbeat`` notifications in both directions at a
@@ -54,7 +55,7 @@ Stateful connections
 .. mermaid::
 
    sequenceDiagram
-     participant C as Client (UI / Runner)
+     participant C as Client (UI)
      participant S as Core
      C->>S: WebSocket connect (ballet.v1.msgpack)
      C->>S: auth(token)

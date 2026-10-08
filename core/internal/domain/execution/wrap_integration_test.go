@@ -39,7 +39,7 @@ func origin(t *testing.T) string {
 	return bare
 }
 
-// session runs the wrapped command in a fresh workspace, like a Runner.
+// session runs the wrapped command in a fresh workspace, like an agent.
 func session(t *testing.T, s execution.Settings, branch string, env []string, command ...string) string {
 	t.Helper()
 	ws := t.TempDir()

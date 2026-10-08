@@ -38,7 +38,7 @@ type Reconciler struct {
 	Now      func() time.Time // default Flows.Now
 	Interval time.Duration    // between passes; default 1 minute
 	// DefaultTimeout of stage runs without one; default 2 hours (the
-	// Runner's default).
+	// agent's default).
 	DefaultTimeout time.Duration
 	// Slack beyond a run's timeout before it counts as stuck, and the
 	// minimum age of an orphaned run; default 10 minutes.
@@ -119,7 +119,7 @@ func (rc *Reconciler) flow(ctx context.Context, f Flow) error {
 				return rc.flag(ctx, f, it, c, fmt.Sprintf("The %s stage's run %s made no progress for %s, beyond its timeout.",
 					f.Stage, r.ID, limit))
 			}
-			return nil // the Runner (or the dispatcher's sweep) ends it
+			return nil // the agent (or the dispatcher's sweep) ends it
 		}
 	}
 	if f.Status == FlowWaiting && f.Waiting == "question" {

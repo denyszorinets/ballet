@@ -27,7 +27,7 @@ func TestExecution_GetAndSet(t *testing.T) {
 	assert.Zero(t, got.Version)
 	assert.Equal(t, execution.DefaultBranchTemplate, got.BranchTemplate)
 
-	in := execution.Settings{RepoURL: "https://github.com/acme/web.git", DefaultBranch: "main", Image: "golang:1.27",
+	in := execution.Settings{RepoURL: "https://github.com/acme/web.git", DefaultBranch: "main",
 		Setup: []string{"make deps"}, Env: map[string]string{"CI": "1"}}
 	_, err = ex.Set(bob, "WEB", in, 0)
 	assert.ErrorIs(t, err, app.ErrForbidden, "engineers do not configure execution")
@@ -43,7 +43,6 @@ func TestExecution_GetAndSet(t *testing.T) {
 
 	got, err = ex.Get(bob, "WEB")
 	require.NoError(t, err)
-	assert.Equal(t, "golang:1.27", got.Image)
 	assert.Equal(t, []string{"make deps"}, got.Setup)
 }
 
@@ -56,7 +55,7 @@ func TestRuns_PreparedFromExecutionSettingsWithSecretsOnlyAtStart(t *testing.T) 
 	}
 	dave := user(t, "dave", "acme-admins")
 	_, err := ex.Set(dave, "WEB", execution.Settings{RepoURL: "https://github.com/acme/web.git", DefaultBranch: "main",
-		Image: "golang:1.27", Env: map[string]string{"CI": "1", "MODE": "project"}}, 0)
+		Env: map[string]string{"CI": "1", "MODE": "project"}}, 0)
 	require.NoError(t, err)
 	tk, err := e.tr.CreateItem(dave, app.CreateItemInput{ProjectKey: "WEB", Kind: tracker.KindTicket, Title: "Export invoices"})
 	require.NoError(t, err)
@@ -64,14 +63,13 @@ func TestRuns_PreparedFromExecutionSettingsWithSecretsOnlyAtStart(t *testing.T) 
 	r, err := e.runs.Create(dave, tk.Key, "implement", run.Spec{Command: []string{"make", "test"}, Env: map[string]string{"MODE": "run"}})
 	require.NoError(t, err)
 	assert.Equal(t, "ballet/"+tk.Key+"-export-invoices", r.Branch)
-	assert.Equal(t, "golang:1.27", r.Spec.Image)
 	assert.Equal(t, map[string]string{"CI": "1", "MODE": "run", "BALLET_TICKET": tk.Key, "BALLET_STAGE": "implement",
 		"BALLET_BRANCH": r.Branch}, r.Spec.Env)
 	assert.Equal(t, []string{"sh", "-c"}, r.Spec.Command[:2])
 	assert.Equal(t, []string{"ballet-workspace", "make", "test"}, r.Spec.Command[3:])
 
-	fr := &fakeRunner{}
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 1}, fr))
+	fr := &fakeAgent{}
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 1}, fr))
 	e.eventually(t, r.ID, run.StatusStarting)
 	fr.mu.Lock()
 	assert.Equal(t, map[string]string{execution.TokenEnv: "s3cret"}, fr.secrets[0], "the token goes to the Runner")

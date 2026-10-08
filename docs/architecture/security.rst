@@ -110,16 +110,27 @@ Secrets
   scope. The REST API accepts keys but only ever returns a fingerprint;
   events record the fingerprint only. The decrypted key is returned
   solely by ``/internal/v1/credentials/resolve`` to services holding
-  ``credentials.read`` (the gateway) — agent containers never receive
+  ``credentials.read`` (the gateway) — agent sessions never receive
   provider keys.
 - Git platform credentials are stored per project. Core uses an API
-  token for the forge adapter (open, review, merge pull requests); the
-  Runner uses a clone credential; containers receive a credential
-  limited to pushing the run's branch where the platform supports it.
+  token for the forge adapter (open, review, merge pull requests); a
+  session receives the git token with its run's start only, in its
+  environment, to clone and push the run's branch.
 
-Container isolation
--------------------
+Session isolation
+-----------------
 
-Runs execute in rootless containers where possible, with no access to the
-host's container socket, restricted network egress (git remote, LLM
-gateway, Ballet MCPs, package registries), and resource limits.
+Ballet creates no containers and needs no container socket
+(:doc:`decisions/0025-agent-fleet-runs-sessions-as-processes`). The
+container or VM an agent runs in is the isolation boundary:
+
+- sessions run as an unprivileged session user, so they cannot read the
+  agent's token or signal the agent; each gets a fresh workspace and
+  ``HOME``, removed afterwards, and a minimal environment;
+- later sessions run where earlier ones ran: run agents of different
+  customers in different pools;
+- coding agents skip their permission prompts (``IS_SANDBOX=1``,
+  ``"permission": "allow"``) because the container is the boundary;
+- restrict the containers' network egress to the git remote, the LLM
+  gateway, Ballet's MCP endpoints and package registries, and give them
+  resource limits (Kubernetes, compose or the VM's firewall).

@@ -987,7 +987,6 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				project: m[1],
 				repo_url: '',
 				default_branch: '',
-				image: '',
 				setup: [],
 				env: {},
 				branch_template: 'ballet/{ticket}-{slug}',

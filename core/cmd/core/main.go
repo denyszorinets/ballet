@@ -34,10 +34,10 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/infra/secrets"
 	"github.com/denyszorinets/ballet/core/internal/infra/servicetokens"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
+	"github.com/denyszorinets/ballet/core/internal/transport/agentapi"
 	"github.com/denyszorinets/ballet/core/internal/transport/httpapi"
 	"github.com/denyszorinets/ballet/core/internal/transport/internalapi"
 	"github.com/denyszorinets/ballet/core/internal/transport/realtime"
-	"github.com/denyszorinets/ballet/core/internal/transport/runnerapi"
 	"github.com/denyszorinets/ballet/core/internal/transport/trackermcp"
 	"github.com/denyszorinets/ballet/core/internal/transport/webui"
 	"github.com/denyszorinets/ballet/kit/auth/local"
@@ -412,7 +412,7 @@ func run() error {
 			return secrets, nil
 		},
 	}
-	runnerapi.Register(svc.Mux, runnerapi.Deps{
+	agentapi.Register(svc.Mux, agentapi.Deps{
 		Verifier: runtoken.NewRingVerifier(tokenKeys, time.Now), Dispatcher: dispatcher,
 		Options: rpc.Options{Logger: svc.Logger},
 	})

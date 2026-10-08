@@ -73,7 +73,7 @@ func setup(t *testing.T) fixture {
 	runs := &app.Runs{Store: st, Items: st, Tenancy: st, Authz: authz, Dispatcher: d, Now: time.Now, NewID: store.NewID}
 	r, err := runs.Create(admin, it.Key, "implement", run.Spec{Command: []string{"x"}})
 	require.NoError(t, err)
-	require.NoError(t, d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 1}, acceptAll{}))
+	require.NoError(t, d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 1}, acceptAll{}))
 	require.Eventually(t, func() bool { x, _ := st.Run(t.Context(), r.ID); return x.Status == run.StatusStarting },
 		5*time.Second, 5*time.Millisecond)
 

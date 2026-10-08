@@ -27,7 +27,6 @@ type Settings struct {
 	ProjectID      string
 	RepoURL        string            // https://, ssh (git@host:path) or file://
 	DefaultBranch  string            // "" : the repository's default
-	Image          string            // devcontainer image (container backends)
 	Setup          []string          // shell commands run in the repository before the session
 	Env            map[string]string // added to every run's environment
 	BranchTemplate string            // e.g. "ballet/{ticket}-{slug}"
@@ -114,9 +113,6 @@ func (s Settings) Validate() error {
 	}
 	if s.AnswerWindowMinutes < 0 || s.AnswerWindowMinutes > 24*60 {
 		errs = append(errs, errors.New("answer_window_minutes must be 0 (the default) to 1440"))
-	}
-	if len(s.Image) > 300 || strings.ContainsAny(s.Image, " \t\n") {
-		errs = append(errs, errors.New("image must be an image reference"))
 	}
 	return errors.Join(errs...)
 }

@@ -185,6 +185,19 @@ Validation
 Dogfooding: Ballet's own devcontainer with the Feature serves as the
 pool for Ballet's tickets.
 
+Findings (M7, :issue:`162`):
+
+- The Runner and its Docker and process backends are gone; the agent
+  runs sessions as processes, optionally as a separate user (tested as
+  root in CI). The failure-injection tests pass with the agent.
+- Claude Code (stream-json) and opencode (Agent Client Protocol) run
+  end to end through the agent against the LLM gateway, including the
+  tracker MCP with the run token.
+- CI builds an example pool from a devcontainer with the Feature and
+  checks the agent, the session user, the pool label and both runtimes.
+- Not yet validated: a real overnight run on the dogfooding pool, and a
+  Kubernetes Deployment.
+
 References
 ----------
 

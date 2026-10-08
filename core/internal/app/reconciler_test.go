@@ -20,9 +20,9 @@ func (e flowEnv) reconciler() *app.Reconciler {
 }
 
 func (e flowEnv) hold() {
-	e.runner.mu.Lock()
-	e.runner.hold = true
-	e.runner.mu.Unlock()
+	e.agent.mu.Lock()
+	e.agent.hold = true
+	e.agent.mu.Unlock()
 }
 
 func (e flowEnv) events(t *testing.T, key string) []string {

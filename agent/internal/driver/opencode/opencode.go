@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/denyszorinets/ballet/agent/internal/driver"
-	"github.com/denyszorinets/ballet/kit/runnerproto"
+	"github.com/denyszorinets/ballet/kit/agentproto"
 )
 
 // Name of the runtime.
@@ -30,7 +30,7 @@ type Driver struct {
 // Setup returns the session's files, environment and command. The
 // configuration, instructions and skills are opencode's global ones in
 // HOME — outside the repository, so agents cannot commit them.
-func (d Driver) Setup(s runnerproto.Session) (driver.Setup, error) {
+func (d Driver) Setup(s agentproto.Session) (driver.Setup, error) {
 	if strings.TrimSpace(s.Prompt) == "" {
 		return driver.Setup{}, errors.New("opencode: the session has no prompt")
 	}
@@ -226,21 +226,21 @@ func (c *codec) end(success bool, text string) driver.Parsed {
 		text = c.last
 	}
 	c.last = ""
-	p.Events = append(p.Events, runnerproto.Event{Kind: runnerproto.EventResult, Text: text, Error: !success})
+	p.Events = append(p.Events, agentproto.Event{Kind: agentproto.EventResult, Text: text, Error: !success})
 	// One turn per result; the agent adds them up.
-	p.Result = &runnerproto.Result{Success: success, Summary: text, Turns: 1, CostUSD: c.cost}
+	p.Result = &agentproto.Result{Success: success, Summary: text, Turns: 1, CostUSD: c.cost}
 	return p
 }
 
 // flush turns the agent's buffered message into a text event.
-func (c *codec) flush() []runnerproto.Event {
+func (c *codec) flush() []agentproto.Event {
 	if c.text.Len() == 0 {
 		return nil
 	}
 	t := c.text.String()
 	c.text.Reset()
 	c.last = t
-	return []runnerproto.Event{{Kind: runnerproto.EventText, Text: t}}
+	return []agentproto.Event{{Kind: agentproto.EventText, Text: t}}
 }
 
 func (c *codec) update(params json.RawMessage) driver.Parsed {
@@ -281,14 +281,14 @@ func (c *codec) update(params json.RawMessage) driver.Parsed {
 		if len(u.Input) > 0 && string(u.Input) != "null" {
 			cl.input = string(u.Input)
 		}
-		var events []runnerproto.Event
+		var events []agentproto.Event
 		if !cl.shown && cl.name != "" {
 			cl.shown = true
-			events = append(c.flush(), runnerproto.Event{Kind: runnerproto.EventToolUse, Tool: cl.name, Input: cl.input})
+			events = append(c.flush(), agentproto.Event{Kind: agentproto.EventToolUse, Tool: cl.name, Input: cl.input})
 		}
 		if u.Status == "completed" || u.Status == "failed" {
 			delete(c.calls, u.CallID)
-			events = append(append(events, c.flush()...), runnerproto.Event{Kind: runnerproto.EventToolResult,
+			events = append(append(events, c.flush()...), agentproto.Event{Kind: agentproto.EventToolResult,
 				Text: truncate(contentText(u.Content), maxToolResult), Error: u.Status == "failed"})
 		}
 		return driver.Parsed{Events: events}

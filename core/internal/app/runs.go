@@ -35,7 +35,7 @@ type RunStore interface {
 // RunFilter selects runs; zero fields do not filter.
 type RunFilter struct {
 	TicketID string
-	Runner   string
+	Agent    string
 	Statuses []run.Status
 	Limit    int
 }
@@ -56,7 +56,7 @@ type RunView struct {
 }
 
 // Runs implements the human-facing run use cases. Runs are queued for a
-// ticket and executed by Runners through the Dispatcher.
+// ticket and executed by agents through the Dispatcher.
 type Runs struct {
 	Store     RunStore
 	Execution ExecutionStore // nil: runs execute their spec as given
@@ -333,9 +333,6 @@ func (rs *Runs) prepare(ctx context.Context, r *run.Run, it tracker.Item) error 
 	for k, v := range x.Env {
 		env[k] = v
 	}
-	if r.Spec.Image == "" {
-		r.Spec.Image = x.Image
-	}
 	if r.Spec.Pool == "" {
 		r.Spec.Pool = x.Pool
 	}
@@ -403,7 +400,7 @@ func (rs *Runs) Logs(ctx context.Context, runID string, afterSeq int64, limit in
 }
 
 // Cancel stops a run: a queued run is cancelled at once; an active one is
-// cancelled on its Runner (or here, when the Runner is gone).
+// cancelled on its agent (or here, when the agent is gone).
 func (rs *Runs) Cancel(ctx context.Context, runID string) (RunView, error) {
 	v, err := rs.view(ctx, runID, ActRunManage)
 	if err != nil {
@@ -501,8 +498,8 @@ func runEvent(r run.Run, customerID, typ string, actor event.Actor, payload map[
 		Actor: actor, OccurredAt: at, Payload: mustJSON(payload)}
 }
 
-// RunnerConn reaches a connected Runner.
-type RunnerConn interface {
+// AgentConn reaches a connected agent.
+type AgentConn interface {
 	// Start sends a run with secretEnv: environment variables (tokens)
 	// delivered with the start only, never stored with the run.
 	Start(ctx context.Context, r run.Run, secretEnv map[string]string) error
@@ -511,23 +508,23 @@ type RunnerConn interface {
 	Input(ctx context.Context, runID, kind, text string) error
 }
 
-// RunnerInfo describes a Runner as it introduced itself.
-type RunnerInfo struct {
+// AgentInfo describes an agent as it introduced itself.
+type AgentInfo struct {
 	Name     string
 	Labels   map[string]string
 	Capacity int
 	Active   []string // runs it still executes (after a reconnect)
 }
 
-type runnerState struct {
-	info   RunnerInfo
-	conn   RunnerConn
+type agentState struct {
+	info   AgentInfo
+	conn   AgentConn
 	active map[string]bool
 	ready  bool // reconciled: may receive runs
 }
 
-// Dispatcher assigns queued runs to connected Runners and records what
-// they report. Runs held by a Runner that stays away longer than Grace
+// Dispatcher assigns queued runs to connected agents and records what
+// they report. Runs held by an agent that stays away longer than Grace
 // fail.
 type Dispatcher struct {
 	Store       RunStore
@@ -547,18 +544,18 @@ type Dispatcher struct {
 	// Control.Paused).
 	Held func(ctx context.Context, projectID string) bool
 
-	mu      sync.Mutex
-	runners map[string]*runnerState
-	gone    map[string]time.Time // disconnected Runners: since when
-	kick    chan struct{}
+	mu     sync.Mutex
+	agents map[string]*agentState
+	gone   map[string]time.Time // disconnected agents: since when
+	kick   chan struct{}
 }
 
-// ErrRunnerConflict is returned when a Runner name is already connected.
-var ErrRunnerConflict = errors.New("a runner with this name is already connected")
+// ErrAgentConflict is returned when an agent name is already connected.
+var ErrAgentConflict = errors.New("an agent with this name is already connected")
 
 func (d *Dispatcher) init() {
-	if d.runners == nil {
-		d.runners = map[string]*runnerState{}
+	if d.agents == nil {
+		d.agents = map[string]*agentState{}
 		d.gone = map[string]time.Time{}
 		d.kick = make(chan struct{}, 1)
 	}
@@ -599,22 +596,22 @@ func (d *Dispatcher) Run(ctx context.Context) {
 	}
 }
 
-// Connect registers a Runner. Runs assigned to it that it no longer
+// Connect registers an agent. Runs assigned to it that it no longer
 // executes fail; runs it still executes stay active.
-func (d *Dispatcher) Connect(ctx context.Context, info RunnerInfo, conn RunnerConn) error {
+func (d *Dispatcher) Connect(ctx context.Context, info AgentInfo, conn AgentConn) error {
 	if info.Name == "" || info.Capacity < 1 {
-		return fmt.Errorf("%w: a runner needs a name and a capacity of at least 1", ErrInvalid)
+		return fmt.Errorf("%w: an agent needs a name and a capacity of at least 1", ErrInvalid)
 	}
 	d.mu.Lock()
 	d.init()
-	if _, taken := d.runners[info.Name]; taken {
+	if _, taken := d.agents[info.Name]; taken {
 		d.mu.Unlock()
-		return ErrRunnerConflict
+		return ErrAgentConflict
 	}
 	// Not ready until reconciled: a run assigned to this connection in the
-	// meantime would look like one the Runner lost.
-	st := &runnerState{info: info, conn: conn, active: map[string]bool{}}
-	d.runners[info.Name] = st
+	// meantime would look like one the agent lost.
+	st := &agentState{info: info, conn: conn, active: map[string]bool{}}
+	d.agents[info.Name] = st
 	delete(d.gone, info.Name)
 	d.mu.Unlock()
 
@@ -622,10 +619,10 @@ func (d *Dispatcher) Connect(ctx context.Context, info RunnerInfo, conn RunnerCo
 	for _, id := range info.Active {
 		still[id] = true
 	}
-	held, err := d.Store.ListRuns(ctx, RunFilter{Runner: info.Name, Statuses: []run.Status{run.StatusStarting, run.StatusRunning}})
+	held, err := d.Store.ListRuns(ctx, RunFilter{Agent: info.Name, Statuses: []run.Status{run.StatusStarting, run.StatusRunning}})
 	if err != nil {
 		d.mu.Lock()
-		delete(d.runners, info.Name)
+		delete(d.agents, info.Name)
 		d.mu.Unlock()
 		return err
 	}
@@ -645,24 +642,24 @@ func (d *Dispatcher) Connect(ctx context.Context, info RunnerInfo, conn RunnerCo
 	return nil
 }
 
-// Disconnect unregisters a Runner connection. Its runs stay active for
+// Disconnect unregisters an agent connection. Its runs stay active for
 // Grace in case it reconnects.
-func (d *Dispatcher) Disconnect(name string, conn RunnerConn) {
+func (d *Dispatcher) Disconnect(name string, conn AgentConn) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.init()
-	if st, ok := d.runners[name]; ok && st.conn == conn {
-		delete(d.runners, name)
+	if st, ok := d.agents[name]; ok && st.conn == conn {
+		delete(d.agents, name)
 		d.gone[name] = d.Now()
 	}
 }
 
-// Runners returns the connected Runners.
-func (d *Dispatcher) Runners() []RunnerInfo {
+// Agents returns the connected agents.
+func (d *Dispatcher) Agents() []AgentInfo {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	out := make([]RunnerInfo, 0, len(d.runners))
-	for _, st := range d.runners {
+	out := make([]AgentInfo, 0, len(d.agents))
+	for _, st := range d.agents {
 		info := st.info
 		info.Active = nil
 		for id := range st.active {
@@ -673,7 +670,7 @@ func (d *Dispatcher) Runners() []RunnerInfo {
 	return out
 }
 
-// dispatch assigns queued runs, oldest first, to Runners with free capacity.
+// dispatch assigns queued runs, oldest first, to agents with free capacity.
 func (d *Dispatcher) dispatch(ctx context.Context) {
 	queued, err := d.Store.ListRuns(ctx, RunFilter{Statuses: []run.Status{run.StatusQueued}, Limit: 100})
 	if err != nil {
@@ -689,7 +686,7 @@ func (d *Dispatcher) dispatch(ctx context.Context) {
 			continue // no free agent of its pool; others may have one
 		}
 		assigned := r
-		assigned.Status, assigned.Runner, assigned.Version = run.StatusStarting, st.info.Name, r.Version+1
+		assigned.Status, assigned.Agent, assigned.Version = run.StatusStarting, st.info.Name, r.Version+1
 		if err := d.Store.UpdateRun(ctx, assigned, r.Version, nil); err != nil {
 			if !errors.Is(err, ErrConflict) {
 				d.logger().ErrorContext(ctx, "assign run failed", "run", r.ID, "error", err)
@@ -723,12 +720,12 @@ func (d *Dispatcher) dispatch(ctx context.Context) {
 		err := st.conn.Start(callCtx, assigned, secrets)
 		cancel()
 		if err != nil {
-			d.logger().WarnContext(ctx, "runner refused run; requeued", "run", r.ID, "runner", st.info.Name, "error", err)
+			d.logger().WarnContext(ctx, "agent refused run; requeued", "run", r.ID, "agent", st.info.Name, "error", err)
 			d.mu.Lock()
 			delete(st.active, r.ID)
 			d.mu.Unlock()
 			back := assigned
-			back.Status, back.Runner, back.Version = run.StatusQueued, "", assigned.Version+1
+			back.Status, back.Agent, back.Version = run.StatusQueued, "", assigned.Version+1
 			_ = d.Store.UpdateRun(ctx, back, assigned.Version, nil)
 		}
 	}
@@ -736,11 +733,11 @@ func (d *Dispatcher) dispatch(ctx context.Context) {
 
 // pick returns a connected agent with free capacity (the least loaded),
 // of the pool when one is given.
-func (d *Dispatcher) pick(pool string) *runnerState {
+func (d *Dispatcher) pick(pool string) *agentState {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	var best *runnerState
-	for _, st := range d.runners {
+	var best *agentState
+	for _, st := range d.agents {
 		if !st.ready || pool != "" && st.info.Labels["pool"] != pool {
 			continue
 		}
@@ -752,7 +749,7 @@ func (d *Dispatcher) pick(pool string) *runnerState {
 	return best
 }
 
-// sweep fails active runs whose Runner has been gone longer than Grace.
+// sweep fails active runs whose agent has been gone longer than Grace.
 func (d *Dispatcher) sweep(ctx context.Context) {
 	grace := d.Grace
 	if grace <= 0 {
@@ -765,16 +762,16 @@ func (d *Dispatcher) sweep(ctx context.Context) {
 	now := d.Now()
 	for _, r := range active {
 		d.mu.Lock()
-		_, connected := d.runners[r.Runner]
-		since, known := d.gone[r.Runner]
+		_, connected := d.agents[r.Agent]
+		since, known := d.gone[r.Agent]
 		d.mu.Unlock()
 		if connected {
 			continue
 		}
 		if !known {
-			// Core restarted: the Runner gets Grace from now to reconnect.
+			// Core restarted: the agent gets Grace from now to reconnect.
 			d.mu.Lock()
-			d.gone[r.Runner] = now
+			d.gone[r.Agent] = now
 			d.mu.Unlock()
 			continue
 		}
@@ -784,9 +781,9 @@ func (d *Dispatcher) sweep(ctx context.Context) {
 	}
 }
 
-// Running records that a Runner started a run's session.
-func (d *Dispatcher) Running(ctx context.Context, runner, runID string) error {
-	r, err := d.held(ctx, runner, runID)
+// Running records that an agent started a run's session.
+func (d *Dispatcher) Running(ctx context.Context, agentName, runID string) error {
+	r, err := d.held(ctx, agentName, runID)
 	if err != nil {
 		return err
 	}
@@ -795,7 +792,7 @@ func (d *Dispatcher) Running(ctx context.Context, runner, runID string) error {
 	}
 	next := r
 	next.Status, next.StartedAt, next.Version = run.StatusRunning, d.Now(), r.Version+1
-	e, err := d.event(ctx, next, "run.started", map[string]any{"runner": runner})
+	e, err := d.event(ctx, next, "run.started", map[string]any{"agent": agentName})
 	if err != nil {
 		return err
 	}
@@ -805,11 +802,11 @@ func (d *Dispatcher) Running(ctx context.Context, runner, runID string) error {
 // Log records output of a run: stdout, stderr, the agent's system
 // messages, and a session's normalized events (stream "event", one JSON
 // object per line). Output beyond MaxLogBytes is dropped.
-func (d *Dispatcher) Log(ctx context.Context, runner, runID, stream, text string) error {
+func (d *Dispatcher) Log(ctx context.Context, agentName, runID, stream, text string) error {
 	if stream != "stdout" && stream != "stderr" && stream != "system" && stream != "event" {
 		return fmt.Errorf("%w: stream must be stdout, stderr, system or event", ErrInvalid)
 	}
-	if _, err := d.held(ctx, runner, runID); err != nil {
+	if _, err := d.held(ctx, agentName, runID); err != nil {
 		return err
 	}
 	max := d.MaxLogBytes
@@ -835,9 +832,9 @@ type SessionResult struct {
 
 // Finished records the end of a run reported by its agent; res is the
 // session's result (nil when it reported none).
-func (d *Dispatcher) Finished(ctx context.Context, runner, runID string, exitCode int, errText string, cancelled bool,
+func (d *Dispatcher) Finished(ctx context.Context, agentName, runID string, exitCode int, errText string, cancelled bool,
 	res *SessionResult) error {
-	r, err := d.held(ctx, runner, runID)
+	r, err := d.held(ctx, agentName, runID)
 	if err != nil {
 		return err
 	}
@@ -893,13 +890,13 @@ func (d *Dispatcher) cancel(ctx context.Context, r run.Run, actor event.Actor) (
 	}
 	d.mu.Lock()
 	d.init()
-	st, connected := d.runners[r.Runner]
+	st, connected := d.agents[r.Agent]
 	d.mu.Unlock()
 	if connected {
 		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 		if err := st.conn.Cancel(callCtx, r.ID); err == nil {
-			return r, nil // the Runner reports run.finished
+			return r, nil // the agent reports run.finished
 		}
 	}
 	return d.finishRun(ctx, r, run.StatusCancelled, nil, "cancelled")
@@ -909,7 +906,7 @@ func (d *Dispatcher) cancel(ctx context.Context, r run.Run, actor event.Actor) (
 func (d *Dispatcher) input(ctx context.Context, r run.Run, kind, text string) error {
 	d.mu.Lock()
 	d.init()
-	st, connected := d.runners[r.Runner]
+	st, connected := d.agents[r.Agent]
 	d.mu.Unlock()
 	if !connected {
 		return fmt.Errorf("%w: the run's agent is not connected", ErrConflict)
@@ -945,7 +942,7 @@ func (d *Dispatcher) finishRun(ctx context.Context, r run.Run, status run.Status
 		return run.Run{}, err
 	}
 	d.mu.Lock()
-	if st, ok := d.runners[r.Runner]; ok {
+	if st, ok := d.agents[r.Agent]; ok {
 		delete(st.active, r.ID)
 	}
 	d.mu.Unlock()
@@ -956,14 +953,14 @@ func (d *Dispatcher) finishRun(ctx context.Context, r run.Run, status run.Status
 	return next, nil
 }
 
-// held returns a run the Runner executes.
-func (d *Dispatcher) held(ctx context.Context, runner, runID string) (run.Run, error) {
+// held returns a run the agent executes.
+func (d *Dispatcher) held(ctx context.Context, agentName, runID string) (run.Run, error) {
 	r, err := d.Store.Run(ctx, runID)
 	if err != nil {
 		return run.Run{}, err
 	}
-	if r.Runner != runner || !r.Status.Active() {
-		return run.Run{}, fmt.Errorf("%w: run %s is not executed by runner %s", ErrForbidden, runID, runner)
+	if r.Agent != agentName || !r.Status.Active() {
+		return run.Run{}, fmt.Errorf("%w: run %s is not executed by agent %s", ErrForbidden, runID, agentName)
 	}
 	return r, nil
 }
@@ -973,7 +970,7 @@ func (d *Dispatcher) event(ctx context.Context, r run.Run, typ string, payload m
 	if err != nil {
 		return event.Event{}, err
 	}
-	return runEvent(r, p.CustomerID, typ, event.Actor{Kind: event.ActorService, Subject: "runner:" + r.Runner}, payload), nil
+	return runEvent(r, p.CustomerID, typ, event.Actor{Kind: event.ActorService, Subject: "agent:" + r.Agent}, payload), nil
 }
 
 func (d *Dispatcher) logger() *slog.Logger {

@@ -18,8 +18,8 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
 )
 
-// fakeRunner records what Core asks of it.
-type fakeRunner struct {
+// fakeAgent records what Core asks of it.
+type fakeAgent struct {
 	mu        sync.Mutex
 	started   []string
 	cancelled []string
@@ -31,7 +31,7 @@ type fakeRunner struct {
 	runs      []run.Run
 }
 
-func (f *fakeRunner) Start(_ context.Context, r run.Run, secrets map[string]string) error {
+func (f *fakeAgent) Start(_ context.Context, r run.Run, secrets map[string]string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.attempts++
@@ -44,7 +44,7 @@ func (f *fakeRunner) Start(_ context.Context, r run.Run, secrets map[string]stri
 	return nil
 }
 
-func (f *fakeRunner) Input(_ context.Context, runID, kind, text string) error {
+func (f *fakeAgent) Input(_ context.Context, runID, kind, text string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.inputErr != nil {
@@ -54,14 +54,14 @@ func (f *fakeRunner) Input(_ context.Context, runID, kind, text string) error {
 	return nil
 }
 
-func (f *fakeRunner) Cancel(_ context.Context, runID string) error {
+func (f *fakeAgent) Cancel(_ context.Context, runID string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.cancelled = append(f.cancelled, runID)
 	return nil
 }
 
-func (f *fakeRunner) starts() []string {
+func (f *fakeAgent) starts() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.started...)
@@ -137,9 +137,9 @@ func TestRuns_DispatchRespectsCapacityAndRecordsReports(t *testing.T) {
 	a, _ := e.runs.Create(dave, tk.Key, "implement", cmd)
 	b, _ := e.runs.Create(dave, tk.Key, "review", cmd)
 
-	fr := &fakeRunner{}
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 1}, fr))
-	assert.ErrorIs(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 1}, &fakeRunner{}), app.ErrRunnerConflict)
+	fr := &fakeAgent{}
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 1}, fr))
+	assert.ErrorIs(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 1}, &fakeAgent{}), app.ErrAgentConflict)
 	e.eventually(t, a.ID, run.StatusStarting)
 	assert.Equal(t, []string{a.ID}, fr.starts())
 	assert.Equal(t, run.StatusQueued, e.status(t, b.ID).Status, "capacity 1")
@@ -181,8 +181,8 @@ func TestRuns_CancelQueuedAndActive(t *testing.T) {
 	_, err = e.runs.Cancel(dave, q.ID)
 	assert.ErrorIs(t, err, app.ErrConflict)
 
-	fr := &fakeRunner{}
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 2}, fr))
+	fr := &fakeAgent{}
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 2}, fr))
 	a, _ := e.runs.Create(dave, tk.Key, "implement", cmd)
 	e.eventually(t, a.ID, run.StatusStarting)
 	_, err = e.runs.Cancel(dave, a.ID)
@@ -197,8 +197,8 @@ func TestRuns_RefusedRunsAreRequeued(t *testing.T) {
 	dave := user(t, "dave", "acme-admins")
 	tk := mk(t, e.tr, tracker.KindTicket, "t")
 	r, _ := e.runs.Create(dave, tk.Key, "implement", cmd)
-	fr := &fakeRunner{refuse: true}
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 1}, fr))
+	fr := &fakeAgent{refuse: true}
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 1}, fr))
 	require.Eventually(t, func() bool { fr.mu.Lock(); defer fr.mu.Unlock(); return fr.attempts >= 2 }, 5*time.Second,
 		5*time.Millisecond, "a refused run goes back to the queue and is offered again")
 	assert.Empty(t, fr.starts())
@@ -210,7 +210,7 @@ func TestRuns_RefusedRunsAreRequeued(t *testing.T) {
 	assert.Equal(t, []string{r.ID}, fr.starts())
 	got := e.status(t, r.ID)
 	assert.Equal(t, run.StatusStarting, got.Status, "accepted runs stay with their runner")
-	assert.Equal(t, "r1", got.Runner)
+	assert.Equal(t, "r1", got.Agent)
 }
 
 func TestRuns_ReconnectAndDisconnect(t *testing.T) {
@@ -219,18 +219,18 @@ func TestRuns_ReconnectAndDisconnect(t *testing.T) {
 	tk := mk(t, e.tr, tracker.KindTicket, "t")
 	a, _ := e.runs.Create(dave, tk.Key, "implement", cmd)
 	b, _ := e.runs.Create(dave, tk.Key, "review", cmd)
-	first := &fakeRunner{}
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 2}, first))
+	first := &fakeAgent{}
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 2}, first))
 	e.eventually(t, a.ID, run.StatusStarting)
 	e.eventually(t, b.ID, run.StatusStarting)
 
 	// The runner reconnects still executing a, but lost b.
 	e.d.Disconnect("r1", first)
-	second := &fakeRunner{}
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 2, Active: []string{a.ID}}, second))
+	second := &fakeAgent{}
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 2, Active: []string{a.ID}}, second))
 	assert.Equal(t, run.StatusStarting, e.status(t, a.ID).Status)
 	assert.Equal(t, run.StatusFailed, e.status(t, b.ID).Status)
-	assert.Len(t, e.d.Runners(), 1)
+	assert.Len(t, e.d.Agents(), 1)
 
 	// Gone for longer than Grace: its runs fail.
 	e.d.Disconnect("r1", second)
@@ -268,8 +268,8 @@ func TestRuns_AgentRunsAreSessionsJudgedByTheirResult(t *testing.T) {
 	assert.Empty(t, r.Spec.Command, "no repository: nothing to prepare")
 	assert.Equal(t, 60, r.Spec.TimeoutSeconds)
 
-	fr := &fakeRunner{}
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 3}, fr))
+	fr := &fakeAgent{}
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 3}, fr))
 	finish := func(res *app.SessionResult, code int) run.Run {
 		t.Helper()
 		v, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "claude-code", Prompt: "p"})
@@ -317,8 +317,8 @@ func TestRuns_AgentPromptIsTheOnboardingBundle(t *testing.T) {
 	require.NoError(t, err)
 
 	// The blocker was implemented by an earlier agent run.
-	fr := &fakeRunner{}
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 1}, fr))
+	fr := &fakeAgent{}
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 1}, fr))
 	prev, err := e.runs.CreateAgent(dave, store.Key, "implement", app.AgentInput{Adapter: "claude-code", Prompt: "p"})
 	require.NoError(t, err)
 	e.eventually(t, prev.ID, run.StatusStarting)
@@ -343,8 +343,8 @@ func TestRuns_InputReachesTheRunningSession(t *testing.T) {
 	e := newRuns(t, time.Minute)
 	dave := user(t, "dave", "acme-admins")
 	tk := mk(t, e.tr, tracker.KindTicket, "t")
-	fr := &fakeRunner{}
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 2}, fr))
+	fr := &fakeAgent{}
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 2}, fr))
 	v, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "claude-code", Prompt: "p"})
 	require.NoError(t, err)
 	e.eventually(t, v.ID, run.StatusStarting)
@@ -372,15 +372,15 @@ func TestDispatcher_RoutesRunsToTheirPool(t *testing.T) {
 	e := newRuns(t, time.Minute)
 	dave := user(t, "dave", "acme-admins")
 	tk := mk(t, e.tr, tracker.KindTicket, "t")
-	web, ml := &fakeRunner{}, &fakeRunner{}
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "web-1", Labels: map[string]string{"pool": "web"},
+	web, ml := &fakeAgent{}, &fakeAgent{}
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "web-1", Labels: map[string]string{"pool": "web"},
 		Capacity: 5}, web))
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "ml-1", Labels: map[string]string{"pool": "ml"},
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "ml-1", Labels: map[string]string{"pool": "ml"},
 		Capacity: 1}, ml))
 
 	toML, err := e.runs.Create(dave, tk.Key, "implement", run.Spec{Command: []string{"x"}, Pool: "ml"})
 	require.NoError(t, err)
-	assert.Equal(t, "ml-1", e.eventually(t, toML.ID, run.StatusStarting).Runner)
+	assert.Equal(t, "ml-1", e.eventually(t, toML.ID, run.StatusStarting).Agent)
 	// ml-1 is full: the next ml run waits even though web-1 is free.
 	waits, err := e.runs.Create(dave, tk.Key, "implement", run.Spec{Command: []string{"x"}, Pool: "ml"})
 	require.NoError(t, err)
@@ -388,7 +388,7 @@ func TestDispatcher_RoutesRunsToTheirPool(t *testing.T) {
 	require.NoError(t, err)
 	any, err := e.runs.Create(dave, tk.Key, "implement", run.Spec{Command: []string{"x"}})
 	require.NoError(t, err)
-	assert.Equal(t, "web-1", e.eventually(t, any.ID, run.StatusStarting).Runner, "runs without a pool go anywhere")
+	assert.Equal(t, "web-1", e.eventually(t, any.ID, run.StatusStarting).Agent, "runs without a pool go anywhere")
 	assert.Equal(t, run.StatusQueued, e.status(t, waits.ID).Status)
 	assert.Equal(t, run.StatusQueued, e.status(t, nowhere.ID).Status, "no agent of the pool: it waits")
 }

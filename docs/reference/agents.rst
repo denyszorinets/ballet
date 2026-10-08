@@ -256,11 +256,10 @@ Protocol
 --------
 
 JSON-RPC over WebSocket (the transport of :doc:`realtime-api`, same
-authentication, refresh and heartbeats) at ``/runner/rpc``. The token is
+authentication, refresh and heartbeats) at ``/agent/rpc``. The token is
 Core's agent token (``data/service-tokens/agent.token``, audience
-``core``, capability ``runner.connect``). Types are in
-:repo:`kit/runnerproto/proto.go`; method names keep the earlier
-``runner`` prefix.
+``core``, capability ``agent.connect``). Types are in
+:repo:`kit/agentproto/proto.go`.
 
 .. list-table::
    :header-rows: 1
@@ -268,10 +267,10 @@ Core's agent token (``data/service-tokens/agent.token``, audience
    * - Method
      - Direction
      - Params
-   * - ``runner.hello``
+   * - ``agent.hello``
      - agent → Core
-     - ``{"runner", "labels", "capacity", "active"}`` — first, once per
-       connection. ``runner`` is the agent's name, unique among connected agents
+     - ``{"agent", "labels", "capacity", "active"}`` — first, once per
+       connection. ``agent`` is the agent's name, unique among connected agents
        (``-32009`` otherwise). Runs Core assigned to this agent that are
        not in ``active`` fail.
    * - ``run.start``

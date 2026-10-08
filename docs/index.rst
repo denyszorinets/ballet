@@ -4,7 +4,8 @@ Ballet
 Ballet is a work-orchestration platform for AI software development. A
 human engineer plans work together with a **planner agent**; the plan
 becomes tickets; tickets are executed by autonomous **coding agents**
-(Claude Code, Codex, opencode, …) each in a fresh devcontainer. Ballet
+(Claude Code, opencode, …) run by a fleet of agents in the projects'
+devcontainer environments. Ballet
 does not build coding agents — it choreographs them: it decides what runs
 when, gives every run complete context, enforces process, and keeps
 humans in control.

@@ -19,9 +19,9 @@ import (
 func newScheduler(t *testing.T, maxActive, perProject int) (flowEnv, *app.Scheduler) {
 	t.Helper()
 	e := newFlows(t, always(report.OutcomeDone))
-	e.runner.mu.Lock()
-	e.runner.hold = true
-	e.runner.mu.Unlock()
+	e.agent.mu.Lock()
+	e.agent.hold = true
+	e.agent.mu.Unlock()
 	s := &app.Scheduler{Store: e.st, Start: e.flows.StartTicket, MaxActive: maxActive, MaxActivePerProject: perProject,
 		Interval: time.Hour}
 	return e, s
@@ -141,7 +141,7 @@ func TestScheduler_StoppedFlowsFreeSlots(t *testing.T) {
 		r, _ := e.st.Run(t.Context(), f.RunID)
 		return r.Status == run.StatusStarting || r.Status == run.StatusRunning
 	}, 5*time.Second, 10*time.Millisecond)
-	require.NoError(t, e.runner.d.Finished(t.Context(), "r1", f.RunID, 0, "", false, nil))
+	require.NoError(t, e.agent.d.Finished(t.Context(), "r1", f.RunID, 0, "", false, nil))
 	e.waitFlow(t, a.Key, func(f app.FlowView) bool { return f.Status == app.FlowStopped })
 	n, err := s.Tick(t.Context())
 	require.NoError(t, err)
