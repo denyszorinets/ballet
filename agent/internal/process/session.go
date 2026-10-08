@@ -26,18 +26,25 @@ var (
 // session talks to a coding-agent session's process through its driver:
 // it sends the prompt, normalizes the output into events, and delivers
 // human messages when a turn ends. A turn that ends with nothing more to
-// say closes standard input, which ends the session.
+// say closes standard input, which ends the session — unless the session
+// is held to wait for answers (ADR-0026). A waiting session gets messages
+// at once, and ends when released or parked.
 type session struct {
 	drv    driver.Driver
 	prompt string
 	out    func(stream, text string)
 
-	mu     sync.Mutex
-	stdin  io.WriteCloser
-	queue  []string // messages for the next turn
-	last   *runnerproto.Result
-	turns  int // over all results: each reports its own
-	closed bool
+	mu        sync.Mutex
+	stdin     io.WriteCloser
+	busy      bool     // a turn is running
+	holding   bool     // stay open when a turn ends with nothing to deliver
+	park      bool     // park when the current turn ends
+	parked    bool     // ended to continue later
+	queue     []string // messages for the next turn
+	last      *runnerproto.Result
+	turns     int // over all results: each reports its own
+	sessionID string
+	closed    bool
 }
 
 // begin sends the prompt.
@@ -45,6 +52,7 @@ func (s *session) begin(stdin io.WriteCloser) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.stdin = stdin
+	s.busy = true
 	s.writeLocked(s.drv.Message(s.prompt))
 }
 
@@ -55,6 +63,11 @@ func (s *session) read(wg *sync.WaitGroup, r io.Reader) {
 	sc.Buffer(make([]byte, 0, 64<<10), maxLine)
 	for sc.Scan() {
 		p := s.drv.Parse(sc.Bytes())
+		if p.SessionID != "" {
+			s.mu.Lock()
+			s.sessionID = p.SessionID
+			s.mu.Unlock()
+		}
 		for _, e := range p.Events {
 			s.event(e)
 		}
@@ -71,26 +84,30 @@ func (s *session) event(e runnerproto.Event) {
 	s.out(runnerproto.StreamEvent, string(b)+"\n")
 }
 
-// turnEnded delivers the next message, or ends the session.
+// turnEnded delivers the next message, parks, waits or ends the session.
 func (s *session) turnEnded(r *runnerproto.Result) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.busy = false
 	s.turns += r.Turns
 	last := *r
 	last.Turns = s.turns
 	s.last = &last
-	if len(s.queue) == 0 {
+	switch {
+	case len(s.queue) > 0:
+		text := s.queue[0]
+		s.queue = s.queue[1:]
+		s.deliverLocked(text)
+	case s.park:
+		s.parkLocked()
+	case !s.holding:
 		s.closeLocked()
-		return
 	}
-	text := s.queue[0]
-	s.queue = s.queue[1:]
-	s.event(runnerproto.Event{Kind: runnerproto.EventUser, Text: text})
-	s.writeLocked(s.drv.Message(text))
 }
 
-// input takes a human's input: a message waits for the end of the
-// current turn; an interrupt stops the turn first.
+// input takes a human's (or Core's) input: a message waits for the end
+// of the current turn; an interrupt stops the turn first; hold, release
+// and park control a session waiting for answers.
 func (s *session) input(kind, text string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -102,8 +119,18 @@ func (s *session) input(kind, text string) error {
 		if text == "" {
 			return errors.Join(ErrInvalidInput, errNoMessageText)
 		}
-		s.queue = append(s.queue, text)
+		if s.busy {
+			s.queue = append(s.queue, text)
+		} else {
+			s.deliverLocked(text)
+		}
 	case runnerproto.InputInterrupt:
+		if !s.busy {
+			if text != "" {
+				s.deliverLocked(text)
+			}
+			return nil
+		}
 		stop := s.drv.Interrupt()
 		if stop == nil {
 			return ErrNoInterrupt
@@ -112,10 +139,34 @@ func (s *session) input(kind, text string) error {
 			s.queue = append(s.queue, text)
 		}
 		s.writeLocked(stop)
+	case runnerproto.InputHold:
+		s.holding = true
+	case runnerproto.InputRelease:
+		s.holding = false
+		if !s.busy && len(s.queue) == 0 {
+			s.closeLocked()
+		}
+	case runnerproto.InputPark:
+		if s.busy {
+			s.park = true
+		} else {
+			s.parkLocked()
+		}
 	default:
 		return ErrInvalidInput
 	}
 	return nil
+}
+
+func (s *session) deliverLocked(text string) {
+	s.busy = true
+	s.event(runnerproto.Event{Kind: runnerproto.EventUser, Text: text})
+	s.writeLocked(s.drv.Message(text))
+}
+
+func (s *session) parkLocked() {
+	s.parked = true
+	s.closeLocked()
 }
 
 func (s *session) writeLocked(b []byte) {
@@ -141,8 +192,10 @@ func (s *session) closeLocked() {
 	}
 }
 
-func (s *session) result() *runnerproto.Result {
+// result is the session's result; parked tells it ended to continue
+// later, as sessionID.
+func (s *session) result() (r *runnerproto.Result, parked bool, sessionID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.last
+	return s.last, s.parked, s.sessionID
 }

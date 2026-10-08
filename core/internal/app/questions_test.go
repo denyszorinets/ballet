@@ -73,7 +73,7 @@ func newQuestions(t *testing.T, script func(string, int) report.Outcome) questio
 		if err != nil {
 			return
 		}
-		_, _ = at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB", Ticket: it.Key},
+		_, _, _ = at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB", Ticket: it.Key},
 			"Which identity provider do we use?", "Keycloak or Okta.", true)
 	}
 	e.runner.mu.Unlock()
@@ -184,7 +184,7 @@ func TestQuestions_NonBlockingQuestionsDoNotStopTheStage(t *testing.T) {
 	e.runner.mu.Lock()
 	e.runner.ask = func(r run.Run, n int) {
 		if r.Stage == "implement" {
-			_, _ = at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB",
+			_, _, _ = at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB",
 				Ticket: tk.Key}, "Should the button be blue?", "", false)
 		}
 	}
@@ -323,4 +323,34 @@ func TestQuestions_SubChatStartsWithTheQuestionsContext(t *testing.T) {
 	assert.Contains(t, system, app.QuestionChatInstructions)
 	assert.Contains(t, system, "Which identity provider do we use?")
 	assert.Contains(t, system, "implement blocked #1")
+}
+
+func TestQuestions_AnAnswerGivenOnlineLetsTheSessionFinishItsStage(t *testing.T) {
+	e := newQuestions(t, always(report.OutcomeDone))
+	at := &app.AgentTracker{Reports: e.st, RunStore: e.st, Items: e.st, Tenancy: e.st, Authz: e.flows.Authz,
+		Now: time.Now, NewID: store.NewID}
+	e.runner.mu.Lock()
+	e.runner.ask = func(r run.Run, n int) {
+		if r.Stage != "implement" {
+			return
+		}
+		it, err := e.st.ItemByID(context.Background(), r.TicketID)
+		if err != nil {
+			return
+		}
+		q, _, err := at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB",
+			Ticket: it.Key}, "Which port?", "", true)
+		if err != nil {
+			return
+		}
+		// A human answers while the session waits; it goes on and finishes.
+		_, _ = e.qs.Answer(user(t, "bob", "acme-devs"), q.ID, "8080")
+	}
+	e.runner.mu.Unlock()
+	tk := e.ticket(t, auto)
+	_, err := e.flows.Start(user(t, "dave", "acme-admins"), tk.Key)
+	require.NoError(t, err)
+
+	e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Status == app.FlowDone })
+	assert.Equal(t, []string{"implement", "review", "verify"}, e.runner.ran(), "no second implement session")
 }

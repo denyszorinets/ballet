@@ -55,6 +55,10 @@ type Result struct {
 	Summary string  `json:"summary"`
 	Turns   int     `json:"turns"`
 	CostUSD float64 `json:"cost_usd"`
+	// Parked: the session ended to wait for answers (ADR-0026); a later
+	// session continues it as SessionID.
+	Parked    bool   `json:"parked,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
 }
 
 // Spec is what the Runner executes.

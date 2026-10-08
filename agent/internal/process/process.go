@@ -5,6 +5,8 @@ package process
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -64,7 +66,15 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 			return -1, nil, fmt.Errorf("unknown agent runtime %q", spec.Session.Runtime)
 		}
 		var err error
-		if setup, err = drv.Setup(*spec.Session); err != nil {
+		sess := *spec.Session
+		if sess.Resume != nil {
+			state, err := gunzip(sess.Resume.State)
+			if err != nil {
+				return -1, nil, fmt.Errorf("session state: %w", err)
+			}
+			sess.Resume = &runnerproto.Resume{SessionID: sess.Resume.SessionID, State: state}
+		}
+		if setup, err = drv.Setup(sess); err != nil {
 			return -1, nil, err
 		}
 	}
@@ -136,7 +146,59 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 		b.mu.Unlock()
 	}()
 	code, err := b.exec(ctx, proc{argv: setup.Command, dir: sdir, env: env, cred: cred}, out, s)
-	return code, s.result(), err
+	res, parked, sessionID := s.result()
+	if err != nil || !parked {
+		return code, res, err
+	}
+	// Parked: keep the work and what continues the session.
+	if _, err := os.Stat(filepath.Join(sdir, ".git")); err == nil {
+		_, _ = b.exec(ctx, proc{argv: []string{"sh", "-c", pushWIP}, dir: sdir, env: env, cred: cred}, out, nil)
+	}
+	parkedRes := runnerproto.Result{Success: true, Parked: true, SessionID: sessionID}
+	if res != nil {
+		parkedRes.Summary, parkedRes.Turns, parkedRes.CostUSD = res.Summary, res.Turns, res.CostUSD
+	}
+	if state, err := drv.State(home, sessionID); err != nil {
+		out(runnerproto.StreamSystem, fmt.Sprintf("agent: session state not saved: %v\n", err))
+	} else if gz, err := gzipState(state); err != nil {
+		out(runnerproto.StreamSystem, fmt.Sprintf("agent: session state not saved: %v\n", err))
+	} else {
+		parkedRes.State = gz
+	}
+	out(runnerproto.StreamSystem, "agent: session parked\n")
+	return code, &parkedRes, nil
+}
+
+// pushWIP commits and pushes the work in progress of a parked session.
+const pushWIP = `echo "agent: pushing the work in progress" >&2
+git add -A && { git diff --cached --quiet || git commit -q -m "WIP: parked while waiting for answers"; } && git push -q`
+
+// maxState bounds a saved session state, compressed: it travels to Core
+// in one message.
+const maxState = 3 << 20
+
+func gzipState(b []byte) ([]byte, error) {
+	var buf bytes.Buffer
+	w := gzip.NewWriter(&buf)
+	if _, err := w.Write(b); err != nil {
+		return nil, err
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	if buf.Len() > maxState {
+		return nil, fmt.Errorf("%d bytes compressed, more than %d", buf.Len(), maxState)
+	}
+	return buf.Bytes(), nil
+}
+
+func gunzip(b []byte) ([]byte, error) {
+	r, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	return io.ReadAll(io.LimitReader(r, 256<<20))
 }
 
 // workspace creates a fresh workspace with its HOME.

@@ -37,4 +37,15 @@ type Session struct {
 	LLMURL       string      `json:"llm_url"`       // the LLM gateway as reached from the session
 	TokenEnv     string      `json:"token_env"`     // secret variable with the run token
 	Dir          string      `json:"dir,omitempty"` // where the session works, relative to the workspace
+	// Resume, when set, continues a parked session (ADR-0026); Prompt is
+	// then its next message.
+	Resume *Resume `json:"resume,omitempty"`
+}
+
+// Resume is a parked session to continue. State is not stored with the
+// run that resumes it: Core attaches it when the run starts.
+type Resume struct {
+	RunID     string `json:"run_id"` // the parked run
+	SessionID string `json:"session_id"`
+	State     []byte `json:"-"`
 }

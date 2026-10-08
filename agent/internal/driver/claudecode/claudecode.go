@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -22,7 +24,10 @@ const Name = "claude-code"
 // maxToolResult bounds a tool result kept as an event.
 const maxToolResult = 4000
 
-var skillNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+var (
+	skillNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,127}$`)
+)
 
 // Driver drives Claude Code.
 type Driver struct {
@@ -83,6 +88,14 @@ func (d Driver) Setup(s runnerproto.Session) (driver.Setup, error) {
 	if s.MaxTurns > 0 {
 		args = append(args, "--max-turns", strconv.Itoa(s.MaxTurns))
 	}
+	if s.Resume != nil {
+		if !sessionIDRe.MatchString(s.Resume.SessionID) {
+			return driver.Setup{}, fmt.Errorf("claude-code: invalid session ID %q", s.Resume.SessionID)
+		}
+		// Claude Code finds a session by its ID in any project directory.
+		files[".claude/projects/ballet-resumed/"+s.Resume.SessionID+".jsonl"] = string(s.Resume.State)
+		args = append(args, "--resume", s.Resume.SessionID)
+	}
 	return driver.Setup{
 		Files:   files,
 		Command: args,
@@ -115,9 +128,10 @@ func (Driver) Interrupt() []byte {
 
 // line is the part of a stream-json line the driver reads.
 type line struct {
-	Type    string `json:"type"`
-	Subtype string `json:"subtype"`
-	Message struct {
+	Type      string `json:"type"`
+	Subtype   string `json:"subtype"`
+	SessionID string `json:"session_id"`
+	Message   struct {
 		Content []struct {
 			Type    string          `json:"type"`
 			Text    string          `json:"text"`
@@ -139,7 +153,7 @@ func (Driver) Parse(b []byte) driver.Parsed {
 	if json.Unmarshal(b, &l) != nil {
 		return driver.Parsed{}
 	}
-	var p driver.Parsed
+	p := driver.Parsed{SessionID: l.SessionID}
 	switch l.Type {
 	case "assistant":
 		for _, c := range l.Message.Content {
@@ -163,6 +177,22 @@ func (Driver) Parse(b []byte) driver.Parsed {
 		p.Result = &runnerproto.Result{Success: ok, Summary: l.Result, Turns: l.Turns, CostUSD: l.Cost}
 	}
 	return p
+}
+
+// State reads the session's transcript: Claude Code keeps it as
+// .claude/projects/<directory>/<session ID>.jsonl in HOME.
+func (Driver) State(home, sessionID string) ([]byte, error) {
+	if !sessionIDRe.MatchString(sessionID) {
+		return nil, fmt.Errorf("claude-code: invalid session ID %q", sessionID)
+	}
+	matches, err := filepath.Glob(filepath.Join(home, ".claude", "projects", "*", sessionID+".jsonl"))
+	if err != nil {
+		return nil, err
+	}
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("claude-code: no transcript of session %s", sessionID)
+	}
+	return os.ReadFile(matches[0])
 }
 
 // toolText is a tool result's content: a string or text blocks.

@@ -455,7 +455,7 @@ Runs
 
 Agent sessions executed by agents (:doc:`/reference/agents`).
 Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
-"branch"?, "adapter"?, "result"?: {"summary", "turns", "cost_usd"},
+"branch"?, "adapter"?, "result"?: {"summary", "turns", "cost_usd", "parked"?, "session_id"?},
 "runner"?, "exit_code"?, "error"?, "created_by", "created_at",
 "started_at"?, "finished_at"?, "version"}``.
 
@@ -527,7 +527,7 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
 
 ``POST /api/v1/runs/{run}/input`` — ``{"kind": "message"|"interrupt", "text"?}`` → ``204``
    Sends a human's input to the run's running coding-agent session
-   (:ref:`talking to a session <reference-agents-talk>`): a message (``text`` required, at most
+   (:ref:`reference-agents-talk`): a message (``text`` required, at most
    20 000 characters) is delivered when the current turn ends; an
    interrupt stops the turn first, then delivers ``text``, if any.
    ``400`` for a plain-command run, ``409`` when the run is not running
@@ -630,6 +630,10 @@ Three more fields choose how Ballet follows the project's branches
 ``forge_api_url`` — the GitHub Enterprise API URL (default
 ``https://api.github.com``); ``link_template`` — for plain git, the link of
 a branch with ``{branch}`` and ``{base}``.
+
+``answer_window_minutes`` (0–1440, ``0``: Core's ``agents.answer_window``)
+is how long a session waits online for answers to its blocking questions
+before it parks (:ref:`reference-agents-park`).
 
 .. _reference-rest-pull-requests:
 

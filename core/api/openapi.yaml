@@ -1300,12 +1300,12 @@ components:
       type: object
       additionalProperties: false
       required: [project, repo_url, default_branch, image, setup, env, branch_template, git_name, git_email, forge,
-        forge_api_url, link_template, version]
+        forge_api_url, link_template, answer_window_minutes, version]
       properties:
         project: { type: string }
         repo_url: { type: string, description: "https, ssh, git@host:path or file URL; empty: no repository" }
         default_branch: { type: string }
-        image: { type: string, description: Devcontainer image of the runs }
+        image: { type: string, description: "Recorded; not used by agents" }
         setup: { type: array, items: { type: string }, description: Shell commands run in the repository before each session }
         env: { type: object, additionalProperties: { type: string } }
         branch_template: { type: string, description: "{ticket}, {slug}, {type}" }
@@ -1314,6 +1314,11 @@ components:
         forge: { type: string, enum: ["", github, git], description: "'' : github for github.com, else git" }
         forge_api_url: { type: string, description: "GitHub Enterprise API URL" }
         link_template: { type: string, description: "Generic git: branch link, {branch} and {base}" }
+        answer_window_minutes:
+          type: integer
+          minimum: 0
+          maximum: 1440
+          description: "How long a session waits online for answers before it parks; 0: Ballet's default"
         updated_at: { type: string, format: date-time }
         version: { type: integer, format: int64 }
     SetExecutionSettings:
@@ -1332,6 +1337,7 @@ components:
         forge: { type: string, enum: ["", github, git] }
         forge_api_url: { type: string }
         link_template: { type: string }
+        answer_window_minutes: { type: integer, minimum: 0, maximum: 1440 }
         version: { type: integer, format: int64, description: "The version read (0 the first time)" }
     Report:
       type: object
@@ -1641,6 +1647,8 @@ components:
         summary: { type: string, description: The agent's final message }
         turns: { type: integer }
         cost_usd: { type: number }
+        parked: { type: boolean, description: "The session ended to wait for answers; a later session continues it" }
+        session_id: { type: string, description: The runtime's session ID a later session resumes }
     Run:
       type: object
       additionalProperties: false

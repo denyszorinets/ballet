@@ -46,9 +46,13 @@ Tools
      - ``question``, ``context``?, ``blocking``?
      - Records a question; the planner tries to answer it from the
        knowledge base, else the humans do (:doc:`/concepts/questions`).
-       Returns ``{"id", "next"}``: after a **blocking** question the
-       agent pushes its work, submits its stage report and ends the
-       session; a new session of the stage continues with the answer
+       Returns ``{"id", "next"}``. After a **blocking** question the
+       session is held: ``next`` tells the agent to end its turn without a
+       stage report; the answer arrives as its next message, or, after the
+       project's answer window, the session parks and is resumed with the
+       answer (:doc:`/concepts/questions`). When the session cannot be held,
+       ``next`` tells the agent to push its work, submit its stage report
+       (``blocked``) and end the session
    * - ``propose_work``
      - ``title``, ``description``, ``type``?, ``reason``
      - Proposes a new ticket, related to the run's ticket, as a **plan

@@ -123,6 +123,9 @@ type agentsConfig struct {
 	TrackerMCPURL   string        `toml:"tracker_mcp_url"`
 	Model           string        `toml:"model"`
 	RunTokenTTL     time.Duration `toml:"run_token_ttl"`
+	// AnswerWindow is how long sessions wait for answers before they park
+	// when the project sets none (ADR-0026).
+	AnswerWindow time.Duration `toml:"answer_window"`
 }
 
 // knowledgeConfig locates the Knowledge service (ADR-0022).
@@ -190,7 +193,7 @@ func defaultConfig() serviceConfig {
 		Forge:      forgeConfig{PollInterval: time.Minute},
 		Scheduler:  schedulerConfig{Enabled: true, MaxActive: 4, MaxActivePerProject: 2, Interval: 10 * time.Second},
 		Reconciler: reconcilerConfig{Interval: time.Minute, Slack: 10 * time.Minute},
-		Agents: agentsConfig{RunTokenTTL: 3 * time.Hour,
+		Agents: agentsConfig{RunTokenTTL: 3 * time.Hour, AnswerWindow: app.DefaultAnswerWindow,
 			TrackerMCPURL: "http://localhost:8080" + trackermcp.Path},
 		Planner: plannerConfig{
 			Model: "claude-sonnet-5-5", MaxTokens: 8192, MaxRounds: 20, Skill: "planner", CompactAtTokens: 100_000,
@@ -218,6 +221,9 @@ func (c serviceConfig) Validate() error {
 	}
 	if c.Reconciler.Interval < time.Second || c.Reconciler.Slack < time.Minute {
 		errs = append(errs, errors.New("reconciler.interval must be at least 1s and reconciler.slack at least 1m"))
+	}
+	if c.Agents.AnswerWindow < time.Minute {
+		errs = append(errs, errors.New("agents.answer_window must be at least 1m"))
 	}
 	if c.Agents.RunTokenTTL < 10*time.Minute {
 		errs = append(errs, errors.New("agents.run_token_ttl must be at least 10m"))
@@ -423,8 +429,11 @@ func run() error {
 		Inbox: st, Reports: st, Planner: plannerSvc,
 		Now: time.Now, NewID: store.NewID, Logger: svc.Logger}
 	questions.Register(orchestrator)
+	runs.Questions, runs.AnswerWindow, runs.Logger = st, cfg.Agents.AnswerWindow, svc.Logger
+	questions.OnAnswered = runs.DeliverAnswer
+	go runs.ParkLoop(ctx, st, 30*time.Second)
 	agentTracker := &app.AgentTracker{Reports: st, RunStore: st, Runs: runs, Items: st, Tenancy: st, Authz: authz,
-		Changesets: changesets, Now: time.Now, NewID: store.NewID, OnQuestion: questions.Route}
+		Changesets: changesets, Now: time.Now, NewID: store.NewID, OnQuestion: questions.Route, OnBlocking: runs.Hold}
 	trackermcp.Register(svc.Mux, runtoken.NewRingVerifier(tokenKeys, time.Now), agentTracker, "v1")
 	pullRequests := &app.PullRequests{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz,
 		Token: app.GitToken(credentials), Now: time.Now, Logger: svc.Logger,

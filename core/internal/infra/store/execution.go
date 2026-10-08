@@ -16,10 +16,11 @@ func (s *Store) ExecutionSettings(ctx context.Context, projectID string) (execut
 	var x execution.Settings
 	var setup, env, updated string
 	err := s.db.QueryRow(ctx, `SELECT project_id, repo_url, default_branch, image, setup, env, branch_template,
-			git_name, git_email, updated_at, version, forge, forge_api_url, link_template FROM project_execution
+			git_name, git_email, updated_at, version, forge, forge_api_url, link_template, answer_window_minutes
+			FROM project_execution
 			WHERE project_id = ?`, projectID).
 		Scan(&x.ProjectID, &x.RepoURL, &x.DefaultBranch, &x.Image, &setup, &env, &x.BranchTemplate, &x.GitName,
-			&x.GitEmail, &updated, &x.Version, &x.Forge, &x.ForgeAPIURL, &x.LinkTemplate)
+			&x.GitEmail, &updated, &x.Version, &x.Forge, &x.ForgeAPIURL, &x.LinkTemplate, &x.AnswerWindowMinutes)
 	if err != nil {
 		return execution.Settings{}, mapReadErr("execution settings", err)
 	}
@@ -48,17 +49,17 @@ func (s *Store) SetExecutionSettings(ctx context.Context, x execution.Settings, 
 		return fmt.Errorf("set execution settings: %w", err)
 	}
 	args := []any{x.RepoURL, x.DefaultBranch, x.Image, string(setup), string(env), x.BranchTemplate, x.GitName, x.GitEmail,
-		formatTime(x.UpdatedAt), x.Version, x.Forge, x.ForgeAPIURL, x.LinkTemplate}
+		formatTime(x.UpdatedAt), x.Version, x.Forge, x.ForgeAPIURL, x.LinkTemplate, x.AnswerWindowMinutes}
 	var stmt sqlstore.Stmt
 	if expectedVersion == 0 {
 		stmt = sqlstore.Exec(`INSERT INTO project_execution (project_id, repo_url, default_branch, image, setup, env,
-			branch_template, git_name, git_email, updated_at, version, forge, forge_api_url, link_template)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			branch_template, git_name, git_email, updated_at, version, forge, forge_api_url, link_template,
+			answer_window_minutes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			append([]any{x.ProjectID}, args...)...)
 	} else {
 		stmt = sqlstore.ExecOne(`UPDATE project_execution SET repo_url = ?, default_branch = ?, image = ?, setup = ?,
 			env = ?, branch_template = ?, git_name = ?, git_email = ?, updated_at = ?, version = ?, forge = ?,
-			forge_api_url = ?, link_template = ? WHERE project_id = ? AND version = ?`, append(args, x.ProjectID, expectedVersion)...)
+			forge_api_url = ?, link_template = ?, answer_window_minutes = ? WHERE project_id = ? AND version = ?`, append(args, x.ProjectID, expectedVersion)...)
 	}
 	return mapWriteErr("set execution settings", s.db.Batch(ctx, stmt, s.AppendEvent(e)))
 }

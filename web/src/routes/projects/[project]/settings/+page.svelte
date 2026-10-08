@@ -25,7 +25,8 @@
 		git_email: '',
 		forge: '' as '' | 'github' | 'git',
 		forge_api_url: '',
-		link_template: ''
+		link_template: '',
+		answer_window_minutes: 0
 	});
 	let token = $state('');
 	let tokenMessage = $state<string>();
@@ -50,7 +51,8 @@
 			git_email: x.git_email,
 			forge: x.forge,
 			forge_api_url: x.forge_api_url,
-			link_template: x.link_template
+			link_template: x.link_template,
+			answer_window_minutes: x.answer_window_minutes
 		};
 	}
 
@@ -191,6 +193,19 @@
 					placeholder="https://git.example.com/web/compare/{'{base}'}...{'{branch}'}"
 				/></label
 			>
+			<label
+				>Answer window (minutes) <input
+					type="number"
+					min="0"
+					max="1440"
+					bind:value={form.answer_window_minutes}
+					aria-describedby="answer-window-help"
+				/></label
+			>
+			<p class="muted small" id="answer-window-help">
+				How long a session waits for answers to its blocking questions before it parks and continues
+				later. 0: Ballet's default (15 minutes).
+			</p>
 			{#if canEdit}<button class="primary" type="submit">Save</button>{/if}
 		</fieldset>
 		{#if saveError}<p class="error" role="alert">{saveError}</p>{/if}

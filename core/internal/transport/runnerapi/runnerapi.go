@@ -79,6 +79,9 @@ func session(s *agent.Session) *runnerproto.Session {
 	for _, m := range s.MCP {
 		out.MCP = append(out.MCP, runnerproto.MCPServer{Name: m.Name, URL: m.URL})
 	}
+	if s.Resume != nil && len(s.Resume.State) > 0 {
+		out.Resume = &runnerproto.Resume{SessionID: s.Resume.SessionID, State: s.Resume.State}
+	}
 	return out
 }
 
@@ -141,7 +144,7 @@ func (h *handlers) handle(ctx context.Context, req *rpc.Request) (any, error) {
 		var res *app.SessionResult
 		if p.Result != nil {
 			res = &app.SessionResult{Success: p.Result.Success, Summary: p.Result.Summary, Turns: p.Result.Turns,
-				CostUSD: p.Result.CostUSD}
+				CostUSD: p.Result.CostUSD, Parked: p.Result.Parked, SessionID: p.Result.SessionID, State: p.Result.State}
 		}
 		return struct{}{}, rpcError(d.Finished(ctx, name, p.Run, p.ExitCode, p.Error, p.Cancelled, res))
 	}

@@ -28,10 +28,16 @@ Asking a question
 Any stage — and the planner — can raise a question through the tracker
 MCP: the question, context, and optionally suggested answers.
 
-#. The session pushes its work in progress and ends; its container is
-   released. Nothing waits idle overnight.
-#. The ticket moves to **Waiting for answer**. Work that does not depend
-   on it continues; dependent tickets wait.
+#. A **blocking** question holds the session open: the agent ends its
+   turn and waits (:doc:`/architecture/decisions/0026-interactive-sessions-park-when-idle`).
+   An answer that comes within the project's **answer window** (15
+   minutes unless the project sets one) is given to the same session as
+   its next message, with its whole context, and the stage goes on.
+#. Past the window the session **parks**: the agent pushes the work in
+   progress as a ``WIP`` commit, saves the session's transcript, and the
+   session ends — nothing waits idle overnight. The ticket moves to
+   **Waiting for answer**. Work that does not depend on it continues;
+   dependent tickets wait.
 #. Ballet first routes the question to the **planner agent**. In a short,
    unattended conversation it may search the knowledge base and read the
    project's tracker items, and must either answer **citing its sources**
@@ -41,9 +47,12 @@ MCP: the question, context, and optionally suggested answers.
 #. If the planner escalates (or fails), the question goes to the **human
    inbox**; any project member with ``tracker.write`` can answer it
    (``POST /api/v1/questions/{question}/answer``).
-#. Once no blocking question of the ticket is open, Ballet starts a new
-   session of the same stage with the questions and answers handed over,
-   and the pipeline continues.
+#. Once no blocking question of a parked session is open, Ballet starts a
+   new session of the same stage that **resumes** the parked one — same
+   conversation, on any agent — with the answers as its next message.
+   When the session could not be saved (or its runtime cannot resume),
+   the new session starts afresh with the questions and answers in its
+   prompt.
 #. The answer is written to the knowledge base as a **decision** entry
    linked to the ticket, authored by whoever answered, so the same
    question is not asked again.

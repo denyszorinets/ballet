@@ -1619,7 +1619,7 @@ export interface components {
             /** @description https, ssh, git@host:path or file URL; empty: no repository */
             repo_url: string;
             default_branch: string;
-            /** @description Devcontainer image of the runs */
+            /** @description Recorded; not used by agents */
             image: string;
             /** @description Shell commands run in the repository before each session */
             setup: string[];
@@ -1639,6 +1639,8 @@ export interface components {
             forge_api_url: string;
             /** @description Generic git: branch link, {branch} and {base} */
             link_template: string;
+            /** @description How long a session waits online for answers before it parks; 0: Ballet's default */
+            answer_window_minutes: number;
             /** Format: date-time */
             updated_at?: string;
             /** Format: int64 */
@@ -1659,6 +1661,7 @@ export interface components {
             forge?: "" | "github" | "git";
             forge_api_url?: string;
             link_template?: string;
+            answer_window_minutes?: number;
             /**
              * Format: int64
              * @description The version read (0 the first time)
@@ -2001,6 +2004,10 @@ export interface components {
             summary: string;
             turns: number;
             cost_usd: number;
+            /** @description The session ended to wait for answers; a later session continues it */
+            parked?: boolean;
+            /** @description The runtime's session ID a later session resumes */
+            session_id?: string;
         };
         Run: {
             id: string;

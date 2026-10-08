@@ -66,6 +66,15 @@ type Session struct {
 	// token: the gateway's API key and the MCP servers' bearer token.
 	TokenEnv string `json:"token_env" msgpack:"token_env"`
 	Dir      string `json:"dir,omitempty" msgpack:"dir,omitempty"` // where the session works, relative to the workspace
+	// Resume, when set, continues a parked session; Prompt is then the
+	// next message.
+	Resume *Resume `json:"resume,omitempty" msgpack:"resume,omitempty"`
+}
+
+// Resume is a parked session to continue.
+type Resume struct {
+	SessionID string `json:"session_id" msgpack:"session_id"`
+	State     []byte `json:"state" msgpack:"state"` // as the driver saved it (gzip)
 }
 
 // Skill is a skill as a session receives it.
@@ -96,8 +105,16 @@ type Cancel struct {
 
 // Input kinds.
 const (
-	InputMessage   = "message"   // delivered when the current turn ends
+	InputMessage   = "message"   // delivered when the current turn ends, or at once when the session waits
 	InputInterrupt = "interrupt" // stop the current turn, then deliver Text, if any
+	// InputHold keeps the session open when its turn ends with nothing
+	// to deliver: it waits for answers (ADR-0026).
+	InputHold = "hold"
+	// InputRelease ends a hold: a waiting session then ends.
+	InputRelease = "release"
+	// InputPark ends a waiting session to continue it later: the agent
+	// pushes the work in progress and reports the session's state.
+	InputPark = "park"
 )
 
 // Input is a human's input to a running coding-agent session.
@@ -147,6 +164,11 @@ type Result struct {
 	Summary string  `json:"summary" msgpack:"summary"` // the agent's final message
 	Turns   int     `json:"turns" msgpack:"turns"`
 	CostUSD float64 `json:"cost_usd" msgpack:"cost_usd"`
+	// Parked reports a session ended to wait for answers; SessionID and
+	// State (gzip, nil when too large or unavailable) continue it.
+	Parked    bool   `json:"parked,omitempty" msgpack:"parked,omitempty"`
+	SessionID string `json:"session_id,omitempty" msgpack:"session_id,omitempty"`
+	State     []byte `json:"state,omitempty" msgpack:"state,omitempty"`
 }
 
 // Log is a chunk of run output. It is sent as a request: the Runner

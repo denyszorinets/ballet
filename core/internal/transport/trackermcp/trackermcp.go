@@ -61,8 +61,7 @@ func NewServer(at *app.AgentTracker, version string) *mcp.Server {
 		Description: "Record a reversible, low-impact decision you made without asking, with its rationale."}, t.assumption)
 	mcp.AddTool(server, &mcp.Tool{Name: "raise_question",
 		Description: "Ask the planner and the humans something you cannot decide. Set blocking when you cannot " +
-			"continue without the answer: then push your work in progress, submit your stage report and end the " +
-			"session; a new session of this stage continues with the answer."}, t.question)
+			"continue without the answer; then do what the result's next says."}, t.question)
 	mcp.AddTool(server, &mcp.Tool{Name: "propose_work",
 		Description: "Propose a new ticket for work you discovered but should not do in this ticket; the planner " +
 			"and the humans decide. You never create tickets."}, t.propose)
@@ -191,12 +190,16 @@ func (t tools) question(ctx context.Context, req *mcp.CallToolRequest, in Questi
 	if err != nil {
 		return nil, QuestionRecorded{}, err
 	}
-	q, err := t.at.RaiseQuestion(ctx, c, in.Question, in.Context, in.Blocking)
+	q, held, err := t.at.RaiseQuestion(ctx, c, in.Question, in.Context, in.Blocking)
 	if err != nil {
 		return nil, QuestionRecorded{}, toolErr(err)
 	}
 	next := "Continue; the answer will appear in ticket_context."
-	if in.Blocking {
+	switch {
+	case in.Blocking && held:
+		next = "Stop working and end your turn now, without a stage report: the answer arrives as your next " +
+			"message. If it takes long, your work in progress is pushed and you continue later with the answer."
+	case in.Blocking:
 		next = "Push your work in progress, submit your stage report (outcome blocked) and end the session now. " +
 			"A new session of this stage continues once the question is answered."
 	}

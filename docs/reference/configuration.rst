@@ -373,6 +373,12 @@ Coding-agent runs (:ref:`reference-agents-runs`).
    Model of agent sessions; ``""`` (default) lets the agent choose.
    ``BALLET_CORE_AGENTS_MODEL``.
 
+``answer_window``
+   How long a session waits for answers to its blocking questions before
+   it parks, for projects that set no ``answer_window_minutes``
+   (:ref:`reference-agents-park`). Default ``"15m"``, at least ``1m``;
+   ``BALLET_CORE_AGENTS_ANSWER_WINDOW``.
+
 ``run_token_ttl``
    Validity of run tokens (at least ``10m``; cover the longest run).
    Default ``3h``; ``BALLET_CORE_AGENTS_RUN_TOKEN_TTL``.

@@ -47,6 +47,10 @@ type AgentTracker struct {
 	// OnQuestion is called after a run raised a question (Questions.Route);
 	// optional.
 	OnQuestion func(ctx context.Context, q report.Question)
+	// OnBlocking is called when a run raised a blocking question: it holds
+	// the run's session open for the answer (Runs.Hold) and reports
+	// whether it does; optional.
+	OnBlocking func(ctx context.Context, runID string) bool
 }
 
 type runScope struct {
@@ -178,25 +182,31 @@ func (a *AgentTracker) Report(ctx context.Context, c RunCaller, kind report.Kind
 }
 
 // RaiseQuestion records a question the run cannot answer itself; it goes
-// to the planner first, then to the humans (ADR-0015).
-func (a *AgentTracker) RaiseQuestion(ctx context.Context, c RunCaller, text, background string, blocking bool) (report.Question, error) {
+// to the planner first, then to the humans (ADR-0015). held reports that
+// the run's session waits online for the answer to a blocking question
+// (ADR-0026).
+func (a *AgentTracker) RaiseQuestion(ctx context.Context, c RunCaller, text, background string, blocking bool) (q report.Question, held bool, err error) {
 	s, err := a.scope(ctx, c)
 	if err != nil {
-		return report.Question{}, err
+		return report.Question{}, false, err
 	}
-	q := report.Question{ID: a.NewID(), ProjectID: s.project.ID, TicketID: s.ticket.ID, RunID: s.run.ID, Text: text,
+	q = report.Question{ID: a.NewID(), ProjectID: s.project.ID, TicketID: s.ticket.ID, RunID: s.run.ID, Text: text,
 		Context: background, Blocking: blocking, Status: report.QuestionOpen, CreatedAt: a.Now()}
 	if err := q.Validate(); err != nil {
-		return report.Question{}, invalid(err)
+		return report.Question{}, false, invalid(err)
 	}
 	e := a.itemEvent(s, "item.question_raised", map[string]any{"run": s.run.ID, "question": q.ID, "blocking": blocking})
 	if err := a.Reports.CreateQuestion(ctx, q, e); err != nil {
-		return report.Question{}, err
+		return report.Question{}, false, err
+	}
+	// Hold before routing: the planner may answer at once.
+	if blocking && a.OnBlocking != nil {
+		held = a.OnBlocking(ctx, s.run.ID)
 	}
 	if a.OnQuestion != nil {
 		a.OnQuestion(ctx, q)
 	}
-	return q, nil
+	return q, held, nil
 }
 
 // ProposeWork turns work a run discovered into a plan changeset for the

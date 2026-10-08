@@ -66,12 +66,16 @@ type Questions struct {
 	Inbox        InboxStore        // nil: no inbox
 	Reports      ReportStore       // stage reports for sub-chats; optional
 	Planner      *Planner          // sub-chats; nil: none
-	Model        string
-	MaxTokens    int
-	MaxRounds    int // tool rounds of an answer attempt; default 8
-	Now          func() time.Time
-	NewID        func() string
-	Logger       *slog.Logger
+	// OnAnswered is called after a question was answered: the answer goes
+	// to the session that asked it if it still waits (Runs.DeliverAnswer);
+	// optional.
+	OnAnswered func(ctx context.Context, q report.Question)
+	Model      string
+	MaxTokens  int
+	MaxRounds  int // tool rounds of an answer attempt; default 8
+	Now        func() time.Time
+	NewID      func() string
+	Logger     *slog.Logger
 }
 
 // QuestionView is a question with its ticket's key.
@@ -140,6 +144,9 @@ func (qs *Questions) answer(ctx context.Context, q report.Question, it tracker.I
 	}
 	if len(jobs) > 0 {
 		qs.Orchestrator.Kick()
+	}
+	if qs.OnAnswered != nil {
+		qs.OnAnswered(ctx, q)
 	}
 	if qs.Knowledge != nil {
 		if err := qs.Knowledge.RecordAnswer(ctx, c.Key, p.Key, it.Key, by, q); err != nil {
