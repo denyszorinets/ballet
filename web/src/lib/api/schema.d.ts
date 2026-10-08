@@ -1641,6 +1641,8 @@ export interface components {
             link_template: string;
             /** @description How long a session waits online for answers before it parks; 0: Ballet's default */
             answer_window_minutes: number;
+            /** @description Agent pool of the project's runs (agents labelled pool=<pool>); empty: any agent */
+            pool: string;
             /** Format: date-time */
             updated_at?: string;
             /** Format: int64 */
@@ -1662,6 +1664,7 @@ export interface components {
             forge_api_url?: string;
             link_template?: string;
             answer_window_minutes?: number;
+            pool?: string;
             /**
              * Format: int64
              * @description The version read (0 the first time)
@@ -1998,6 +2001,8 @@ export interface components {
             files?: {
                 [key: string]: string;
             };
+            /** @description Agent pool that executes the run; empty: any agent */
+            pool?: string;
         };
         RunResult: {
             /** @description The agent's final message */

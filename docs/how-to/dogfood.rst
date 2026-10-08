@@ -16,13 +16,16 @@ What you need
 - Agent sessions need Ballet's toolchains (Go, Bun, uv, git, Claude
   Code):
 
-  - with the compose installation, run the agent from the dogfooding
-    image:
+  - with the compose installation, run the agent from Ballet's own
+    agent pool — this repository's devcontainer with the ballet-agent
+    Feature (:repo:`.devcontainer/dogfood/devcontainer.json`,
+    :doc:`agent-pools`):
 
     .. code-block:: bash
 
-       make images
-       docker build -f deploy/agent/ballet.Containerfile -t ballet-dogfood deploy/agent
+       make feature
+       devcontainer build --workspace-folder . --config .devcontainer/dogfood/devcontainer.json \
+         --image-name ballet-dogfood
        BALLET_AGENT_IMAGE=ballet-dogfood docker compose -f deploy/compose.yaml up -d agent
 
   - with ``make run`` in the devcontainer, the sessions use its tools.
@@ -52,7 +55,8 @@ after changing skills or settings. It
 
 Other settings: ``BALLET_FORGE`` (``github`` or ``git``),
 ``ISSUES_TOKEN`` and ``ISSUES_REPO`` (where ``--import-issues`` reads),
-``BALLET_URL`` (default ``http://localhost:8080``),
+``BALLET_POOL`` (``ballet`` to send the runs to the dogfooding pool;
+default: any agent), ``BALLET_URL`` (default ``http://localhost:8080``),
 ``BALLET_TOKEN`` (an organization admin's bearer token; not needed
 without authentication, else default: the development realm's
 ``alice``), ``BALLET_REPO``.

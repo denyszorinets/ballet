@@ -1,0 +1,11 @@
+{
+    // Ballet's own agent pool (docs/how-to/dogfood.rst): this repository's
+    // development environment plus the Ballet agent. Its toolchains live
+    // under /root, so sessions run as root (sessionUser ""): the container
+    // is the boundary.
+    "name": "Ballet agent pool (dogfooding)",
+    "build": { "dockerfile": "../Containerfile", "context": ".." },
+    "features": {
+        "../ballet-agent": { "pool": "ballet", "sessionUser": "" }
+    }
+}

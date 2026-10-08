@@ -316,8 +316,15 @@ user. Run agents of different customers in different containers.
 The agent image (``make images`` builds ``ballet-agent`` from
 :repo:`deploy/Containerfile`) has git, Claude Code and common build
 tools, a session user ``ballet`` and ``BALLET_AGENT_SESSION_USER=ballet``.
-Projects needing more toolchains extend it, as
-:repo:`deploy/agent/ballet.Containerfile` does for Ballet itself.
+Projects build agent pools with their toolchains from their
+devcontainers (:doc:`/how-to/agent-pools`).
+
+**Pools.** An agent's ``pool`` label (``agent.labels``, e.g.
+``pool=web``; the devcontainer Feature sets it) puts it in a pool. Core
+sends a run whose project names a pool (execution setting ``pool``) only
+to agents of that pool — the least loaded with free capacity — and runs
+without a pool to any agent. A run waits in the queue while no agent of
+its pool has room.
 
 Test switching users (needs root; CI runs it on every pull request) with
 ``sudo -E make agent-root-test``.

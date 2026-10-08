@@ -22,7 +22,7 @@ test('admins configure execution and the git token', async ({ page }) => {
 	const form = page.getByRole('form', { name: 'Execution settings' });
 	await form.getByLabel('Repository URL').fill('https://github.com/acme/web.git');
 	await form.getByLabel('Default branch').fill('main');
-	await form.getByLabel('Image').fill('golang:1.27');
+	await form.getByLabel('Agent pool').fill('web');
 	await form.getByLabel('Setup commands (one per line)').fill('make deps\n\ngo mod download');
 	await form.getByLabel('Environment (KEY=value per line)').fill('CI=1\nGOFLAGS=-mod=mod');
 	await form.getByLabel('Answer window (minutes)').fill('30');
@@ -33,6 +33,7 @@ test('admins configure execution and the git token', async ({ page }) => {
 		setup: ['make deps', 'go mod download'],
 		env: { CI: '1', GOFLAGS: '-mod=mod' },
 		answer_window_minutes: 30,
+		pool: 'web',
 		version: 1
 	});
 

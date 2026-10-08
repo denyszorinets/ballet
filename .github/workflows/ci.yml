@@ -37,6 +37,18 @@ jobs:
       # Switching sessions to another OS user needs root.
       - run: sudo -E env "PATH=$PATH" make agent-root-test
 
+  feature:
+    name: Agent Feature
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.1"
+          cache-dependency-path: "**/go.sum"
+      - run: npm install -g @devcontainers/cli
+      - run: make feature-test
+
   failure:
     name: Failure injection
     runs-on: ubuntu-latest

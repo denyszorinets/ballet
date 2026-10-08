@@ -1,0 +1,9 @@
+{
+    // An agent pool built from a devcontainer with the Ballet agent Feature
+    // (docs/how-to/agent-pools.rst). CI builds it (make feature-test).
+    "name": "Ballet agent pool (example)",
+    "image": "mcr.microsoft.com/devcontainers/base:bookworm",
+    "features": {
+        "../ballet-agent": { "pool": "example" }
+    }
+}

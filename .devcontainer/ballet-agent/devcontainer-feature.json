@@ -1,0 +1,33 @@
+{
+    "id": "ballet-agent",
+    "version": "1.0.0",
+    "name": "Ballet agent",
+    "description": "Makes this devcontainer an agent pool for Ballet: installs the Ballet agent, Claude Code and an unprivileged session user (ADR-0025).",
+    "documentationURL": "https://github.com/denyszorinets/ballet/blob/develop/docs/how-to/agent-pools.rst",
+    "options": {
+        "pool": {
+            "type": "string",
+            "default": "",
+            "description": "Pool label of the agents: the project's execution setting 'pool' sends its runs here. Empty: no pool."
+        },
+        "sessionUser": {
+            "type": "string",
+            "default": "ballet",
+            "description": "OS user sessions run as (created if missing). Empty: sessions run as the agent's user (root)."
+        },
+        "agentUrl": {
+            "type": "string",
+            "default": "",
+            "description": "URL of the agent binary, ${ARCH} replaced by amd64 or arm64, when the Feature does not bundle it (make feature)."
+        },
+        "installClaude": {
+            "type": "boolean",
+            "default": true,
+            "description": "Install Claude Code for every user unless it is installed already."
+        }
+    },
+    "containerEnv": {
+        "BALLET_AGENT_CONFIG": "/etc/ballet/agent.toml"
+    },
+    "entrypoint": "/usr/local/share/ballet-agent/entrypoint.sh"
+}

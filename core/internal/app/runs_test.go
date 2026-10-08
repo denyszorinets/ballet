@@ -367,3 +367,28 @@ func TestRuns_InputReachesTheRunningSession(t *testing.T) {
 	require.NoError(t, err)
 	assert.ErrorIs(t, e.runs.Input(dave, plain.ID, app.InputMessage, "x"), app.ErrInvalid, "plain commands take no input")
 }
+
+func TestDispatcher_RoutesRunsToTheirPool(t *testing.T) {
+	e := newRuns(t, time.Minute)
+	dave := user(t, "dave", "acme-admins")
+	tk := mk(t, e.tr, tracker.KindTicket, "t")
+	web, ml := &fakeRunner{}, &fakeRunner{}
+	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "web-1", Labels: map[string]string{"pool": "web"},
+		Capacity: 5}, web))
+	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "ml-1", Labels: map[string]string{"pool": "ml"},
+		Capacity: 1}, ml))
+
+	toML, err := e.runs.Create(dave, tk.Key, "implement", run.Spec{Command: []string{"x"}, Pool: "ml"})
+	require.NoError(t, err)
+	assert.Equal(t, "ml-1", e.eventually(t, toML.ID, run.StatusStarting).Runner)
+	// ml-1 is full: the next ml run waits even though web-1 is free.
+	waits, err := e.runs.Create(dave, tk.Key, "implement", run.Spec{Command: []string{"x"}, Pool: "ml"})
+	require.NoError(t, err)
+	nowhere, err := e.runs.Create(dave, tk.Key, "implement", run.Spec{Command: []string{"x"}, Pool: "gpu"})
+	require.NoError(t, err)
+	any, err := e.runs.Create(dave, tk.Key, "implement", run.Spec{Command: []string{"x"}})
+	require.NoError(t, err)
+	assert.Equal(t, "web-1", e.eventually(t, any.ID, run.StatusStarting).Runner, "runs without a pool go anywhere")
+	assert.Equal(t, run.StatusQueued, e.status(t, waits.ID).Status)
+	assert.Equal(t, run.StatusQueued, e.status(t, nowhere.ID).Status, "no agent of the pool: it waits")
+}

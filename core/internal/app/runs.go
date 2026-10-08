@@ -336,6 +336,9 @@ func (rs *Runs) prepare(ctx context.Context, r *run.Run, it tracker.Item) error 
 	if r.Spec.Image == "" {
 		r.Spec.Image = x.Image
 	}
+	if r.Spec.Pool == "" {
+		r.Spec.Pool = x.Pool
+	}
 	if x.RepoURL != "" {
 		branch, err := execution.BranchName(x.BranchTemplate, it.Key, string(it.Type), it.Title)
 		if err != nil {
@@ -681,9 +684,9 @@ func (d *Dispatcher) dispatch(ctx context.Context) {
 		if d.Held != nil && d.Held(ctx, r.ProjectID) {
 			continue
 		}
-		st := d.pick()
+		st := d.pick(r.Spec.Pool)
 		if st == nil {
-			return
+			continue // no free agent of its pool; others may have one
 		}
 		assigned := r
 		assigned.Status, assigned.Runner, assigned.Version = run.StatusStarting, st.info.Name, r.Version+1
@@ -731,13 +734,14 @@ func (d *Dispatcher) dispatch(ctx context.Context) {
 	}
 }
 
-// pick returns a connected Runner with free capacity (the least loaded).
-func (d *Dispatcher) pick() *runnerState {
+// pick returns a connected agent with free capacity (the least loaded),
+// of the pool when one is given.
+func (d *Dispatcher) pick(pool string) *runnerState {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	var best *runnerState
 	for _, st := range d.runners {
-		if !st.ready {
+		if !st.ready || pool != "" && st.info.Labels["pool"] != pool {
 			continue
 		}
 		free := st.info.Capacity - len(st.active)
