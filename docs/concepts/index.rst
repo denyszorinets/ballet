@@ -15,3 +15,4 @@ How Ballet thinks about work, agents, knowledge and process.
    scheduling
    knowledge
    skills
+   comparison
