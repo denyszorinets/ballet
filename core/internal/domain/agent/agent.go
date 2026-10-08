@@ -4,11 +4,14 @@
 // (ADR-0025) and report the result.
 package agent
 
-// ClaudeCode is the Claude Code runtime.
-const ClaudeCode = "claude-code"
+// Runtimes agents can drive.
+const (
+	ClaudeCode = "claude-code"
+	Opencode   = "opencode"
+)
 
 // Runtimes are the runtimes agents can drive.
-var Runtimes = []string{ClaudeCode}
+var Runtimes = []string{ClaudeCode, Opencode}
 
 // Skill is a skill as a session receives it.
 type Skill struct {

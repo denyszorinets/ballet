@@ -69,7 +69,7 @@ func TestSetup_RejectsIncompleteSessions(t *testing.T) {
 }
 
 func TestMessage_IsAStreamJSONUserMessage(t *testing.T) {
-	line := claudecode.Driver{}.Message("hello\nworld")
+	line := claudecode.Driver{}.NewCodec("/w").Message("hello\nworld")
 	require.Equal(t, byte('\n'), line[len(line)-1])
 	var m struct {
 		Type    string `json:"type"`
@@ -85,7 +85,7 @@ func TestMessage_IsAStreamJSONUserMessage(t *testing.T) {
 }
 
 func TestParse_NormalizesEvents(t *testing.T) {
-	d := claudecode.Driver{}
+	d := claudecode.Driver{}.NewCodec("/w")
 	tests := []struct {
 		name   string
 		line   string
@@ -139,7 +139,7 @@ func TestParse_TruncatesLongToolResults(t *testing.T) {
 	}
 	line, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"content": []any{
 		map[string]any{"type": "tool_result", "content": string(long)}}}})
-	p := claudecode.Driver{}.Parse(line)
+	p := claudecode.Driver{}.NewCodec("/w").Parse(line)
 	require.Len(t, p.Events, 1)
 	assert.Less(t, len(p.Events[0].Text), 5000)
 }
@@ -152,14 +152,14 @@ func TestInterrupt_IsAControlRequest(t *testing.T) {
 			Subtype string `json:"subtype"`
 		} `json:"request"`
 	}
-	require.NoError(t, json.Unmarshal(claudecode.Driver{}.Interrupt(), &m))
+	require.NoError(t, json.Unmarshal(claudecode.Driver{}.NewCodec("/w").Interrupt(), &m))
 	assert.Equal(t, "control_request", m.Type)
 	assert.NotEmpty(t, m.RequestID)
 	assert.Equal(t, "interrupt", m.Request.Subtype)
 }
 
 func TestParse_KeepsTheSessionID(t *testing.T) {
-	p := claudecode.Driver{}.Parse([]byte(`{"type":"system","subtype":"init","session_id":"abc-1"}`))
+	p := claudecode.Driver{}.NewCodec("/w").Parse([]byte(`{"type":"system","subtype":"init","session_id":"abc-1"}`))
 	assert.Equal(t, "abc-1", p.SessionID)
 }
 

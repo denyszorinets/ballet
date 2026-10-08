@@ -133,7 +133,7 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 	for k, v := range setup.Env {
 		env = append(env, k+"="+os.Expand(v, func(name string) string { return vars[name] }))
 	}
-	s := &session{drv: drv, prompt: spec.Session.Prompt, out: out}
+	s := &session{drv: drv.NewCodec(sdir), prompt: spec.Session.Prompt, out: out}
 	b.mu.Lock()
 	if b.live == nil {
 		b.live = map[string]*session{}

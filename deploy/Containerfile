@@ -59,7 +59,7 @@ FROM node:22-bookworm AS agent
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git ca-certificates curl make jq ripgrep python3 && \
     rm -rf /var/lib/apt/lists/*
-RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force
+RUN npm install -g @anthropic-ai/claude-code opencode-ai && npm cache clean --force
 RUN useradd --create-home --shell /bin/bash ballet
 COPY --from=build /out/agent /usr/local/bin/ballet-agent
 ENV BALLET_AGENT_SESSION_USER=ballet

@@ -4,6 +4,6 @@
     "name": "Ballet agent pool (example)",
     "image": "mcr.microsoft.com/devcontainers/base:bookworm",
     "features": {
-        "../ballet-agent": { "pool": "example" }
+        "../ballet-agent": { "pool": "example", "installOpencode": true }
     }
 }

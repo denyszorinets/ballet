@@ -69,7 +69,7 @@ feature-test: feature ## Build the example agent pool with the Feature and check
 	devcontainer build --workspace-folder . --config .devcontainer/agent-pool-example/devcontainer.json \
 		--image-name ballet-pool-example
 	docker run --rm --entrypoint sh ballet-pool-example -c \
-		'ballet-agent -h 2>&1 | grep -q config && id ballet && grep -q "pool=example" /etc/ballet/agent.toml && claude --version'
+		'ballet-agent -h 2>&1 | grep -q config && id ballet && grep -q "pool=example" /etc/ballet/agent.toml && claude --version && opencode --version'
 
 .PHONY: failure-test
 failure-test: ## Crash Core, the agent and the gateway mid-stage with the real binaries and check recovery

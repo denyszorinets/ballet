@@ -190,6 +190,30 @@ cannot commit it:
   the customer's knowledge (:doc:`knowledge-mcp`), authenticated with the
   run's token (``Bearer ${BALLET_RUN_TOKEN}``, expanded by Claude Code).
 
+opencode
+~~~~~~~~
+
+**opencode** (runtime ``opencode``) runs ``opencode acp`` — the Agent
+Client Protocol over standard input and output — in the repository; the
+executable is the agent's ``drivers.opencode_command``. The driver
+initializes the connection, opens one ACP session and sends one
+``session/prompt`` per turn; ``session/update`` notifications become
+events (message chunks are joined into one ``text`` event, a tool call is
+shown once its input is known), an interrupt is ``session/cancel``, and
+permission requests are allowed. Its global configuration in ``$HOME``:
+
+- ``.config/opencode/opencode.json`` — the Anthropic provider pointed at
+  the LLM gateway (``<gateway>/v1``, the run token as API key via
+  ``{env:BALLET_RUN_TOKEN}``), the model (``anthropic/<model>``, default
+  ``claude-sonnet-5-5``, declared so opencode accepts it), the MCP
+  servers (``remote``, ``Authorization: Bearer {env:BALLET_RUN_TOKEN}``),
+  ``"permission": "allow"``, no autoupdate or sharing;
+- ``.config/opencode/AGENTS.md`` — standing instructions;
+- ``.config/opencode/skills/<name>/SKILL.md`` and the skill's files.
+
+Parked opencode sessions are not resumed: the stage starts a new session
+with the questions and answers in its prompt.
+
 Prompt and run token
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -314,8 +338,8 @@ agent and with later sessions, separated by workspaces and the session
 user. Run agents of different customers in different containers.
 
 The agent image (``make images`` builds ``ballet-agent`` from
-:repo:`deploy/Containerfile`) has git, Claude Code and common build
-tools, a session user ``ballet`` and ``BALLET_AGENT_SESSION_USER=ballet``.
+:repo:`deploy/Containerfile`) has git, Claude Code, opencode and common
+build tools, a session user ``ballet`` and ``BALLET_AGENT_SESSION_USER=ballet``.
 Projects build agent pools with their toolchains from their
 devcontainers (:doc:`/how-to/agent-pools`).
 
@@ -372,6 +396,9 @@ Configuration
    * - ``drivers.claude_command``
      - ``claude``
      - The Claude Code executable
+   * - ``drivers.opencode_command``
+     - ``opencode``
+     - The opencode executable
 
 Run an agent next to Core:
 

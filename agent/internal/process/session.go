@@ -30,7 +30,7 @@ var (
 // is held to wait for answers (ADR-0026). A waiting session gets messages
 // at once, and ends when released or parked.
 type session struct {
-	drv    driver.Driver
+	drv    driver.Codec
 	prompt string
 	out    func(stream, text string)
 
@@ -53,7 +53,7 @@ func (s *session) begin(stdin io.WriteCloser) {
 	defer s.mu.Unlock()
 	s.stdin = stdin
 	s.busy = true
-	s.writeLocked(s.drv.Message(s.prompt))
+	s.writeLocked(s.drv.Start(s.prompt))
 }
 
 // read normalizes standard output until it closes.
@@ -63,9 +63,12 @@ func (s *session) read(wg *sync.WaitGroup, r io.Reader) {
 	sc.Buffer(make([]byte, 0, 64<<10), maxLine)
 	for sc.Scan() {
 		p := s.drv.Parse(sc.Bytes())
-		if p.SessionID != "" {
+		if p.SessionID != "" || len(p.Reply) > 0 {
 			s.mu.Lock()
-			s.sessionID = p.SessionID
+			if p.SessionID != "" {
+				s.sessionID = p.SessionID
+			}
+			s.writeLocked(p.Reply)
 			s.mu.Unlock()
 		}
 		for _, e := range p.Events {

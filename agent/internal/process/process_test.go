@@ -184,6 +184,10 @@ func (fakeDriver) State(home, sessionID string) ([]byte, error) {
 	return os.ReadFile(filepath.Join(home, "state-"+sessionID))
 }
 
+func (d fakeDriver) NewCodec(string) driver.Codec { return d }
+
+func (d fakeDriver) Start(prompt string) []byte { return d.Message(prompt) }
+
 func (fakeDriver) Message(text string) []byte { return []byte(text + "\n") }
 
 func (fakeDriver) Interrupt() []byte { return []byte("INTERRUPT\n") }
