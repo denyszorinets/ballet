@@ -29,6 +29,9 @@ data/
 docs/_build/
 docs/.venv/
 
+# Website build (make site)
+/_site/
+
 # Tooling scratch output
 .playwright-mcp/
 __pycache__/

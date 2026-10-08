@@ -9,6 +9,8 @@ BIN_DIR     := bin
 WEB_DIR     := web
 FEATURE_DIR := .devcontainer/ballet-agent
 DOCS_DIR    := docs
+SITE_DIR    := site
+SITE_OUT    := _site
 STATICCHECK := honnef.co/go/tools/cmd/staticcheck@v0.8.1
 # Where `make bundle` copies the built SPA for Core to embed (bindata tag).
 WEBUI_DIST  := core/internal/transport/webui/dist
@@ -179,6 +181,17 @@ docs-check: ## Strict docs build (warnings are errors) + linkcheck
 	$(SPHINX) -W --keep-going -b html . _build/html
 	$(SPHINX) -W --keep-going -b linkcheck . _build/linkcheck
 
+.PHONY: site
+site: docs ## Build the website (site/) with the docs under /docs/ into _site
+	rm -rf $(SITE_OUT)
+	cp -r $(SITE_DIR) $(SITE_OUT)
+	cp -r $(DOCS_DIR)/_build/html $(SITE_OUT)/docs
+	touch $(SITE_OUT)/.nojekyll
+
+.PHONY: site-serve
+site-serve: site ## Serve the built website on http://127.0.0.1:8001
+	python3 -m http.server --directory $(SITE_OUT) --bind 127.0.0.1 8001
+
 ##@ Aggregate
 
 .PHONY: go-check
@@ -191,5 +204,5 @@ check: go-check web-check ## Run all Go and web checks (CI entry point)
 clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)/core $(BIN_DIR)/gateway $(BIN_DIR)/knowledge $(BIN_DIR)/agent
 	rm -rf $(BIN_DIR)/fake-anthropic $(WEBUI_DIST) $(FEATURE_DIR)/bin
-	rm -rf $(DOCS_DIR)/_build $(WEB_DIR)/build $(WEB_DIR)/.svelte-kit
+	rm -rf $(DOCS_DIR)/_build $(SITE_OUT) $(WEB_DIR)/build $(WEB_DIR)/.svelte-kit
 	rm -rf $(WEB_DIR)/test-results $(WEB_DIR)/playwright-report

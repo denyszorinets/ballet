@@ -10,7 +10,9 @@ knowledge service keeps documentation, decisions and debt from decaying.
 
 ## Documentation
 
-The documentation is a Sphinx site under [`docs/`](docs/index.rst):
+Website and documentation: https://denyszorinets.github.io/ballet/
+(published from `develop`). The documentation is a Sphinx site under
+[`docs/`](docs/index.rst):
 
 - [Vision](docs/concepts/vision.rst)
 - [Architecture overview](docs/architecture/overview.rst)
@@ -20,6 +22,7 @@ The documentation is a Sphinx site under [`docs/`](docs/index.rst):
 make docs         # build into docs/_build/html
 make docs-serve   # live preview on http://127.0.0.1:8000
 make docs-check   # strict build + link check
+make site         # landing page + docs, as published, into _site/
 ```
 
 ## Run it

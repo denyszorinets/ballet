@@ -10,6 +10,7 @@ Contributor workflow for Ballet itself.
    persistence
    rest-api
    web
+   website
 
 Workflow
 --------
