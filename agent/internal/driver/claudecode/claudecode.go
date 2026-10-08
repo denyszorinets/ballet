@@ -1,0 +1,191 @@
+// Package claudecode drives Claude Code: claude -p with stream-json input
+// and output, so the session stays open between turns (ADR-0026).
+package claudecode
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"path"
+	"regexp"
+	"strconv"
+	"strings"
+
+	"github.com/denyszorinets/ballet/agent/internal/driver"
+	"github.com/denyszorinets/ballet/kit/runnerproto"
+)
+
+// Name of the runtime.
+const Name = "claude-code"
+
+// maxToolResult bounds a tool result kept as an event.
+const maxToolResult = 4000
+
+var skillNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+// Driver drives Claude Code.
+type Driver struct {
+	Command string // the claude executable (default "claude")
+}
+
+// Setup returns the session's files, environment and command. Skills,
+// instructions and MCP servers are Claude Code's user-level configuration
+// in HOME — outside the repository, so agents cannot commit them.
+func (d Driver) Setup(s runnerproto.Session) (driver.Setup, error) {
+	if strings.TrimSpace(s.Prompt) == "" {
+		return driver.Setup{}, errors.New("claude-code: the session has no prompt")
+	}
+	if s.LLMURL == "" || s.TokenEnv == "" {
+		return driver.Setup{}, errors.New("claude-code: the gateway URL and the token variable are required")
+	}
+	files := map[string]string{}
+	if s.Instructions != "" {
+		files[".claude/CLAUDE.md"] = s.Instructions
+	}
+	for _, sk := range s.Skills {
+		if !skillNameRe.MatchString(sk.Name) || strings.Contains(sk.Name, "..") {
+			return driver.Setup{}, fmt.Errorf("claude-code: invalid skill name %q", sk.Name)
+		}
+		dir := ".claude/skills/" + sk.Name
+		files[dir+"/SKILL.md"] = fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s", sk.Name, oneLine(sk.Description), sk.Body)
+		for p, content := range sk.Files {
+			clean := path.Clean(p)
+			if path.IsAbs(clean) || clean == "." || strings.HasPrefix(clean, "..") {
+				return driver.Setup{}, fmt.Errorf("claude-code: skill %s file %q escapes the skill", sk.Name, p)
+			}
+			files[dir+"/"+clean] = content
+		}
+	}
+	if len(s.MCP) > 0 {
+		servers := map[string]any{}
+		for _, m := range s.MCP {
+			// Claude Code expands ${VAR}: the token stays in the environment.
+			servers[m.Name] = map[string]any{"type": "http", "url": m.URL,
+				"headers": map[string]string{"Authorization": "Bearer ${" + s.TokenEnv + "}"}}
+		}
+		cfg, err := json.MarshalIndent(map[string]any{"mcpServers": servers}, "", "  ")
+		if err != nil {
+			return driver.Setup{}, err
+		}
+		files[".claude.json"] = string(cfg)
+	}
+
+	command := d.Command
+	if command == "" {
+		command = "claude"
+	}
+	args := []string{command, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+		"--permission-mode", "bypassPermissions"}
+	if s.Model != "" {
+		args = append(args, "--model", s.Model)
+	}
+	if s.MaxTurns > 0 {
+		args = append(args, "--max-turns", strconv.Itoa(s.MaxTurns))
+	}
+	return driver.Setup{
+		Files:   files,
+		Command: args,
+		Env: map[string]string{
+			"ANTHROPIC_BASE_URL": s.LLMURL,
+			"ANTHROPIC_API_KEY":  "${" + s.TokenEnv + "}",
+			// Sessions run in the agent's container or VM, the isolation
+			// boundary (ADR-0025), so Claude Code may skip permission
+			// prompts there.
+			"IS_SANDBOX":          "1",
+			"DISABLE_AUTOUPDATER": "1",
+			"DISABLE_TELEMETRY":   "1",
+			"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+		},
+	}, nil
+}
+
+// Message encodes a user message.
+func (Driver) Message(text string) []byte {
+	b, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": text}})
+	return append(b, '\n')
+}
+
+// line is the part of a stream-json line the driver reads.
+type line struct {
+	Type    string `json:"type"`
+	Subtype string `json:"subtype"`
+	Message struct {
+		Content []struct {
+			Type    string          `json:"type"`
+			Text    string          `json:"text"`
+			Name    string          `json:"name"`
+			Input   json.RawMessage `json:"input"`
+			Content json.RawMessage `json:"content"`
+			IsError bool            `json:"is_error"`
+		} `json:"content"`
+	} `json:"message"`
+	IsError bool    `json:"is_error"`
+	Result  string  `json:"result"`
+	Turns   int     `json:"num_turns"`
+	Cost    float64 `json:"total_cost_usd"`
+}
+
+// Parse normalizes one line of output; other lines are ignored.
+func (Driver) Parse(b []byte) driver.Parsed {
+	var l line
+	if json.Unmarshal(b, &l) != nil {
+		return driver.Parsed{}
+	}
+	var p driver.Parsed
+	switch l.Type {
+	case "assistant":
+		for _, c := range l.Message.Content {
+			switch c.Type {
+			case "text":
+				p.Events = append(p.Events, runnerproto.Event{Kind: runnerproto.EventText, Text: c.Text})
+			case "tool_use":
+				p.Events = append(p.Events, runnerproto.Event{Kind: runnerproto.EventToolUse, Tool: c.Name, Input: string(c.Input)})
+			}
+		}
+	case "user":
+		for _, c := range l.Message.Content {
+			if c.Type == "tool_result" {
+				p.Events = append(p.Events, runnerproto.Event{Kind: runnerproto.EventToolResult,
+					Text: truncate(toolText(c.Content), maxToolResult), Error: c.IsError})
+			}
+		}
+	case "result":
+		ok := l.Subtype == "success" && !l.IsError
+		p.Events = []runnerproto.Event{{Kind: runnerproto.EventResult, Text: l.Result, Error: !ok}}
+		p.Result = &runnerproto.Result{Success: ok, Summary: l.Result, Turns: l.Turns, CostUSD: l.Cost}
+	}
+	return p
+}
+
+// toolText is a tool result's content: a string or text blocks.
+func toolText(raw json.RawMessage) string {
+	var s string
+	if json.Unmarshal(raw, &s) == nil {
+		return s
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &blocks) != nil {
+		return ""
+	}
+	var parts []string
+	for _, b := range blocks {
+		if b.Type == "text" {
+			parts = append(parts, b.Text)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
+}
+
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
+}

@@ -21,7 +21,6 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/app/plannertools"
 	"github.com/denyszorinets/ballet/core/internal/domain/agent"
-	"github.com/denyszorinets/ballet/core/internal/domain/agent/claudecode"
 	"github.com/denyszorinets/ballet/core/internal/domain/credential"
 	"github.com/denyszorinets/ballet/core/internal/domain/execution"
 	"github.com/denyszorinets/ballet/core/internal/domain/forge"
@@ -117,12 +116,11 @@ type reconcilerConfig struct {
 // agentsConfig configures coding-agent runs (ADR-0003).
 type agentsConfig struct {
 	// GatewayURL and KnowledgeMCPURL as reached from inside run sessions
-	// (containers may see other host names); empty: gateway.url and
+	// (agents may see other host names); empty: gateway.url and
 	// knowledge.url + "/mcp".
 	GatewayURL      string        `toml:"gateway_url"`
 	KnowledgeMCPURL string        `toml:"knowledge_mcp_url"`
 	TrackerMCPURL   string        `toml:"tracker_mcp_url"`
-	ClaudeCommand   string        `toml:"claude_command"`
 	Model           string        `toml:"model"`
 	RunTokenTTL     time.Duration `toml:"run_token_ttl"`
 }
@@ -192,7 +190,7 @@ func defaultConfig() serviceConfig {
 		Forge:      forgeConfig{PollInterval: time.Minute},
 		Scheduler:  schedulerConfig{Enabled: true, MaxActive: 4, MaxActivePerProject: 2, Interval: 10 * time.Second},
 		Reconciler: reconcilerConfig{Interval: time.Minute, Slack: 10 * time.Minute},
-		Agents: agentsConfig{ClaudeCommand: "claude", RunTokenTTL: 3 * time.Hour,
+		Agents: agentsConfig{RunTokenTTL: 3 * time.Hour,
 			TrackerMCPURL: "http://localhost:8080" + trackermcp.Path},
 		Planner: plannerConfig{
 			Model: "claude-sonnet-5-5", MaxTokens: 8192, MaxRounds: 20, Skill: "planner", CompactAtTokens: 100_000,
@@ -372,11 +370,8 @@ func run() error {
 	if knowledgeMCP == "" {
 		knowledgeMCP = strings.TrimSuffix(cfg.Knowledge.URL, "/") + "/mcp"
 	}
-	agents := map[string]agent.Adapter{
-		claudecode.Name: claudecode.Adapter{Command: cfg.Agents.ClaudeCommand, GatewayURL: agentGateway, APIKeyEnv: runTokenEnv},
-	}
-	dispatcher := &app.Dispatcher{Store: st, Tenancy: st, Now: time.Now, Logger: svc.Logger, Adapters: agents,
-		// Secrets reach the Runner with the run's start only: the run's own
+	dispatcher := &app.Dispatcher{Store: st, Tenancy: st, Now: time.Now, Logger: svc.Logger,
+		// Secrets reach the agent with the run's start only: the run's own
 		// token and the project's git token.
 		SecretEnv: func(ctx context.Context, r domainrun.Run) (map[string]string, error) {
 			p, err := st.ProjectByID(ctx, r.ProjectID)
@@ -416,11 +411,11 @@ func run() error {
 		Options: rpc.Options{Logger: svc.Logger},
 	})
 	runs := &app.Runs{Store: st, Execution: st, Items: st, Tenancy: st, Authz: authz, Dispatcher: dispatcher,
-		Agents: agents, SessionSkills: skills.SessionSkills, Model: cfg.Agents.Model, Deps: st,
+		LLMURL: agentGateway, TokenEnv: runTokenEnv, SessionSkills: skills.SessionSkills, Model: cfg.Agents.Model, Deps: st,
 		Knowledge: knowledgeReader.ForTicket,
 		MCP: []agent.MCPServer{
-			{Name: "tracker", URL: cfg.Agents.TrackerMCPURL, TokenEnv: runTokenEnv},
-			{Name: "knowledge", URL: knowledgeMCP, TokenEnv: runTokenEnv},
+			{Name: "tracker", URL: cfg.Agents.TrackerMCPURL},
+			{Name: "knowledge", URL: knowledgeMCP},
 		},
 		Now: time.Now, NewID: store.NewID}
 	questions := &app.Questions{Store: st, Items: st, Tenancy: st, Authz: authz, Orchestrator: orchestrator,
@@ -444,11 +439,7 @@ func run() error {
 		},
 	}
 	go pullRequests.Poll(ctx, cfg.Forge.PollInterval)
-	adapterNames := make([]string, 0, len(agents))
-	for name := range agents {
-		adapterNames = append(adapterNames, name)
-	}
-	pipelines := &app.Pipelines{Store: st, Tenancy: st, Authz: authz, Adapters: adapterNames, Now: time.Now}
+	pipelines := &app.Pipelines{Store: st, Tenancy: st, Authz: authz, Adapters: agent.Runtimes, Now: time.Now}
 	flows := &app.Flows{Store: st, Items: st, Tenancy: st, Authz: authz, Pipelines: pipelines, Runs: runs, RunStore: st,
 		Reports: st, PullRequests: pullRequests, Orchestrator: orchestrator, Now: time.Now, NewID: store.NewID,
 		Logger: svc.Logger}

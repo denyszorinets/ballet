@@ -474,7 +474,10 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
 ``GET /api/v1/runs/{run}/logs?after=<seq>&limit=<n>`` → ``200``
    ``{"items": [{"seq", "stream", "text", "at"}]}``: output after
    ``seq`` (default 0), at most ``limit`` (default and maximum 1000)
-   chunks. Poll with the last ``seq`` to follow a running run.
+   chunks. ``stream`` is ``stdout``, ``stderr``, ``system`` (the
+   agent's messages) or ``event`` (a session's events,
+   :ref:`reference-agents-runs`). Poll with the last ``seq`` to follow a
+   running run.
 
 ``GET /api/v1/items/{item}/reports`` → ``200``
    What the ticket's runs reported through the tracker MCP

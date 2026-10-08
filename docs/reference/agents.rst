@@ -82,17 +82,50 @@ the session's environment.
 Agent runs
 ----------
 
-An **agent run** executes a coding agent instead of a plain command
-(:doc:`/architecture/decisions/0003-orchestrate-existing-coding-agents`).
-An **adapter** turns the session — prompt, instructions, the project's
-skills, MCP servers — into files, environment and a command, and reads
-the agent's result back when the run finishes.
+An **agent run** executes a coding-agent session instead of a plain
+command (:doc:`/architecture/decisions/0003-orchestrate-existing-coding-agents`).
+Core sends the session independent of the runtime — runtime, prompt,
+standing instructions, the project's skills, MCP servers, model, the
+gateway URL and the variable holding the run token — in the spec's
+``session``. The spec's ``command`` only prepares the workspace (clone,
+branch, setup; :ref:`reference-agents-workspace`); after it succeeds the
+agent's **driver** for the runtime runs the session in the repository
+(:doc:`/architecture/decisions/0025-agent-fleet-runs-sessions-as-processes`).
 
-**Claude Code** (adapter ``claude-code``) runs ``claude -p`` headless
-(``--output-format stream-json --permission-mode bypassPermissions``,
-``IS_SANDBOX=1``) in the repository, with the prompt on standard input.
-Everything it gets lives in ``$HOME`` (``<workspace>/.home``), outside the
-repository, so agents cannot commit it:
+The driver keeps the session open between turns: it sends the prompt as
+the first message, normalizes what the session prints into **events**
+and ends the session when a turn ends with nothing more to say. Events
+are part of the run's output, stream ``event``, one JSON object per line:
+
+.. list-table::
+   :header-rows: 1
+
+   * - ``kind``
+     - Fields
+     - Meaning
+   * - ``text``
+     - ``text``
+     - What the agent says
+   * - ``tool_use``
+     - ``tool``, ``input`` (JSON)
+     - The agent calls a tool
+   * - ``tool_result``
+     - ``text`` (at most 4 000 bytes), ``error``
+     - What the tool returned
+   * - ``result``
+     - ``text``, ``error``
+     - A turn ended, with the agent's final message
+
+The ticket page shows them as the session's transcript, live while it
+runs. The driver also reports the session's result — final message,
+turns, cost, success — with ``run.finished``.
+
+**Claude Code** (runtime ``claude-code``) runs ``claude -p --input-format
+stream-json --output-format stream-json --permission-mode
+bypassPermissions`` (``IS_SANDBOX=1``) in the repository; the executable
+is the agent's ``drivers.claude_command``. Everything it gets lives in
+``$HOME`` (``<workspace>/.home``), outside the repository, so agents
+cannot commit it:
 
 - ``.claude/skills/<name>/SKILL.md`` and the skill's files — the
   project's skills in the versions it resolves (pins apply);
@@ -131,8 +164,8 @@ delivered as ``BALLET_RUN_TOKEN`` in ``secret_env``. Claude Code uses it as
 its API key against the LLM gateway (``ANTHROPIC_BASE_URL``), so its
 usage is metered to the ticket.
 
-When the run finishes, Core reads the final ``result`` event from the
-run's output: the agent's final message, turns and cost become the run's
+When the run finishes, the session's result reported by the agent —
+final message, turns and cost — becomes the run's
 ``result``. A session that exits 0 but reports an error, or reports
 nothing, fails the run.
 
@@ -161,7 +194,8 @@ Core's agent token (``data/service-tokens/agent.token``, audience
    * - ``run.start``
      - Core → agent
      - ``{"run", "spec"}``; ``spec.secret_env`` holds secrets the agent
-       adds to the session's environment and must never log or store. An
+       adds to the session's environment and must never log or store;
+       ``spec.session`` is a coding-agent session for the driver. An
        error result (e.g. at capacity) requeues the run
    * - ``run.cancel``
      - Core → agent
@@ -171,10 +205,12 @@ Core's agent token (``data/service-tokens/agent.token``, audience
      - ``{"run", "status": "running"}``
    * - ``run.log``
      - agent → Core
-     - ``{"run", "stream": "stdout"|"stderr"|"system", "text"}``
+     - ``{"run", "stream": "stdout"|"stderr"|"system"|"event", "text"}``
    * - ``run.finished``
      - agent → Core
-     - ``{"run", "exit_code", "error"?, "cancelled"?}``
+     - ``{"run", "exit_code", "error"?, "cancelled"?, "result"?}``;
+       ``result`` (``{"success", "summary", "turns", "cost_usd"}``) is a
+       session's
 
 Every agent → Core message is a request the agent awaits, so a run's
 output always reaches Core before its ``run.finished``. The agent
@@ -261,6 +297,9 @@ Configuration
    * - ``session.default_timeout``
      - ``2h``
      - Timeout of runs whose spec sets none (at least ``1m``)
+   * - ``drivers.claude_command``
+     - ``claude``
+     - The Claude Code executable
 
 Run an agent next to Core:
 

@@ -16,6 +16,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/denyszorinets/ballet/agent/internal/driver"
+	"github.com/denyszorinets/ballet/agent/internal/driver/claudecode"
 	"github.com/denyszorinets/ballet/agent/internal/link"
 	"github.com/denyszorinets/ballet/agent/internal/process"
 	"github.com/denyszorinets/ballet/kit/config"
@@ -34,6 +36,12 @@ type serviceConfig struct {
 	Core    coreConfig    `toml:"core"`
 	Agent   agentConfig   `toml:"agent"`
 	Session sessionConfig `toml:"session"`
+	Drivers driversConfig `toml:"drivers"`
+}
+
+// driversConfig configures the coding-agent runtimes.
+type driversConfig struct {
+	ClaudeCommand string `toml:"claude_command"` // the claude executable
 }
 
 // coreConfig locates Core and the agent token.
@@ -63,6 +71,7 @@ func defaultConfig() serviceConfig {
 		Core:    coreConfig{URL: "http://localhost:8080", TokenFile: "data/service-tokens/agent.token"},
 		Agent:   agentConfig{Capacity: 1},
 		Session: sessionConfig{DefaultTimeout: 2 * time.Hour},
+		Drivers: driversConfig{ClaudeCommand: "claude"},
 	}
 }
 
@@ -139,7 +148,10 @@ func run() error {
 	if cfg.Session.User == "" && os.Getuid() == 0 {
 		svc.Logger.Warn("sessions run as root with the agent's privileges; set session.user")
 	}
-	backend := &process.Backend{WorkRoot: cfg.Session.WorkDir, Keep: cfg.Session.KeepWorkspaces, User: cfg.Session.User}
+	backend := &process.Backend{WorkRoot: cfg.Session.WorkDir, Keep: cfg.Session.KeepWorkspaces, User: cfg.Session.User,
+		Drivers: map[string]driver.Driver{
+			claudecode.Name: claudecode.Driver{Command: cfg.Drivers.ClaudeCommand},
+		}}
 
 	r := &link.Agent{
 		URL: "ws" + strings.TrimPrefix(strings.TrimSuffix(cfg.Core.URL, "/"), "http") + runnerproto.Path,

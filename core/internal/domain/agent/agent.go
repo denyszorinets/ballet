@@ -1,55 +1,40 @@
 // Package agent describes coding-agent sessions independent of the agent
 // runtime (ADR-0003): what a session gets — task, instructions, skills, MCP
-// servers — and what it reports. Adapters turn a Session into the files,
-// environment and command a Runner executes, and read the result back.
+// servers. Agents run sessions through their driver for the runtime
+// (ADR-0025) and report the result.
 package agent
+
+// ClaudeCode is the Claude Code runtime.
+const ClaudeCode = "claude-code"
+
+// Runtimes are the runtimes agents can drive.
+var Runtimes = []string{ClaudeCode}
 
 // Skill is a skill as a session receives it.
 type Skill struct {
-	Name        string
-	Description string
-	Body        string            // SKILL.md body
-	Files       map[string]string // supporting files, relative to the skill
+	Name        string            `json:"name"`
+	Description string            `json:"description"`
+	Body        string            `json:"body"`            // SKILL.md body
+	Files       map[string]string `json:"files,omitempty"` // supporting files, relative to the skill
 }
 
 // MCPServer is an MCP server the session may use, authenticated with the
-// bearer token in environment variable TokenEnv.
+// run token.
 type MCPServer struct {
-	Name     string
-	URL      string
-	TokenEnv string
+	Name string `json:"name"`
+	URL  string `json:"url"`
 }
 
 // Session is everything an agent session starts with.
 type Session struct {
-	Prompt       string // the task
-	Instructions string // standing instructions (role, stage, conventions)
-	Skills       []Skill
-	MCP          []MCPServer
-	Model        string // "": the runtime's default
-	MaxTurns     int    // 0: unlimited
-}
-
-// Built is a session as the Runner executes it.
-type Built struct {
-	Command []string
-	Files   map[string]string // workspace-relative path → content
-	Env     map[string]string
-}
-
-// Result is what a session reported at its end.
-type Result struct {
-	Success bool
-	Summary string // the agent's final message
-	Turns   int
-	CostUSD float64
-}
-
-// Adapter builds sessions for one agent runtime and reads their results.
-type Adapter interface {
-	Name() string
-	Build(s Session) (Built, error)
-	// Result extracts the result from the session's standard output; ok is
-	// false when the output holds none (the session crashed).
-	Result(stdout string) (r Result, ok bool)
+	Runtime      string      `json:"runtime"`
+	Prompt       string      `json:"prompt"`                 // the task
+	Instructions string      `json:"instructions,omitempty"` // standing instructions (role, stage, conventions)
+	Skills       []Skill     `json:"skills,omitempty"`
+	MCP          []MCPServer `json:"mcp,omitempty"`
+	Model        string      `json:"model,omitempty"` // "": the runtime's default
+	MaxTurns     int         `json:"max_turns,omitempty"`
+	LLMURL       string      `json:"llm_url"`       // the LLM gateway as reached from the session
+	TokenEnv     string      `json:"token_env"`     // secret variable with the run token
+	Dir          string      `json:"dir,omitempty"` // where the session works, relative to the workspace
 }

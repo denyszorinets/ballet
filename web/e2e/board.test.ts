@@ -178,6 +178,21 @@ test('the item page shows agent activity', async ({ page }) => {
 					}
 				]
 			}
+		},
+		runLogs: {
+			r1: [
+				{ seq: 1, stream: 'stderr', text: 'ballet: on branch ballet/WEB-1-login\n', at },
+				{
+					seq: 2,
+					stream: 'event',
+					text:
+						'{"kind":"text","text":"Adding the login form."}\n' +
+						'{"kind":"tool_use","tool":"Bash","input":"{\\"command\\":\\"go test ./...\\"}"}\n' +
+						'{"kind":"tool_result","text":"ok"}\n' +
+						'{"kind":"result","text":"Login works."}\n',
+					at
+				}
+			]
 		}
 	});
 	await page.goto('/items/WEB-1');
@@ -198,6 +213,12 @@ test('the item page shows agent activity', async ({ page }) => {
 	);
 	await expect(session).toContainText('Sessions last 8 hours.');
 	await expect(session).toContainText('Which IdP for staff?');
+	await session.getByRole('button', { name: 'Show session' }).click();
+	const transcript = session.getByRole('region', { name: 'Session transcript' });
+	await expect(transcript).toContainText('ballet: on branch ballet/WEB-1-login');
+	await expect(transcript).toContainText('Adding the login form.');
+	await expect(transcript).toContainText('Bash command: go test ./...');
+	await expect(transcript).toContainText('Turn ended: Login works.');
 	await expect(timeline).toContainText('Waited for answers at implement');
 	await expect(timeline).toContainText('1,600 counted tokens');
 	const reports = page.getByRole('list', { name: 'Agent reports' });

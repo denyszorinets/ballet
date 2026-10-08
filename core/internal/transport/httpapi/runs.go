@@ -39,6 +39,7 @@ func timePtr(t time.Time) *time.Time {
 
 func toRunJSON(v app.RunView) runJSON {
 	spec := v.Spec
+	spec.Session = nil // internal: the session's prompt, skills and wiring
 	if spec.Command == nil {
 		spec.Command = []string{}
 	}

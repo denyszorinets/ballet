@@ -2,6 +2,7 @@ package process_test
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/denyszorinets/ballet/agent/internal/driver"
 	"github.com/denyszorinets/ballet/agent/internal/process"
 	"github.com/denyszorinets/ballet/kit/runnerproto"
 )
@@ -21,6 +23,7 @@ type output struct {
 	stdout strings.Builder
 	stderr strings.Builder
 	system strings.Builder
+	event  strings.Builder
 }
 
 func (o *output) write(stream, text string) {
@@ -31,6 +34,8 @@ func (o *output) write(stream, text string) {
 		o.stdout.WriteString(text)
 	case runnerproto.StreamStderr:
 		o.stderr.WriteString(text)
+	case runnerproto.StreamEvent:
+		o.event.WriteString(text)
 	default:
 		o.system.WriteString(text)
 	}
@@ -48,7 +53,7 @@ func TestProcess_RunsInAFreshWorkspace(t *testing.T) {
 	spec := sh(`pwd; echo "home=$HOME"; echo "x=$X tok=$TOK"; echo "secret=$BALLET_RUNNER_SECRET"; echo oops >&2; touch f; exit 3`,
 		map[string]string{"X": "1"})
 	spec.SecretEnv = map[string]string{"TOK": "t"}
-	code, err := b.Run(t.Context(), "run-1", spec, o.write)
+	code, _, err := b.Run(t.Context(), "run-1", spec, o.write)
 	require.NoError(t, err)
 	assert.Equal(t, 3, code)
 	lines := strings.Split(strings.TrimSpace(o.stdout.String()), "\n")
@@ -70,7 +75,7 @@ func TestProcess_CancelStopsTheProcessGroup(t *testing.T) {
 	var o output
 	done := make(chan error, 1)
 	go func() {
-		_, err := b.Run(ctx, "run-2", sh(`(sleep 30; echo child) & echo started; wait`, nil), o.write)
+		_, _, err := b.Run(ctx, "run-2", sh(`(sleep 30; echo child) & echo started; wait`, nil), o.write)
 		done <- err
 	}()
 	require.Eventually(t, func() bool { o.mu.Lock(); defer o.mu.Unlock(); return strings.Contains(o.stdout.String(), "started") },
@@ -88,11 +93,11 @@ func TestProcess_CancelStopsTheProcessGroup(t *testing.T) {
 
 func TestProcess_Errors(t *testing.T) {
 	b := &process.Backend{WorkRoot: t.TempDir(), Keep: true}
-	_, err := b.Run(t.Context(), "run-3", runnerproto.Spec{Command: []string{"/no/such/binary"}}, func(string, string) {})
+	_, _, err := b.Run(t.Context(), "run-3", runnerproto.Spec{Command: []string{"/no/such/binary"}}, func(string, string) {})
 	assert.ErrorContains(t, err, "start /no/such/binary")
 
 	var o output
-	code, err := b.Run(t.Context(), "run-4", sh(`pwd`, nil), o.write)
+	code, _, err := b.Run(t.Context(), "run-4", sh(`pwd`, nil), o.write)
 	require.NoError(t, err)
 	assert.Zero(t, code)
 	dir := strings.TrimSpace(o.stdout.String())
@@ -101,7 +106,7 @@ func TestProcess_Errors(t *testing.T) {
 	assert.True(t, strings.HasPrefix(dir, b.WorkRoot), "workdirs stay inside the workspace: %s", dir)
 
 	o = output{}
-	_, err = b.Run(t.Context(), "run-5", runnerproto.Spec{Command: []string{"pwd"}, Workdir: "../../etc"}, o.write)
+	_, _, err = b.Run(t.Context(), "run-5", runnerproto.Spec{Command: []string{"pwd"}, Workdir: "../../etc"}, o.write)
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(strings.TrimSpace(o.stdout.String()), b.WorkRoot), "no escaping the workspace")
 	_ = filepath.Join
@@ -112,12 +117,12 @@ func TestProcess_WritesFilesBeforeTheSession(t *testing.T) {
 	var o output
 	spec := runnerproto.Spec{Command: []string{"sh", "-c", `cat "$HOME/.claude/skills/x/SKILL.md" ../.ballet/mcp.json`}, Workdir: "repo",
 		Files: map[string]string{".home/.claude/skills/x/SKILL.md": "skill\n", ".ballet/mcp.json": "{}\n"}}
-	code, err := b.Run(t.Context(), "run-f", spec, o.write)
+	code, _, err := b.Run(t.Context(), "run-f", spec, o.write)
 	require.NoError(t, err)
 	assert.Zero(t, code, o.stderr.String())
 	assert.Equal(t, "skill\n{}\n", o.stdout.String())
 
-	_, err = b.Run(t.Context(), "run-g", runnerproto.Spec{Command: []string{"true"}, Files: map[string]string{"../x": "no"}}, o.write)
+	_, _, err = b.Run(t.Context(), "run-g", runnerproto.Spec{Command: []string{"true"}, Files: map[string]string{"../x": "no"}}, o.write)
 	assert.ErrorContains(t, err, "relative to the workspace")
 }
 
@@ -125,7 +130,7 @@ func TestProcess_CreatesAMissingWorkDirectory(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "not", "yet")
 	b := &process.Backend{WorkRoot: root}
 	var o output
-	code, err := b.Run(t.Context(), "run-1", sh("true", nil), o.write)
+	code, _, err := b.Run(t.Context(), "run-1", sh("true", nil), o.write)
 	require.NoError(t, err)
 	assert.Equal(t, 0, code)
 	_, err = os.Stat(root)
@@ -144,7 +149,7 @@ func TestProcess_RunsTheSessionAsTheSessionUser(t *testing.T) {
 	var o output
 	spec := sh(`id -u; touch made-here && echo wrote; cat `+secret+` || echo denied`, nil)
 	spec.Files = map[string]string{"repo/.keep": ""}
-	code, err := b.Run(t.Context(), "run-u", spec, o.write)
+	code, _, err := b.Run(t.Context(), "run-u", spec, o.write)
 	require.NoError(t, err)
 	assert.Equal(t, 0, code)
 	assert.Equal(t, "65534\nwrote\ndenied\n", o.stdout.String(), o.stderr.String())
@@ -153,6 +158,81 @@ func TestProcess_RunsTheSessionAsTheSessionUser(t *testing.T) {
 func TestProcess_UnknownSessionUserFails(t *testing.T) {
 	b := &process.Backend{WorkRoot: t.TempDir(), User: "no-such-user-ballet"}
 	var o output
-	_, err := b.Run(t.Context(), "run-x", sh("true", nil), o.write)
+	_, _, err := b.Run(t.Context(), "run-x", sh("true", nil), o.write)
 	assert.ErrorContains(t, err, "no-such-user-ballet")
+}
+
+// fakeDriver drives a shell script: "EV <text>" lines are text events,
+// "RESULT <text>" ends a turn.
+type fakeDriver struct{ script string }
+
+func (d fakeDriver) Setup(s runnerproto.Session) (driver.Setup, error) {
+	return driver.Setup{Files: map[string]string{"cfg/skill.md": "skill"}, Env: map[string]string{"KEY": "${" + s.TokenEnv + "}"},
+		Command: []string{"sh", "-c", d.script}}, nil
+}
+
+func (fakeDriver) Message(text string) []byte { return []byte(text + "\n") }
+
+func (fakeDriver) Parse(line []byte) driver.Parsed {
+	l := string(line)
+	switch {
+	case strings.HasPrefix(l, "EV "):
+		return driver.Parsed{Events: []runnerproto.Event{{Kind: "text", Text: l[3:]}}}
+	case strings.HasPrefix(l, "RESULT "):
+		return driver.Parsed{Result: &runnerproto.Result{Success: true, Summary: l[7:]}}
+	}
+	return driver.Parsed{}
+}
+
+func (o *output) events(t *testing.T) []string {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	var texts []string
+	for _, l := range strings.Split(strings.TrimSpace(o.event.String()), "\n") {
+		var e runnerproto.Event
+		require.NoError(t, json.Unmarshal([]byte(l), &e))
+		texts = append(texts, e.Text)
+	}
+	return texts
+}
+
+func TestProcess_RunsASessionThroughItsDriver(t *testing.T) {
+	b := &process.Backend{WorkRoot: t.TempDir(), Drivers: map[string]driver.Driver{"fake": fakeDriver{script: `
+read prompt
+echo "EV prompt=$prompt"
+echo "EV dir=$(basename "$PWD") key=$KEY skill=$(cat "$HOME/cfg/skill.md") prepared=$(cat ../prepared)"
+echo "RESULT finished"
+cat >/dev/null
+echo "EV stdin closed"`}}}
+	var o output
+	spec := runnerproto.Spec{
+		Command:   []string{"sh", "-c", "mkdir repo && echo yes > prepared && echo preparing"},
+		SecretEnv: map[string]string{"TOK": "secret"},
+		Session:   &runnerproto.Session{Runtime: "fake", Prompt: "do it", TokenEnv: "TOK", Dir: "repo"},
+	}
+	code, res, err := b.Run(t.Context(), "run-s", spec, o.write)
+	require.NoError(t, err)
+	assert.Equal(t, 0, code)
+	assert.Equal(t, &runnerproto.Result{Success: true, Summary: "finished"}, res)
+	assert.Equal(t, "preparing\n", o.stdout.String(), "the preparation's output is streamed as is")
+	assert.Equal(t, []string{"prompt=do it", "dir=repo key=secret skill=skill prepared=yes", "stdin closed"}, o.events(t),
+		"the prompt is sent, and standard input closes when the turn ends")
+}
+
+func TestProcess_FailedPreparationSkipsTheSession(t *testing.T) {
+	b := &process.Backend{WorkRoot: t.TempDir(), Drivers: map[string]driver.Driver{"fake": fakeDriver{script: `echo "EV ran"`}}}
+	var o output
+	code, res, err := b.Run(t.Context(), "run-p", runnerproto.Spec{Command: []string{"sh", "-c", "exit 4"},
+		Session: &runnerproto.Session{Runtime: "fake", Prompt: "x"}}, o.write)
+	require.NoError(t, err)
+	assert.Equal(t, 4, code)
+	assert.Nil(t, res)
+	assert.Empty(t, o.event.String())
+}
+
+func TestProcess_UnknownRuntimeFails(t *testing.T) {
+	b := &process.Backend{WorkRoot: t.TempDir()}
+	var o output
+	_, _, err := b.Run(t.Context(), "run-r", runnerproto.Spec{Session: &runnerproto.Session{Runtime: "nope", Prompt: "x"}}, o.write)
+	assert.ErrorContains(t, err, `unknown agent runtime "nope"`)
 }

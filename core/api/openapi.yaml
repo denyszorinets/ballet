@@ -1610,11 +1610,11 @@ components:
       additionalProperties: false
       required: [command]
       properties:
-        image: { type: string, description: Container image (container backends) }
+        image: { type: string, description: Recorded; not used by agents }
         command: { type: array, items: { type: string }, minItems: 1 }
         env: { type: object, additionalProperties: { type: string } }
         workdir: { type: string }
-        timeout_seconds: { type: integer, minimum: 0, description: "0: the Runner's default" }
+        timeout_seconds: { type: integer, minimum: 0, description: "0: the agent's default" }
         files: { type: object, additionalProperties: { type: string }, description: "Workspace-relative path → content, written first" }
     RunResult:
       type: object
@@ -1636,7 +1636,7 @@ components:
         status: { $ref: "#/components/schemas/RunStatus" }
         spec: { $ref: "#/components/schemas/RunSpec" }
         branch: { type: string, description: The ticket branch the run works on }
-        adapter: { type: string, description: Agent adapter that built the session }
+        adapter: { type: string, description: "The coding-agent runtime of a session run, e.g. claude-code" }
         result: { $ref: "#/components/schemas/RunResult" }
         runner: { type: string }
         exit_code: { type: integer }
@@ -1673,7 +1673,10 @@ components:
       required: [seq, stream, text, at]
       properties:
         seq: { type: integer, format: int64 }
-        stream: { type: string, enum: [stdout, stderr, system] }
+        stream:
+          type: string
+          enum: [stdout, stderr, system, event]
+          description: "event: a session's normalized events, one JSON object per line (kind, text, tool, input, error)"
         text: { type: string }
         at: { type: string, format: date-time }
     RunLogList:

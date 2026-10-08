@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/denyszorinets/ballet/agent/internal/driver"
 	"github.com/denyszorinets/ballet/kit/runnerproto"
 )
 
@@ -33,66 +34,144 @@ type Backend struct {
 	// StopGrace is how long a cancelled session gets after SIGTERM before
 	// SIGKILL (default 10 s).
 	StopGrace time.Duration
+	// Drivers run coding-agent sessions (spec.Session), by runtime.
+	Drivers map[string]driver.Driver
 }
 
-// Run executes spec.Command in a fresh workspace and streams its output.
-func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, out func(stream, text string)) (int, error) {
+// Run executes a run in a fresh workspace and streams its output: the
+// spec's command, then its coding-agent session, if any. The result is
+// the session's (nil without one, or when it reported none).
+func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, out func(stream, text string)) (int, *runnerproto.Result, error) {
+	var drv driver.Driver
+	var setup driver.Setup
+	if spec.Session != nil {
+		var ok bool
+		if drv, ok = b.Drivers[spec.Session.Runtime]; !ok {
+			return -1, nil, fmt.Errorf("unknown agent runtime %q", spec.Session.Runtime)
+		}
+		var err error
+		if setup, err = drv.Setup(*spec.Session); err != nil {
+			return -1, nil, err
+		}
+	}
 	cred, err := b.credential()
 	if err != nil {
-		return -1, err
+		return -1, nil, err
 	}
-	if b.WorkRoot != "" {
-		// A configured work directory may not exist yet. The session user
-		// must be able to reach its workspace inside it.
-		if err := os.MkdirAll(b.WorkRoot, 0o711); err != nil {
-			return -1, fmt.Errorf("create work directory: %w", err)
-		}
-		if cred != nil {
-			if err := os.Chmod(b.WorkRoot, 0o711); err != nil {
-				return -1, fmt.Errorf("work directory: %w", err)
-			}
-		}
-	}
-	ws, err := os.MkdirTemp(b.WorkRoot, "ballet-run-"+safe(runID)+"-")
+	ws, err := b.workspace(runID, cred)
 	if err != nil {
-		return -1, fmt.Errorf("create workspace: %w", err)
+		return -1, nil, err
 	}
 	if !b.Keep {
 		defer func() { _ = os.RemoveAll(ws) }()
 	}
 	home := filepath.Join(ws, ".home")
-	if err := os.MkdirAll(home, 0o700); err != nil {
-		return -1, fmt.Errorf("create workspace: %w", err)
-	}
+	files := map[string]string{}
 	for name, content := range spec.Files {
-		p, err := inside(ws, name)
-		if err != nil {
-			return -1, err
-		}
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
-			return -1, fmt.Errorf("write %s: %w", name, err)
-		}
-		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
-			return -1, fmt.Errorf("write %s: %w", name, err)
-		}
+		files[name] = content
+	}
+	for name, content := range setup.Files {
+		files[filepath.Join(".home", name)] = content
+	}
+	if err := write(ws, files); err != nil {
+		return -1, nil, err
 	}
 	dir, err := workdir(ws, spec.Workdir)
 	if err != nil {
-		return -1, err
+		return -1, nil, err
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return -1, fmt.Errorf("create workdir: %w", err)
+		return -1, nil, fmt.Errorf("create workdir: %w", err)
 	}
 	if cred != nil {
 		if err := chownAll(ws, int(cred.Uid), int(cred.Gid)); err != nil {
-			return -1, fmt.Errorf("hand the workspace to the session user: %w", err)
+			return -1, nil, fmt.Errorf("hand the workspace to the session user: %w", err)
 		}
 	}
+	out(runnerproto.StreamSystem, fmt.Sprintf("agent: workspace %s\n", ws))
 
-	cmd := exec.Command(spec.Command[0], spec.Command[1:]...)
-	cmd.Dir = dir
-	cmd.Env = environment(ws, home, spec.Env, spec.SecretEnv)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Credential: cred}
+	env := environment(ws, home, spec.Env, spec.SecretEnv)
+	if len(spec.Command) > 0 {
+		code, err := b.exec(ctx, proc{argv: spec.Command, dir: dir, env: env, cred: cred}, out, nil)
+		if err != nil || code != 0 || spec.Session == nil {
+			return code, nil, err
+		}
+	}
+	sdir, err := workdir(ws, spec.Session.Dir)
+	if err != nil {
+		return -1, nil, err
+	}
+	vars := map[string]string{}
+	for _, e := range env {
+		k, v, _ := strings.Cut(e, "=")
+		vars[k] = v
+	}
+	for k, v := range setup.Env {
+		env = append(env, k+"="+os.Expand(v, func(name string) string { return vars[name] }))
+	}
+	s := &session{drv: drv, prompt: spec.Session.Prompt}
+	code, err := b.exec(ctx, proc{argv: setup.Command, dir: sdir, env: env, cred: cred}, out, s)
+	return code, s.result(), err
+}
+
+// workspace creates a fresh workspace with its HOME.
+func (b *Backend) workspace(runID string, cred *syscall.Credential) (string, error) {
+	if b.WorkRoot != "" {
+		// A configured work directory may not exist yet. The session user
+		// must be able to reach its workspace inside it.
+		if err := os.MkdirAll(b.WorkRoot, 0o711); err != nil {
+			return "", fmt.Errorf("create work directory: %w", err)
+		}
+		if cred != nil {
+			if err := os.Chmod(b.WorkRoot, 0o711); err != nil {
+				return "", fmt.Errorf("work directory: %w", err)
+			}
+		}
+	}
+	ws, err := os.MkdirTemp(b.WorkRoot, "ballet-run-"+safe(runID)+"-")
+	if err != nil {
+		return "", fmt.Errorf("create workspace: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Join(ws, ".home"), 0o700); err != nil {
+		_ = os.RemoveAll(ws)
+		return "", fmt.Errorf("create workspace: %w", err)
+	}
+	return ws, nil
+}
+
+// write writes workspace-relative files.
+func write(ws string, files map[string]string) error {
+	for name, content := range files {
+		p, err := inside(ws, name)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			return fmt.Errorf("write %s: %w", name, err)
+		}
+		if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// proc is a process to execute.
+type proc struct {
+	argv []string
+	dir  string
+	env  []string
+	cred *syscall.Credential
+}
+
+// exec runs a process to its end. Without a session its output is
+// streamed as is; with one, the session's driver talks to it over
+// standard input and output.
+func (b *Backend) exec(ctx context.Context, p proc, out func(stream, text string), s *session) (int, error) {
+	cmd := exec.Command(p.argv[0], p.argv[1:]...)
+	cmd.Dir = p.dir
+	cmd.Env = p.env
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Credential: p.cred}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return -1, err
@@ -101,14 +180,24 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 	if err != nil {
 		return -1, err
 	}
-	out(runnerproto.StreamSystem, fmt.Sprintf("process backend: workspace %s\n", ws))
+	var stdin io.WriteCloser
+	if s != nil {
+		if stdin, err = cmd.StdinPipe(); err != nil {
+			return -1, err
+		}
+	}
 	if err := cmd.Start(); err != nil {
-		return -1, fmt.Errorf("start %s: %w", spec.Command[0], err)
+		return -1, fmt.Errorf("start %s: %w", p.argv[0], err)
 	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go pump(&wg, stdout, runnerproto.StreamStdout, out)
+	if s == nil {
+		go pump(&wg, stdout, runnerproto.StreamStdout, out)
+	} else {
+		s.begin(stdin)
+		go s.read(&wg, stdout, out)
+	}
 	go pump(&wg, stderr, runnerproto.StreamStderr, out)
 
 	stopped := make(chan struct{})
@@ -120,6 +209,9 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 		}
 	}()
 	wg.Wait()
+	if s != nil {
+		s.end()
+	}
 	err = cmd.Wait()
 	close(stopped)
 	if ctx.Err() != nil {

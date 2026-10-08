@@ -126,7 +126,6 @@ func newStack(t *testing.T) *stack {
 		"BALLET_CORE_GATEWAY_URL="+url("gateway"),
 		"BALLET_CORE_KNOWLEDGE_URL="+url("knowledge"),
 		"BALLET_CORE_AGENTS_TRACKER_MCP_URL="+url("core")+"/mcp/tracker",
-		"BALLET_CORE_AGENTS_CLAUDE_COMMAND="+agent,
 		"BALLET_CORE_SCHEDULER_INTERVAL=1s",
 		"BALLET_CORE_RECONCILER_INTERVAL=2s",
 	)
@@ -135,7 +134,7 @@ func newStack(t *testing.T) *stack {
 	st.gateway = mk("gateway", nil, "BALLET_GATEWAY_SERVER_ADDR=:"+ports["gateway"],
 		"BALLET_GATEWAY_CORE_URL="+url("core"), "BALLET_GATEWAY_ANTHROPIC_URL=http://127.0.0.1:"+ports["llm"])
 	st.agent = mk("agent", nil, "BALLET_AGENT_SERVER_ADDR=:"+ports["agent"],
-		"BALLET_AGENT_CORE_URL="+url("core"), "BALLET_AGENT_AGENT_NAME=a1",
+		"BALLET_AGENT_CORE_URL="+url("core"), "BALLET_AGENT_AGENT_NAME=a1", "BALLET_AGENT_DRIVERS_CLAUDE_COMMAND="+agent,
 		"BALLET_AGENT_SESSION_WORK_DIR="+filepath.Join(dir, "work"))
 	all := []*service{llm, st.core, st.knowledge, st.gateway, st.agent}
 	t.Cleanup(func() {

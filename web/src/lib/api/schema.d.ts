@@ -1959,14 +1959,14 @@ export interface components {
         /** @enum {string} */
         RunStatus: "queued" | "starting" | "running" | "succeeded" | "failed" | "cancelled";
         RunSpec: {
-            /** @description Container image (container backends) */
+            /** @description Recorded; not used by agents */
             image?: string;
             command: string[];
             env?: {
                 [key: string]: string;
             };
             workdir?: string;
-            /** @description 0: the Runner's default */
+            /** @description 0: the agent's default */
             timeout_seconds?: number;
             /** @description Workspace-relative path → content, written first */
             files?: {
@@ -1988,7 +1988,7 @@ export interface components {
             spec: components["schemas"]["RunSpec"];
             /** @description The ticket branch the run works on */
             branch?: string;
-            /** @description Agent adapter that built the session */
+            /** @description The coding-agent runtime of a session run, e.g. claude-code */
             adapter?: string;
             result?: components["schemas"]["RunResult"];
             runner?: string;
@@ -2022,8 +2022,11 @@ export interface components {
         RunLog: {
             /** Format: int64 */
             seq: number;
-            /** @enum {string} */
-            stream: "stdout" | "stderr" | "system";
+            /**
+             * @description event: a session's normalized events, one JSON object per line (kind, text, tool, input, error)
+             * @enum {string}
+             */
+            stream: "stdout" | "stderr" | "system" | "event";
             text: string;
             /** Format: date-time */
             at: string;

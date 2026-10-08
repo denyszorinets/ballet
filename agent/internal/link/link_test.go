@@ -77,22 +77,24 @@ func (c *core) result(t *testing.T, run string) runnerproto.Finished {
 // until release is closed; "fail" errors.
 type backend struct{ release chan struct{} }
 
-func (b backend) Run(ctx context.Context, _ string, spec runnerproto.Spec, out func(string, string)) (int, error) {
+func (b backend) Run(ctx context.Context, _ string, spec runnerproto.Spec, out func(string, string)) (int, *runnerproto.Result, error) {
 	switch spec.Command[0] {
 	case "sleep":
 		out("stdout", "sleeping\n")
 		<-ctx.Done()
-		return -1, ctx.Err()
+		return -1, nil, ctx.Err()
 	case "gate":
 		<-b.release
-		return 0, nil
+		return 0, nil, nil
 	case "fail":
-		return -1, errors.New("image not found")
+		return -1, nil, errors.New("image not found")
+	case "agent":
+		return 0, &runnerproto.Result{Success: true, Summary: "done", Turns: 2}, nil
 	}
 	out("stdout", "a ")
 	out("stdout", "b\n")
 	out("stderr", "warn\n")
-	return 3, nil
+	return 3, nil, nil
 }
 
 func setup(t *testing.T, capacity int) (*core, *link.Agent) {
@@ -142,6 +144,10 @@ func TestAgent_ExecutesAndReports(t *testing.T) {
 
 	require.NoError(t, start(t, c, "run2", "fail", 0))
 	assert.Equal(t, "image not found", c.result(t, "run2").Error)
+
+	require.NoError(t, start(t, c, "run3", "agent", 0))
+	assert.Equal(t, &runnerproto.Result{Success: true, Summary: "done", Turns: 2}, c.result(t, "run3").Result,
+		"the session's result is reported")
 }
 
 func TestAgent_CancelTimeoutCapacity(t *testing.T) {

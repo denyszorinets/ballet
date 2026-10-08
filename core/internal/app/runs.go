@@ -57,8 +57,10 @@ type RunView struct {
 type Runs struct {
 	Store     RunStore
 	Execution ExecutionStore // nil: runs execute their spec as given
-	// Agents are the adapters agent runs can use, by name.
-	Agents map[string]agent.Adapter
+	// LLMURL is the LLM gateway as reached from sessions; TokenEnv names
+	// the secret variable holding the run token.
+	LLMURL   string
+	TokenEnv string
 	// SessionSkills returns the skills a project's sessions get.
 	SessionSkills func(ctx context.Context, projectKey string) ([]agent.Skill, error)
 	MCP           []agent.MCPServer // MCP servers every session gets
@@ -76,24 +78,23 @@ type Runs struct {
 
 // AgentInput describes an agent run.
 type AgentInput struct {
-	Adapter        string // e.g. "claude-code"
+	Adapter        string // the runtime, e.g. "claude-code"
 	Prompt         string
 	TimeoutSeconds int
 }
 
-// CreateAgent queues a run executing a coding agent through an adapter:
+// CreateAgent queues a run executing a coding-agent session on a runtime:
 // the session gets the prompt, the project's skills and the MCP servers.
 // Like Create, it needs run.manage.
 func (rs *Runs) CreateAgent(ctx context.Context, ticketKey, stage string, in AgentInput) (RunView, error) {
-	a, ok := rs.Agents[in.Adapter]
-	if !ok {
-		return RunView{}, fmt.Errorf("%w: unknown agent adapter %q", ErrInvalid, in.Adapter)
+	if !slices.Contains(agent.Runtimes, in.Adapter) {
+		return RunView{}, fmt.Errorf("%w: unknown agent runtime %q", ErrInvalid, in.Adapter)
 	}
 	if len(in.Prompt) > 20_000 {
 		return RunView{}, fmt.Errorf("%w: the prompt must be at most 20000 characters", ErrInvalid)
 	}
 	return rs.create(ctx, ticketKey, stage, func(it tracker.Item, p tenancy.Project) (run.Spec, string, error) {
-		return rs.agentSpec(ctx, a, it, p, stage, in, StageOptions{})
+		return rs.agentSpec(ctx, it, p, stage, in, StageOptions{})
 	})
 }
 
@@ -105,9 +106,9 @@ type StageOptions struct {
 	Artifacts    string   // what earlier stages handed over (their reports)
 }
 
-// agentSpec builds an agent run's spec: the onboarding bundle as prompt,
-// the project's skills, the MCP servers.
-func (rs *Runs) agentSpec(ctx context.Context, a agent.Adapter, it tracker.Item, p tenancy.Project, stage string,
+// agentSpec builds an agent run's spec: a session with the onboarding
+// bundle as prompt, the project's skills and the MCP servers.
+func (rs *Runs) agentSpec(ctx context.Context, it tracker.Item, p tenancy.Project, stage string,
 	in AgentInput, opts StageOptions) (run.Spec, string, error) {
 	extra := strings.TrimSpace(strings.Join([]string{opts.Artifacts, in.Prompt}, "\n\n"))
 	bundle, err := rs.Bundle(ctx, it, p, stage, extra)
@@ -133,22 +134,17 @@ func (rs *Runs) agentSpec(ctx context.Context, a agent.Adapter, it tracker.Item,
 	if opts.Model != "" {
 		model = opts.Model
 	}
-	built, err := a.Build(agent.Session{
-		Prompt: bundle.Render(onboarding.DefaultMaxBytes), Skills: skills, MCP: rs.MCP, Model: model,
-		Instructions: sessionInstructions,
-	})
-	if err != nil {
-		return run.Spec{}, "", invalid(err)
-	}
-	return run.Spec{Command: built.Command, Files: built.Files, Env: built.Env, TimeoutSeconds: in.TimeoutSeconds}, a.Name(), nil
+	return run.Spec{TimeoutSeconds: in.TimeoutSeconds, Session: &agent.Session{
+		Runtime: in.Adapter, Prompt: bundle.Render(onboarding.DefaultMaxBytes), Instructions: sessionInstructions,
+		Skills: skills, MCP: rs.MCP, Model: model, LLMURL: rs.LLMURL, TokenEnv: rs.TokenEnv,
+	}}, in.Adapter, nil
 }
 
 // CreateForStage queues the agent run of a pipeline stage for Core's
 // orchestrator: no caller, no authorization.
 func (rs *Runs) CreateForStage(ctx context.Context, it tracker.Item, stage, adapter string, opts StageOptions, timeoutSeconds int) (RunView, error) {
-	a, ok := rs.Agents[adapter]
-	if !ok {
-		return RunView{}, fmt.Errorf("%w: unknown agent adapter %q", ErrPermanent, adapter)
+	if !slices.Contains(agent.Runtimes, adapter) {
+		return RunView{}, fmt.Errorf("%w: unknown agent runtime %q", ErrPermanent, adapter)
 	}
 	p, err := rs.Tenancy.ProjectByID(ctx, it.ProjectID)
 	if err != nil {
@@ -159,7 +155,7 @@ func (rs *Runs) CreateForStage(ctx context.Context, it tracker.Item, stage, adap
 		return RunView{}, err
 	}
 	return rs.insert(ctx, it, p, c, stage, func(it tracker.Item, p tenancy.Project) (run.Spec, string, error) {
-		return rs.agentSpec(ctx, a, it, p, stage, AgentInput{TimeoutSeconds: timeoutSeconds}, opts)
+		return rs.agentSpec(ctx, it, p, stage, AgentInput{Adapter: adapter, TimeoutSeconds: timeoutSeconds}, opts)
 	}, event.System, "ballet")
 }
 
@@ -323,7 +319,14 @@ func (rs *Runs) prepare(ctx context.Context, r *run.Run, it tracker.Item) error 
 		}
 		r.Branch = branch
 		env["BALLET_BRANCH"] = branch
-		r.Spec.Command = execution.Wrap(x, branch, true, r.Spec.Command)
+		if r.Spec.Session != nil {
+			// The workspace is prepared first; the session then works in
+			// the repository.
+			r.Spec.Command = execution.Wrap(x, branch, true, []string{"true"})
+			r.Spec.Session.Dir = execution.RepoDir
+		} else {
+			r.Spec.Command = execution.Wrap(x, branch, true, r.Spec.Command)
+		}
 	}
 	for k, v := range r.Spec.Env {
 		env[k] = v
@@ -480,8 +483,6 @@ type Dispatcher struct {
 	// SecretEnv returns the secrets a run receives with its start (the
 	// project's git token); optional.
 	SecretEnv func(ctx context.Context, r run.Run) (map[string]string, error)
-	// Adapters read agent runs' results, by adapter name.
-	Adapters map[string]agent.Adapter
 	// OnFinished is called after a run ended (the pipeline continues);
 	// optional.
 	OnFinished func(ctx context.Context, r run.Run)
@@ -734,10 +735,12 @@ func (d *Dispatcher) Running(ctx context.Context, runner, runID string) error {
 	return d.Store.UpdateRun(ctx, next, r.Version, &e)
 }
 
-// Log records output of a run. Output beyond MaxLogBytes is dropped.
+// Log records output of a run: stdout, stderr, the agent's system
+// messages, and a session's normalized events (stream "event", one JSON
+// object per line). Output beyond MaxLogBytes is dropped.
 func (d *Dispatcher) Log(ctx context.Context, runner, runID, stream, text string) error {
-	if stream != "stdout" && stream != "stderr" && stream != "system" {
-		return fmt.Errorf("%w: stream must be stdout, stderr or system", ErrInvalid)
+	if stream != "stdout" && stream != "stderr" && stream != "system" && stream != "event" {
+		return fmt.Errorf("%w: stream must be stdout, stderr, system or event", ErrInvalid)
 	}
 	if _, err := d.held(ctx, runner, runID); err != nil {
 		return err
@@ -750,20 +753,25 @@ func (d *Dispatcher) Log(ctx context.Context, runner, runID, stream, text string
 	return err
 }
 
-// Finished records the end of a run reported by its Runner.
-func (d *Dispatcher) Finished(ctx context.Context, runner, runID string, exitCode int, errText string, cancelled bool) error {
+// SessionResult is what a coding-agent session reported at its end.
+type SessionResult struct {
+	Success bool
+	Summary string
+	Turns   int
+	CostUSD float64
+}
+
+// Finished records the end of a run reported by its agent; res is the
+// session's result (nil when it reported none).
+func (d *Dispatcher) Finished(ctx context.Context, runner, runID string, exitCode int, errText string, cancelled bool,
+	res *SessionResult) error {
 	r, err := d.held(ctx, runner, runID)
 	if err != nil {
 		return err
 	}
-	if a, ok := d.Adapters[r.Adapter]; ok && r.Adapter != "" && !cancelled {
-		stdout, err := d.stdout(ctx, r.ID)
-		if err != nil {
-			return err
-		}
-		res, ok := a.Result(stdout)
+	if r.Spec.Session != nil && !cancelled {
 		switch {
-		case ok:
+		case res != nil:
 			r.Result = &run.Result{Summary: truncate(res.Summary, 10_000), Turns: res.Turns, CostUSD: res.CostUSD}
 			if !res.Success && exitCode == 0 && errText == "" {
 				errText = "the agent reported a failure: " + truncate(res.Summary, 500)
@@ -781,27 +789,6 @@ func (d *Dispatcher) Finished(ctx context.Context, runner, runID string, exitCod
 		return d.finish(ctx, r, run.StatusFailed, &exitCode, fmt.Sprintf("exited with code %d", exitCode))
 	}
 	return d.finish(ctx, r, run.StatusSucceeded, &exitCode, "")
-}
-
-// stdout returns a run's standard output.
-func (d *Dispatcher) stdout(ctx context.Context, runID string) (string, error) {
-	var b strings.Builder
-	var after int64
-	for {
-		logs, err := d.Store.RunLogs(ctx, runID, after, 1000)
-		if err != nil {
-			return "", err
-		}
-		for _, l := range logs {
-			if l.Stream == "stdout" {
-				b.WriteString(l.Text)
-			}
-			after = l.Seq
-		}
-		if len(logs) < 1000 {
-			return b.String(), nil
-		}
-	}
 }
 
 func truncate(s string, n int) string {

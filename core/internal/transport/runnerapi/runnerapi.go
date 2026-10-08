@@ -1,6 +1,6 @@
-// Package runnerapi serves the Runner protocol (kit/runnerproto): Runners
-// connect over WebSocket with their runner token, introduce themselves,
-// receive runs and report on them (ADR-0009).
+// Package runnerapi serves the agent protocol (kit/runnerproto): agents
+// connect over WebSocket with their token, introduce themselves, receive
+// runs and report on them (ADR-0025).
 package runnerapi
 
 import (
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/denyszorinets/ballet/core/internal/app"
+	"github.com/denyszorinets/ballet/core/internal/domain/agent"
 	"github.com/denyszorinets/ballet/core/internal/domain/run"
 	"github.com/denyszorinets/ballet/kit/auth"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
@@ -61,8 +62,24 @@ type conn struct{ c *rpc.Conn }
 func (rc conn) Start(ctx context.Context, r run.Run, secretEnv map[string]string) error {
 	return rc.c.Call(ctx, runnerproto.MethodStart, runnerproto.Start{Run: r.ID, Spec: runnerproto.Spec{
 		Image: r.Spec.Image, Command: r.Spec.Command, Env: r.Spec.Env, SecretEnv: secretEnv, Workdir: r.Spec.Workdir,
-		TimeoutSeconds: r.Spec.TimeoutSeconds, Files: r.Spec.Files,
+		TimeoutSeconds: r.Spec.TimeoutSeconds, Files: r.Spec.Files, Session: session(r.Spec.Session),
 	}}, nil)
+}
+
+// session is a run's session as the protocol carries it.
+func session(s *agent.Session) *runnerproto.Session {
+	if s == nil {
+		return nil
+	}
+	out := &runnerproto.Session{Runtime: s.Runtime, Prompt: s.Prompt, Instructions: s.Instructions, Model: s.Model,
+		MaxTurns: s.MaxTurns, LLMURL: s.LLMURL, TokenEnv: s.TokenEnv, Dir: s.Dir}
+	for _, sk := range s.Skills {
+		out.Skills = append(out.Skills, runnerproto.Skill{Name: sk.Name, Description: sk.Description, Body: sk.Body, Files: sk.Files})
+	}
+	for _, m := range s.MCP {
+		out.MCP = append(out.MCP, runnerproto.MCPServer{Name: m.Name, URL: m.URL})
+	}
+	return out
 }
 
 func (rc conn) Cancel(ctx context.Context, runID string) error {
@@ -117,7 +134,12 @@ func (h *handlers) handle(ctx context.Context, req *rpc.Request) (any, error) {
 		if err := req.Decode(&p); err != nil {
 			return nil, err
 		}
-		return struct{}{}, rpcError(d.Finished(ctx, name, p.Run, p.ExitCode, p.Error, p.Cancelled))
+		var res *app.SessionResult
+		if p.Result != nil {
+			res = &app.SessionResult{Success: p.Result.Success, Summary: p.Result.Summary, Turns: p.Result.Turns,
+				CostUSD: p.Result.CostUSD}
+		}
+		return struct{}{}, rpcError(d.Finished(ctx, name, p.Run, p.ExitCode, p.Error, p.Cancelled, res))
 	}
 	return nil, rpc.Errorf(rpc.CodeMethodNotFound, "method %s not found", req.Method)
 }

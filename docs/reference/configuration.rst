@@ -369,10 +369,6 @@ Coding-agent runs (:ref:`reference-agents-runs`).
    ``"http://localhost:8080/mcp/tracker"``;
    ``BALLET_CORE_AGENTS_TRACKER_MCP_URL``.
 
-``claude_command``
-   The Claude Code executable in the session. Default ``"claude"``;
-   ``BALLET_CORE_AGENTS_CLAUDE_COMMAND``.
-
 ``model``
    Model of agent sessions; ``""`` (default) lets the agent choose.
    ``BALLET_CORE_AGENTS_MODEL``.
