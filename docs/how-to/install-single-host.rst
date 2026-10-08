@@ -3,7 +3,8 @@ Install Ballet on one host
 
 The compose installation runs Ballet's services as containers on one
 Linux host with Docker Engine: Core (with the web UI), Knowledge, the LLM
-gateway and a Runner whose agent sessions run as sibling containers.
+gateway and an agent that runs coding-agent sessions as processes in its
+own container (:doc:`/reference/agents`). Ballet needs no Docker socket.
 
 Requirements
 ------------
@@ -12,7 +13,7 @@ Requirements
   The services use the host network (``network_mode: host``); with
   Docker Desktop, enable host networking in its settings.
 - Free ports 8080 (Core), 8081 (Knowledge), 8082 (gateway), 8083
-  (Runner metrics), 9090 (Prometheus), 3000 (Grafana), and 8180 for the
+  (agent metrics), 9090 (Prometheus), 3000 (Grafana), and 8180 for the
   development Keycloak.
 - An Anthropic API key for the projects, and a git token for their
   repositories.
@@ -24,21 +25,19 @@ Start
 
    git clone https://github.com/denyszorinets/ballet.git && cd ballet
    docker compose -f deploy/compose.yaml up -d --build
-   docker build -f deploy/agent/Containerfile -t ballet-agent deploy/agent
 
-The first command builds the images (``make images`` builds them too) and
-starts the services without authentication (see below for several
-users). The second builds the image
-agent sessions run in: git, Claude Code and common build tools — extend
-it for your projects' toolchains.
+This builds the images (``make images`` builds them too) and starts the
+services without authentication (see below for several users). The agent
+image, ``ballet-agent``, has git, Claude Code and common build tools;
+sessions run in it as the user ``ballet``. Extend it for your projects'
+toolchains and set ``BALLET_AGENT_IMAGE`` to your image.
 
 Open http://localhost:8080 on the host — no sign-in: you are the local
 user. Then, as in :doc:`run-locally`:
 
 #. create a customer and a project;
 #. store the customer's Anthropic key (customer page → *LLM credentials*);
-#. in the project settings, set the repository, ``ballet-agent`` as the
-   image, and a git token;
+#. in the project settings, set the repository and a git token;
 #. add tickets — or plan them with the planner — and move them to
    *Ready*.
 
@@ -66,8 +65,13 @@ installation-specific ones and takes these from the environment or an
 ``BALLET_ANTHROPIC_URL``
    Anthropic API base URL (default ``https://api.anthropic.com``).
 
-``BALLET_RUNNER_NAME``, ``BALLET_RUNNER_CAPACITY``
-   The Runner's name and how many sessions it runs at once (default 2).
+``BALLET_AGENT_IMAGE``
+   The agent image (default ``ballet-agent``), e.g. one extending it with
+   your projects' toolchains.
+
+``BALLET_AGENT_NAME``, ``BALLET_AGENT_CAPACITY``
+   The agent's name and how many sessions it runs at once (default 2).
+   Sessions share the agent's container, each in its own workspace.
 
 ``BALLET_LOG_LEVEL``
    ``debug``, ``info`` (default), ``warn`` or ``error``.
@@ -130,9 +134,10 @@ Security notes
 - With host networking the services listen on all interfaces: allow only
   port 8080 (or a TLS reverse proxy in front of it), and Grafana's 3000
   if you use it, through the host's firewall. The gateway and Knowledge
-  are only needed by agent containers on the same host; Prometheus only
+  are only needed by agent sessions on the same host; Prometheus only
   by Grafana.
-- The Runner uses the host's Docker socket to start agent containers;
-  whoever controls the Runner controls the host's Docker engine.
+- Agent sessions run on the host network as the unprivileged user
+  ``ballet`` in the agent container: they can reach every service
+  listening on the host.
 - The development Keycloak and its demo users are for trying Ballet;
   use your own identity provider for real use.

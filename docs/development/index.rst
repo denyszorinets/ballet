@@ -86,8 +86,8 @@ and push to ``develop`` and ``main``, with one job per area:
    * - Web e2e
      - ``make web-e2e`` (Chrome preinstalled on the runner); Playwright
        results are uploaded on failure
-   * - Runner (Docker)
-     - ``make runner-docker-test`` against the runner's Docker engine
+   * - Agent (root)
+     - ``sudo -E make agent-root-test``: sessions run as another OS user
    * - Failure injection
      - ``make failure-test``
    * - Images
@@ -101,16 +101,16 @@ Failure injection
 -----------------
 
 ``make failure-test`` (``core/test/failure``) builds the real binaries and
-runs Core, Knowledge, the LLM gateway, a Runner with the process backend
+runs Core, Knowledge, the LLM gateway, an agent
 and the fake Anthropic API as processes on free ports, with an in-process
 OIDC issuer. A shell script (``fakeagent.sh``) stands in for Claude Code:
 it calls the gateway, works for a few seconds, calls it again and reports
 a result. Each test starts a ticket on a one-stage pipeline and kills a
 service (``SIGKILL``) while the session runs:
 
-- **Core** killed and restarted: the Runner keeps the session and
+- **Core** killed and restarted: the agent keeps the session and
   delivers its result to the new Core; the ticket finishes.
-- **Runner** killed and restarted: the session is lost; the stage fails
+- **Agent** killed and restarted: the session is lost; the stage fails
   and the ticket waits with a question for the humans.
 - **Gateway** restarted: the session's next call reaches it; the ticket
   finishes.

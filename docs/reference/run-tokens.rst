@@ -1,7 +1,7 @@
 Run Tokens
 ==========
 
-Workloads — agent runs, Runners, planner sessions and Ballet services —
+Workloads — agent runs, agents, planner sessions and Ballet services —
 authenticate with short-lived **run tokens** issued by Core
 (:doc:`/architecture/decisions/0006-oidc-claims-rbac-and-scoped-run-tokens`).
 Humans never use run tokens.
@@ -58,7 +58,7 @@ Capabilities
    * - ``llm.invoke``
      - Call the LLM gateway
    * - ``runner.connect``
-     - Connect a Runner to Core
+     - Connect an agent to Core
    * - ``credentials.read``
      - (gateway) Read LLM credentials from Core
    * - ``usage.write``
@@ -95,8 +95,8 @@ per service into ``[services] tokens_dir`` (mode ``0600``):
      - ``service:knowledge``
      - ``core``, ``gateway``
      - ``llm.embed``
-   * - ``runner.token``
-     - ``service:runner``
+   * - ``agent.token``
+     - ``service:agent``
      - ``core``
      - ``runner.connect``
 

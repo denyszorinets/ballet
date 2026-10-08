@@ -3,7 +3,8 @@
 # See docs/how-to/install-single-host.rst. Every service uses the host's
 # network, so they find each other — and the browser finds them — on
 # localhost with the same ports as `make run`. Agent sessions run as
-# sibling containers through the host's Docker engine.
+# processes inside the agent container (ADR-0025); Ballet needs no Docker
+# socket.
 name: ballet
 
 x-service: &service
@@ -55,21 +56,18 @@ services:
     volumes:
       - ballet-data:/var/lib/ballet/data:ro
 
-  runner:
+  agent:
     <<: *service
-    build: { context: .., dockerfile: deploy/Containerfile, target: runner }
-    image: ballet-runner
+    build: { context: .., dockerfile: deploy/Containerfile, target: agent }
+    image: ${BALLET_AGENT_IMAGE:-ballet-agent}
     depends_on: [core]
     environment:
-      BALLET_RUNNER_RUNNER_NAME: ${BALLET_RUNNER_NAME:-host}
-      BALLET_RUNNER_RUNNER_CAPACITY: ${BALLET_RUNNER_CAPACITY:-2}
-      BALLET_RUNNER_RUNNER_BACKEND: docker
-      # Agent containers share the host network to reach the gateway,
-      # Knowledge and Core's tracker on localhost.
-      BALLET_RUNNER_DOCKER_NETWORK: host
+      BALLET_AGENT_AGENT_NAME: ${BALLET_AGENT_NAME:-host}
+      # Concurrent sessions in this container. Host networking gives one
+      # agent per host; more hosts (or Kubernetes replicas) scale further.
+      BALLET_AGENT_AGENT_CAPACITY: ${BALLET_AGENT_CAPACITY:-2}
     volumes:
       - ballet-data:/var/lib/ballet/data:ro
-      - /var/run/docker.sock:/var/run/docker.sock
 
   prometheus:
     <<: *service

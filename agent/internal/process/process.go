@@ -1,5 +1,6 @@
-// Package process runs sessions as local processes in temporary
-// workspaces — for development only, without isolation (ADR-0023).
+// Package process runs sessions as local processes in fresh workspaces,
+// optionally as a separate, unprivileged OS user (ADR-0025). The container
+// or VM the agent runs in is the isolation boundary.
 package process
 
 import (
@@ -10,7 +11,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -23,6 +26,10 @@ import (
 type Backend struct {
 	WorkRoot string // parent of the run workspaces; default the OS temp dir
 	Keep     bool   // keep workspaces after runs (debugging)
+	// User, when set, is the OS user sessions run as; the agent must run
+	// as root to switch to it. Sessions then cannot read the agent's files
+	// (its token) or signal it.
+	User string
 	// StopGrace is how long a cancelled session gets after SIGTERM before
 	// SIGKILL (default 10 s).
 	StopGrace time.Duration
@@ -30,10 +37,20 @@ type Backend struct {
 
 // Run executes spec.Command in a fresh workspace and streams its output.
 func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, out func(stream, text string)) (int, error) {
+	cred, err := b.credential()
+	if err != nil {
+		return -1, err
+	}
 	if b.WorkRoot != "" {
-		// A configured work directory may not exist yet.
-		if err := os.MkdirAll(b.WorkRoot, 0o700); err != nil {
+		// A configured work directory may not exist yet. The session user
+		// must be able to reach its workspace inside it.
+		if err := os.MkdirAll(b.WorkRoot, 0o711); err != nil {
 			return -1, fmt.Errorf("create work directory: %w", err)
+		}
+		if cred != nil {
+			if err := os.Chmod(b.WorkRoot, 0o711); err != nil {
+				return -1, fmt.Errorf("work directory: %w", err)
+			}
 		}
 	}
 	ws, err := os.MkdirTemp(b.WorkRoot, "ballet-run-"+safe(runID)+"-")
@@ -66,11 +83,16 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return -1, fmt.Errorf("create workdir: %w", err)
 	}
+	if cred != nil {
+		if err := chownAll(ws, int(cred.Uid), int(cred.Gid)); err != nil {
+			return -1, fmt.Errorf("hand the workspace to the session user: %w", err)
+		}
+	}
 
 	cmd := exec.Command(spec.Command[0], spec.Command[1:]...)
 	cmd.Dir = dir
 	cmd.Env = environment(ws, home, spec.Env, spec.SecretEnv)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Credential: cred}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return -1, err
@@ -111,6 +133,36 @@ func (b *Backend) Run(ctx context.Context, runID string, spec runnerproto.Spec, 
 		return -1, err
 	}
 	return 0, nil
+}
+
+// credential resolves User; nil when sessions run as the agent's user.
+func (b *Backend) credential() (*syscall.Credential, error) {
+	if b.User == "" {
+		return nil, nil
+	}
+	u, err := user.Lookup(b.User)
+	if err != nil {
+		return nil, fmt.Errorf("session user: %w", err)
+	}
+	uid, err := strconv.ParseUint(u.Uid, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("session user %s: uid %q", b.User, u.Uid)
+	}
+	gid, err := strconv.ParseUint(u.Gid, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("session user %s: gid %q", b.User, u.Gid)
+	}
+	return &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid), Groups: []uint32{}}, nil
+}
+
+// chownAll gives the tree at root to uid:gid.
+func chownAll(root string, uid, gid int) error {
+	return filepath.WalkDir(root, func(p string, _ os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		return os.Lchown(p, uid, gid)
+	})
 }
 
 // stop terminates the session's process group, forcefully after StopGrace.
@@ -154,7 +206,7 @@ func inside(ws, name string) (string, error) {
 	return filepath.Join(ws, clean), nil
 }
 
-// environment is minimal: the session does not inherit the Runner's
+// environment is minimal: the session does not inherit the agent's
 // configuration or secrets.
 func environment(ws, home string, envs ...map[string]string) []string {
 	out := []string{"HOME=" + home, "BALLET_WORKSPACE=" + ws}

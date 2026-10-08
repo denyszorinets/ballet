@@ -2,8 +2,8 @@
 
 # Go modules in the workspace (go.work). Each is built and tested on its own:
 # `go test ./...` at the repository root does not cover every module.
-MODULES  := core gateway kit knowledge runner
-SERVICES := core gateway knowledge runner
+MODULES  := agent core gateway kit knowledge
+SERVICES := agent core gateway knowledge
 
 BIN_DIR     := bin
 WEB_DIR     := web
@@ -53,12 +53,12 @@ test-race: ## Run Go tests with the race detector in every module
 test-standalone: ## Test every module without the workspace (GOWORK=off)
 	$(call each_module,GOWORK=off go test ./...)
 
-.PHONY: runner-docker-test
-runner-docker-test: ## Test the Runner's Docker backend against the local Docker engine
-	cd runner && BALLET_DOCKER_TESTS=1 go test -race -count=1 -run Integration -v ./internal/backend/docker/
+.PHONY: agent-root-test
+agent-root-test: ## Test running sessions as a separate OS user (needs root, e.g. sudo -E make agent-root-test)
+	cd agent && go test -count=1 -run SessionUser -v ./internal/process/
 
 .PHONY: failure-test
-failure-test: ## Crash Core, Runner and gateway mid-stage with the real binaries and check recovery
+failure-test: ## Crash Core, the agent and the gateway mid-stage with the real binaries and check recovery
 	cd core && BALLET_FAILURE_TESTS=1 go test -count=1 -v ./test/failure/
 
 .PHONY: build
@@ -89,13 +89,12 @@ run: bundle ## Build everything and run Ballet on http://localhost:8080 (Ctrl-C 
 
 ##@ Containers
 
-IMAGE_TARGETS := core gateway knowledge runner
+IMAGE_TARGETS := core gateway knowledge agent
 
 .PHONY: images
-images: ## Build the service images (ballet-<service>) and the agent image (ballet-agent)
+images: ## Build the images (ballet-<service>), the agent image (ballet-agent) included
 	@set -e; for t in $(IMAGE_TARGETS); do echo "==> image ballet-$$t"; \
 		docker build -f deploy/Containerfile --target $$t -t ballet-$$t .; done
-	docker build -f deploy/agent/Containerfile -t ballet-agent deploy/agent
 
 .PHONY: dashboards
 dashboards: ## Regenerate the Grafana dashboards (deploy/monitoring/dashboards.py)
@@ -176,7 +175,7 @@ check: go-check web-check ## Run all Go and web checks (CI entry point)
 
 .PHONY: clean
 clean: ## Remove build artifacts
-	rm -rf $(BIN_DIR)/core $(BIN_DIR)/gateway $(BIN_DIR)/knowledge $(BIN_DIR)/runner
+	rm -rf $(BIN_DIR)/core $(BIN_DIR)/gateway $(BIN_DIR)/knowledge $(BIN_DIR)/agent
 	rm -rf $(BIN_DIR)/fake-anthropic $(WEBUI_DIST)
 	rm -rf $(DOCS_DIR)/_build $(WEB_DIR)/build $(WEB_DIR)/.svelte-kit
 	rm -rf $(WEB_DIR)/test-results $(WEB_DIR)/playwright-report

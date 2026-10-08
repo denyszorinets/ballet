@@ -38,10 +38,10 @@ What it does
       services' tokens;
    #. Knowledge on ``:8081``;
    #. the LLM gateway on ``:8082``;
-   #. a Runner named ``local``: the ``docker`` backend when ``docker info``
-      succeeds, else the ``process`` backend (runs on this machine; as
-      root it sets ``IS_SANDBOX=1`` for Claude Code, see
-      :doc:`/architecture/decisions/0023-process-backend-for-development`).
+   #. an agent named ``local`` with capacity 2: sessions run as processes
+      on this machine (:doc:`/reference/agents`). Set
+      ``BALLET_AGENT_SESSION_USER`` to run them as another OS user (the
+      script must then run as root).
 
    Every service's output is shown prefixed with its name and written to
    ``.run/logs/<service>.log``. If a service exits, the script stops the
@@ -64,9 +64,6 @@ Environment variables of ``scripts/run.sh``:
    (``BALLET_GATEWAY_ANTHROPIC_URL``): agent sessions and the planner run
    without a real API key (store any key, e.g. ``sk-fake``, as the
    project's Anthropic credential).
-
-``BALLET_RUNNER_BACKEND``
-   ``docker`` or ``process``, overriding the detection.
 
 ``BALLET_RUN_DIR``
    Directory for state and logs instead of ``.run``.

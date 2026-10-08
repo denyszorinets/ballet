@@ -177,8 +177,8 @@ starts the next tickets within seconds.
 Recovery and stuck stages
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Flows survive restarts of Core and Runners: their steps are durable jobs,
-and a Runner that stays away longer than its grace period fails its runs,
+Flows survive restarts of Core and agents: their steps are durable jobs,
+and an agent that stays away longer than its grace period fails its runs,
 which ends the stage ``failed``. In addition, Core's reconciler checks
 every active flow periodically (``[reconciler] interval``, default one
 minute):

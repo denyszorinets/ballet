@@ -1,5 +1,5 @@
-// Package link connects a Runner to Core (kit/runnerproto): it dials with
-// the runner token, reconnects with backoff, executes the runs Core sends
+// Package link connects an agent to Core (kit/runnerproto): it dials with
+// the agent token, reconnects with backoff, executes the runs Core sends
 // through a Backend, streams their output and reports their end.
 package link
 
@@ -24,8 +24,8 @@ type Backend interface {
 	Run(ctx context.Context, runID string, spec runnerproto.Spec, out func(stream, text string)) (int, error)
 }
 
-// Runner keeps a Runner connected to Core and executes its runs.
-type Runner struct {
+// Agent keeps an agent connected to Core and executes its runs.
+type Agent struct {
 	URL            string // ws(s)://<core>/runner/rpc
 	Token          func(ctx context.Context) (string, error)
 	Name           string
@@ -44,11 +44,11 @@ type Runner struct {
 	wg      sync.WaitGroup
 }
 
-// Run keeps the Runner connected until ctx ends, then cancels its runs and
+// Run keeps the agent connected until ctx ends, then cancels its runs and
 // waits for them.
-func (r *Runner) Run(ctx context.Context) error {
+func (r *Agent) Run(ctx context.Context) error {
 	if r.Name == "" || r.Capacity < 1 || r.Backend == nil {
-		return errors.New("link: a runner needs a name, a capacity and a backend")
+		return errors.New("link: an agent needs a name, a capacity and a backend")
 	}
 	r.mu.Lock()
 	r.runs = map[string]context.CancelFunc{}
@@ -80,7 +80,7 @@ func (r *Runner) Run(ctx context.Context) error {
 }
 
 // session runs one connection until it ends.
-func (r *Runner) session(ctx context.Context) error {
+func (r *Agent) session(ctx context.Context) error {
 	conn, _, err := rpc.Dial(ctx, r.URL, rpc.DialOptions{
 		Token:   r.Token,
 		Options: rpc.Options{Handler: r.handle(ctx), Logger: r.Logger},
@@ -91,7 +91,7 @@ func (r *Runner) session(ctx context.Context) error {
 	defer func() { _ = conn.Close() }()
 	r.mu.Lock()
 	// Runs whose result is not delivered yet are still ours: Core fails
-	// runs a reconnecting Runner does not claim.
+	// runs a reconnecting agent does not claim.
 	active := make([]string, 0, len(r.runs)+len(r.pending))
 	for id := range r.runs {
 		active = append(active, id)
@@ -111,7 +111,7 @@ func (r *Runner) session(ctx context.Context) error {
 	pending := r.pending
 	r.pending = nil
 	r.mu.Unlock()
-	r.logger().InfoContext(ctx, "connected to Core", "runner", r.Name, "active", len(active))
+	r.logger().InfoContext(ctx, "connected to Core", "agent", r.Name, "active", len(active))
 	for _, f := range pending {
 		r.finish(ctx, f)
 	}
@@ -128,7 +128,7 @@ func (r *Runner) session(ctx context.Context) error {
 }
 
 // handle answers Core's requests on a connection.
-func (r *Runner) handle(ctx context.Context) rpc.Handler {
+func (r *Agent) handle(ctx context.Context) rpc.Handler {
 	return func(_ context.Context, req *rpc.Request) (any, error) {
 		switch req.Method {
 		case runnerproto.MethodStart:
@@ -155,7 +155,7 @@ func (r *Runner) handle(ctx context.Context) rpc.Handler {
 	}
 }
 
-func (r *Runner) start(ctx context.Context, p runnerproto.Start) error {
+func (r *Agent) start(ctx context.Context, p runnerproto.Start) error {
 	timeout := r.DefaultTimeout
 	if timeout <= 0 {
 		timeout = 2 * time.Hour
@@ -169,7 +169,7 @@ func (r *Runner) start(ctx context.Context, p runnerproto.Start) error {
 		return rpc.Errorf(rpc.CodeConflict, "run %s is already running", p.Run)
 	}
 	if len(r.runs) >= r.Capacity {
-		return rpc.Errorf(rpc.CodeConflict, "runner is at capacity")
+		return rpc.Errorf(rpc.CodeConflict, "agent is at capacity")
 	}
 	runCtx, cancel := context.WithCancel(ctx)
 	runCtx, cancelTimeout := context.WithTimeout(runCtx, timeout)
@@ -188,8 +188,8 @@ func (r *Runner) start(ctx context.Context, p runnerproto.Start) error {
 }
 
 // execute runs a session and reports it; reports outlive the run's
-// context (runCtx) but not the Runner's (ctx).
-func (r *Runner) execute(runCtx, ctx context.Context, p runnerproto.Start) {
+// context (runCtx) but not the agent's (ctx).
+func (r *Agent) execute(runCtx, ctx context.Context, p runnerproto.Start) {
 	r.call(ctx, runnerproto.MethodStatus, runnerproto.Status{Run: p.Run, Status: "running"})
 	out := newBuffer(func(stream, text string) {
 		// A request, not a notification: Core handles requests and
@@ -215,7 +215,7 @@ func (r *Runner) execute(runCtx, ctx context.Context, p runnerproto.Start) {
 }
 
 // finish delivers a result, or keeps it for the next connection.
-func (r *Runner) finish(ctx context.Context, f runnerproto.Finished) {
+func (r *Agent) finish(ctx context.Context, f runnerproto.Finished) {
 	if err := r.call(ctx, runnerproto.MethodFinished, f); err != nil {
 		var rerr *rpc.Error
 		if errors.As(err, &rerr) {
@@ -228,13 +228,13 @@ func (r *Runner) finish(ctx context.Context, f runnerproto.Finished) {
 	}
 }
 
-func (r *Runner) current() *rpc.Conn {
+func (r *Agent) current() *rpc.Conn {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.conn
 }
 
-func (r *Runner) call(ctx context.Context, method string, params any) error {
+func (r *Agent) call(ctx context.Context, method string, params any) error {
 	c := r.current()
 	if c == nil {
 		return errors.New("not connected")
@@ -244,14 +244,14 @@ func (r *Runner) call(ctx context.Context, method string, params any) error {
 	return c.Call(callCtx, method, params, nil)
 }
 
-func (r *Runner) flushInterval() time.Duration {
+func (r *Agent) flushInterval() time.Duration {
 	if r.FlushInterval > 0 {
 		return r.FlushInterval
 	}
 	return 200 * time.Millisecond
 }
 
-func (r *Runner) logger() *slog.Logger {
+func (r *Agent) logger() *slog.Logger {
 	if r.Logger != nil {
 		return r.Logger
 	}

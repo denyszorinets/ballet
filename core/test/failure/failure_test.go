@@ -1,5 +1,5 @@
 // Package failure tests recovery from crashes with Ballet's real binaries:
-// Core, Knowledge, the LLM gateway and a Runner (process backend) run as
+// Core, Knowledge, the LLM gateway and an agent (ADR-0025) run as
 // processes, a fake agent stands in for Claude Code, and services are
 // killed mid-stage. Run with `make failure-test` (BALLET_FAILURE_TESTS=1).
 package failure_test
@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 	}
 	bin = dir
 	root, _ := filepath.Abs("../../..")
-	for _, pkg := range []string{"core/cmd/core", "gateway/cmd/gateway", "knowledge/cmd/knowledge", "runner/cmd/runner",
+	for _, pkg := range []string{"core/cmd/core", "gateway/cmd/gateway", "knowledge/cmd/knowledge", "agent/cmd/agent",
 		"gateway/cmd/fake-anthropic"} {
 		cmd := exec.Command("go", "build", "-o", filepath.Join(bin, filepath.Base(pkg)), "./"+pkg)
 		cmd.Dir, cmd.Stdout, cmd.Stderr = root, os.Stdout, os.Stderr
@@ -88,7 +88,7 @@ func freePort(t *testing.T) string {
 type stack struct {
 	t                        *testing.T
 	core, knowledge, gateway *service
-	runner                   *service
+	agent                    *service
 	coreURL                  string
 	token                    string
 }
@@ -98,7 +98,7 @@ func newStack(t *testing.T) *stack {
 	dir := t.TempDir()
 	iss := oidctest.NewIssuer(t)
 	ports := map[string]string{}
-	for _, s := range []string{"core", "knowledge", "gateway", "runner", "llm"} {
+	for _, s := range []string{"core", "knowledge", "gateway", "agent", "llm"} {
 		ports[s] = freePort(t)
 	}
 	url := func(s string) string { return "http://localhost:" + ports[s] }
@@ -134,10 +134,10 @@ func newStack(t *testing.T) *stack {
 		"BALLET_KNOWLEDGE_CORE_URL="+url("core"))
 	st.gateway = mk("gateway", nil, "BALLET_GATEWAY_SERVER_ADDR=:"+ports["gateway"],
 		"BALLET_GATEWAY_CORE_URL="+url("core"), "BALLET_GATEWAY_ANTHROPIC_URL=http://127.0.0.1:"+ports["llm"])
-	st.runner = mk("runner", nil, "BALLET_RUNNER_SERVER_ADDR=:"+ports["runner"],
-		"BALLET_RUNNER_CORE_URL="+url("core"), "BALLET_RUNNER_RUNNER_NAME=r1", "BALLET_RUNNER_RUNNER_BACKEND=process",
-		"BALLET_RUNNER_PROCESS_WORK_DIR="+filepath.Join(dir, "work"))
-	all := []*service{llm, st.core, st.knowledge, st.gateway, st.runner}
+	st.agent = mk("agent", nil, "BALLET_AGENT_SERVER_ADDR=:"+ports["agent"],
+		"BALLET_AGENT_CORE_URL="+url("core"), "BALLET_AGENT_AGENT_NAME=a1",
+		"BALLET_AGENT_SESSION_WORK_DIR="+filepath.Join(dir, "work"))
+	all := []*service{llm, st.core, st.knowledge, st.gateway, st.agent}
 	t.Cleanup(func() {
 		for _, s := range all {
 			if s.cmd != nil && s.cmd.ProcessState == nil {
@@ -148,7 +148,7 @@ func newStack(t *testing.T) *stack {
 	llm.start()
 	st.core.start()
 	st.waitHealthy(url("core"))
-	for _, tok := range []string{"knowledge", "gateway", "runner"} {
+	for _, tok := range []string{"knowledge", "gateway", "agent"} {
 		st.eventually(10*time.Second, "token "+tok, func() bool {
 			fi, err := os.Stat(filepath.Join(dir, "data", "service-tokens", tok+".token"))
 			return err == nil && fi.Size() > 0
@@ -156,7 +156,7 @@ func newStack(t *testing.T) *stack {
 	}
 	st.knowledge.start()
 	st.gateway.start()
-	st.runner.start()
+	st.agent.start()
 	st.waitHealthy(url("knowledge"))
 	st.waitHealthy(url("gateway"))
 	st.token = iss.Token(t, "alice", "ballet", map[string]any{"groups": []string{"ballet-admins"}, "name": "Alice"})
@@ -328,20 +328,20 @@ func TestFailure_CoreCrashMidStageContinues(t *testing.T) {
 	st.core.start()
 	st.waitHealthy(st.coreURL)
 
-	// The Runner keeps the session; its result reaches the restarted Core.
+	// The agent keeps the session; its result reaches the restarted Core.
 	st.waitFlow(key, "done", 60*time.Second, func(f flowView) bool { return f.Status == "done" })
 }
 
-func TestFailure_RunnerCrashMidStageIsFlagged(t *testing.T) {
+func TestFailure_AgentCrashMidStageIsFlagged(t *testing.T) {
 	st := newStack(t)
-	key := st.ticket("Survive a Runner crash")
+	key := st.ticket("Survive an agent crash")
 	st.running(key)
 
-	st.runner.kill()
+	st.agent.kill()
 	time.Sleep(time.Second)
-	st.runner.start()
+	st.agent.start()
 
-	// The restarted Runner no longer has the session: the stage fails and
+	// The restarted agent no longer has the session: the stage fails and
 	// the ticket waits with a question for the humans.
 	f := st.waitFlow(key, "flagged", 60*time.Second, func(f flowView) bool { return f.Waiting == "question" })
 	require.Contains(t, f.Report, "no longer executes")

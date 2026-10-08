@@ -15,7 +15,7 @@ Keep going
   (:doc:`/architecture/decisions/0016-durable-orchestration-in-the-database`).
 - **Retries for infrastructure failures** (container start, network,
   provider errors) with backoff, distinct from agent-level failures.
-- **Heartbeats.** Runners report their own and each session's liveness;
+- **Heartbeats.** Agents report their own and each session's liveness;
   missed heartbeats trigger reconciliation
   (:doc:`/architecture/integration`).
 - **Stuck detection.** Sessions that exceed their time limit or stop

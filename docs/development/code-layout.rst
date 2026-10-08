@@ -6,11 +6,11 @@ a Go workspace (:doc:`/architecture/decisions/0002-go-and-svelte`).
 
 .. code-block:: text
 
-   go.work            workspace: core, gateway, kit, knowledge, runner
+   go.work            workspace: agent, core, gateway, kit, knowledge
    core/              Core service module
    gateway/           LLM gateway module
    knowledge/         Knowledge service module
-   runner/            Runner module
+   agent/             agent module (runs coding-agent sessions)
    kit/               shared library module (no business logic)
    web/               Svelte UI
    docs/              this documentation (uv project)
@@ -18,7 +18,7 @@ a Go workspace (:doc:`/architecture/decisions/0002-go-and-svelte`).
 Modules
 -------
 
-``core``, ``gateway``, ``knowledge``, ``runner``
+``agent``, ``core``, ``gateway``, ``knowledge``
    One deployable service each, module path
    ``github.com/denyszorinets/ballet/<name>``. A service module never
    imports another service module; services talk over their APIs.
@@ -50,7 +50,7 @@ inward.
      cmd/<service>/        entry point: configuration and wiring only
      internal/domain/      entities, value objects, invariants
      internal/app/         use cases; interfaces (ports) for what they need
-     internal/infra/       adapters: SQLite, Docker, forge and LLM clients
+     internal/infra/       adapters: SQLite, forge and LLM clients
      internal/transport/   REST, WebSocket and MCP handlers
 
 - ``domain`` imports nothing from ``app``, ``infra`` or ``transport``.
@@ -77,7 +77,7 @@ Services and ports
    * - gateway
      - ``:8082``
      - ``/healthz`` ``/readyz`` ``/metrics``
-   * - runner
+   * - agent
      - ``:8083``
      - ``/healthz`` ``/readyz`` ``/metrics``
 

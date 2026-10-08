@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/denyszorinets/ballet/agent/internal/process"
 	"github.com/denyszorinets/ballet/kit/runnerproto"
-	"github.com/denyszorinets/ballet/runner/internal/backend/process"
 )
 
 type output struct {
@@ -56,7 +56,7 @@ func TestProcess_RunsInAFreshWorkspace(t *testing.T) {
 	assert.True(t, strings.HasSuffix(lines[0], "/repo"), lines[0])
 	assert.Contains(t, lines[1], "/.home")
 	assert.Equal(t, "x=1 tok=t", lines[2], "secret env is passed to the session")
-	assert.Equal(t, "secret=", lines[3], "the Runner's environment is not inherited")
+	assert.Equal(t, "secret=", lines[3], "the agent's environment is not inherited")
 	assert.Equal(t, "oops\n", o.stderr.String())
 	assert.Contains(t, o.system.String(), "workspace")
 	entries, _ := os.ReadDir(root)
@@ -130,4 +130,29 @@ func TestProcess_CreatesAMissingWorkDirectory(t *testing.T) {
 	assert.Equal(t, 0, code)
 	_, err = os.Stat(root)
 	assert.NoError(t, err)
+}
+
+func TestProcess_RunsTheSessionAsTheSessionUser(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("switching users needs root")
+	}
+	root := t.TempDir()
+	require.NoError(t, os.Chmod(filepath.Dir(root), 0o711)) // the session user reaches its workspace
+	secret := filepath.Join(t.TempDir(), "agent.token")
+	require.NoError(t, os.WriteFile(secret, []byte("token"), 0o600))
+	b := &process.Backend{WorkRoot: root, User: "nobody"}
+	var o output
+	spec := sh(`id -u; touch made-here && echo wrote; cat `+secret+` || echo denied`, nil)
+	spec.Files = map[string]string{"repo/.keep": ""}
+	code, err := b.Run(t.Context(), "run-u", spec, o.write)
+	require.NoError(t, err)
+	assert.Equal(t, 0, code)
+	assert.Equal(t, "65534\nwrote\ndenied\n", o.stdout.String(), o.stderr.String())
+}
+
+func TestProcess_UnknownSessionUserFails(t *testing.T) {
+	b := &process.Backend{WorkRoot: t.TempDir(), User: "no-such-user-ballet"}
+	var o output
+	_, err := b.Run(t.Context(), "run-x", sh("true", nil), o.write)
+	assert.ErrorContains(t, err, "no-such-user-ballet")
 }
