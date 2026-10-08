@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -24,10 +23,7 @@ const Name = "claude-code"
 // maxToolResult bounds a tool result kept as an event.
 const maxToolResult = 4000
 
-var (
-	skillNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
-	sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,127}$`)
-)
+var sessionIDRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]{0,127}$`)
 
 // Driver drives Claude Code.
 type Driver struct {
@@ -44,23 +40,12 @@ func (d Driver) Setup(s runnerproto.Session) (driver.Setup, error) {
 	if s.LLMURL == "" || s.TokenEnv == "" {
 		return driver.Setup{}, errors.New("claude-code: the gateway URL and the token variable are required")
 	}
-	files := map[string]string{}
+	files, err := driver.SkillFiles(".claude/skills", s.Skills)
+	if err != nil {
+		return driver.Setup{}, fmt.Errorf("claude-code: %w", err)
+	}
 	if s.Instructions != "" {
 		files[".claude/CLAUDE.md"] = s.Instructions
-	}
-	for _, sk := range s.Skills {
-		if !skillNameRe.MatchString(sk.Name) || strings.Contains(sk.Name, "..") {
-			return driver.Setup{}, fmt.Errorf("claude-code: invalid skill name %q", sk.Name)
-		}
-		dir := ".claude/skills/" + sk.Name
-		files[dir+"/SKILL.md"] = fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n%s", sk.Name, oneLine(sk.Description), sk.Body)
-		for p, content := range sk.Files {
-			clean := path.Clean(p)
-			if path.IsAbs(clean) || clean == "." || strings.HasPrefix(clean, "..") {
-				return driver.Setup{}, fmt.Errorf("claude-code: skill %s file %q escapes the skill", sk.Name, p)
-			}
-			files[dir+"/"+clean] = content
-		}
 	}
 	if len(s.MCP) > 0 {
 		servers := map[string]any{}
@@ -113,14 +98,23 @@ func (d Driver) Setup(s runnerproto.Session) (driver.Setup, error) {
 	}, nil
 }
 
+// NewCodec returns a codec: Claude Code's stream-json needs no session
+// state.
+func (Driver) NewCodec(string) driver.Codec { return codec{} }
+
+type codec struct{}
+
+// Start sends the prompt as the first message.
+func (c codec) Start(prompt string) []byte { return c.Message(prompt) }
+
 // Message encodes a user message.
-func (Driver) Message(text string) []byte {
+func (codec) Message(text string) []byte {
 	b, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": text}})
 	return append(b, '\n')
 }
 
 // Interrupt encodes a control request stopping the current turn.
-func (Driver) Interrupt() []byte {
+func (codec) Interrupt() []byte {
 	b, _ := json.Marshal(map[string]any{"type": "control_request",
 		"request_id": fmt.Sprintf("ballet-%d", time.Now().UnixNano()), "request": map[string]any{"subtype": "interrupt"}})
 	return append(b, '\n')
@@ -148,7 +142,7 @@ type line struct {
 }
 
 // Parse normalizes one line of output; other lines are ignored.
-func (Driver) Parse(b []byte) driver.Parsed {
+func (codec) Parse(b []byte) driver.Parsed {
 	var l line
 	if json.Unmarshal(b, &l) != nil {
 		return driver.Parsed{}
@@ -222,8 +216,4 @@ func truncate(s string, n int) string {
 		return s
 	}
 	return s[:n] + "…"
-}
-
-func oneLine(s string) string {
-	return strings.Join(strings.Fields(s), " ")
 }

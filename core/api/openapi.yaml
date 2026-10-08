@@ -1692,7 +1692,7 @@ components:
           additionalProperties: false
           required: [adapter, prompt]
           properties:
-            adapter: { type: string, enum: [claude-code] }
+            adapter: { type: string, enum: [claude-code, opencode] }
             prompt: { type: string }
             timeout_seconds: { type: integer, minimum: 0 }
     RunInput:

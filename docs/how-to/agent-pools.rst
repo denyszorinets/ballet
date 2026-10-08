@@ -52,6 +52,9 @@ Options:
 ``installClaude``
    Install Claude Code (default ``true``; skipped when ``claude`` is in
    ``/usr/local/bin`` or ``/usr/bin`` already).
+``installOpencode``
+   Install opencode (default ``false``; skipped when it is installed),
+   for projects whose stages run on it.
 
 The Feature writes ``/etc/ballet/agent.toml`` (the pool label and the
 session user; ``BALLET_AGENT_CONFIG`` points at it) — ``BALLET_AGENT_*``

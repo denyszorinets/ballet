@@ -651,6 +651,9 @@ func (fl *Flows) handleResume(ctx context.Context, j Job) error {
 		return err
 	}
 	f, it, c, ok, err := fl.current(ctx, flowJob{TicketID: p.TicketID})
+	if errors.Is(err, ErrNotFound) {
+		return nil // the question came from a run outside a pipeline
+	}
 	if err != nil || !ok || f.Status != FlowWaiting || f.Waiting != "question" {
 		return err
 	}

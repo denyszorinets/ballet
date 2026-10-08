@@ -2049,7 +2049,7 @@ export interface components {
             spec?: components["schemas"]["RunSpec"];
             agent?: {
                 /** @enum {string} */
-                adapter: "claude-code";
+                adapter: "claude-code" | "opencode";
                 prompt: string;
                 timeout_seconds?: number;
             };

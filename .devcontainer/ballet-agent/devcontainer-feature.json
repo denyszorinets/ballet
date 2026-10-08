@@ -1,6 +1,6 @@
 {
     "id": "ballet-agent",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "name": "Ballet agent",
     "description": "Makes this devcontainer an agent pool for Ballet: installs the Ballet agent, Claude Code and an unprivileged session user (ADR-0025).",
     "documentationURL": "https://github.com/denyszorinets/ballet/blob/develop/docs/how-to/agent-pools.rst",
@@ -24,6 +24,11 @@
             "type": "boolean",
             "default": true,
             "description": "Install Claude Code for every user unless it is installed already."
+        },
+        "installOpencode": {
+            "type": "boolean",
+            "default": false,
+            "description": "Install opencode for every user unless it is installed already."
         }
     },
     "containerEnv": {

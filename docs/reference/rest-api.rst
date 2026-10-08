@@ -459,7 +459,7 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
 "runner"?, "exit_code"?, "error"?, "created_by", "created_at",
 "started_at"?, "finished_at"?, "version"}``.
 
-``POST /api/v1/items/{item}/runs`` — ``{"stage", "spec": {"command", "env"?, "image"?, "workdir"?, "timeout_seconds"?, "files"?}}`` or ``{"stage", "agent": {"adapter": "claude-code", "prompt", "timeout_seconds"?}}`` → ``201``
+``POST /api/v1/items/{item}/runs`` — ``{"stage", "spec": {"command", "env"?, "image"?, "workdir"?, "timeout_seconds"?, "files"?}}`` or ``{"stage", "agent": {"adapter": "claude-code"|"opencode", "prompt", "timeout_seconds"?}}`` → ``201``
    Queues a run of a ticket by hand: a command (``spec``) or a coding
    agent session (``agent``, :ref:`reference-agents-runs`). Needs
    ``run.manage`` on the project (organization and customer admins).

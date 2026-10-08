@@ -1,6 +1,7 @@
 #!/bin/sh
 # Installs the Ballet agent into a devcontainer image (Feature options
-# arrive as POOL, SESSIONUSER, AGENTURL, INSTALLCLAUDE). Runs as root at
+# arrive as POOL, SESSIONUSER, AGENTURL, INSTALLCLAUDE,
+# INSTALLOPENCODE). Runs as root at
 # image build time.
 set -eu
 
@@ -31,6 +32,17 @@ if [ "${INSTALLCLAUDE:-true}" = "true" ] && ! [ -x /usr/local/bin/claude ] && ! 
     HOME=/tmp/ballet-claude-install sh -c 'curl -fsSL https://claude.ai/install.sh | bash'
     install -m 0755 "$(readlink -f /tmp/ballet-claude-install/.local/bin/claude)" /usr/local/bin/claude
     rm -rf /tmp/ballet-claude-install
+  fi
+fi
+
+# opencode, where every user finds it.
+if [ "${INSTALLOPENCODE:-false}" = "true" ] && ! [ -x /usr/local/bin/opencode ] && ! [ -x /usr/bin/opencode ]; then
+  if command -v npm >/dev/null 2>&1; then
+    npm install -g opencode-ai
+  else
+    HOME=/tmp/ballet-opencode-install sh -c 'curl -fsSL https://opencode.ai/install | bash'
+    install -m 0755 "$(readlink -f /tmp/ballet-opencode-install/.opencode/bin/opencode)" /usr/local/bin/opencode
+    rm -rf /tmp/ballet-opencode-install
   fi
 fi
 

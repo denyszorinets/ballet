@@ -37,8 +37,9 @@ The first stage is where tickets start. Each stage:
 ``id``
    Unique, ``[a-z][a-z0-9_-]{0,31}``.
 ``kind``
-   ``agent`` — a coding agent session (``adapter``, default
-   ``claude-code``; optional ``model``; ``skills`` limits the project
+   ``agent`` — a coding agent session (``adapter``: the runtime,
+   ``claude-code`` (default) or ``opencode``, :ref:`reference-agents-runs`;
+   optional ``model``; ``skills`` limits the project
    skills the session gets, empty means all; ``instructions`` tell it
    what this stage does). ``human`` — a human approves (``done``) or
    rejects (``failed``). ``platform`` — Ballet acts on the forge;
