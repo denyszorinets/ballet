@@ -1,5 +1,5 @@
 // Package run models runs: one agent session executing one pipeline stage
-// of one ticket on a Runner (ADR-0009).
+// of one ticket on an agent (ADR-0025).
 package run
 
 import (
@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"regexp"
 	"time"
+
+	"github.com/denyszorinets/ballet/core/internal/domain/agent"
 )
 
 // Status of a run.
@@ -63,6 +65,9 @@ type Spec struct {
 	Workdir        string            `json:"workdir,omitempty"`
 	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
 	Files          map[string]string `json:"files,omitempty"` // written into the workspace first
+	// Session, when set, is a coding-agent session run after Command (the
+	// workspace preparation; may be empty).
+	Session *agent.Session `json:"session,omitempty"`
 }
 
 // Run is one session.
@@ -74,7 +79,7 @@ type Run struct {
 	Status     Status
 	Spec       Spec
 	Branch     string // the ticket branch the run works on ("": no repository)
-	Adapter    string // agent adapter that built the session ("": a plain command)
+	Adapter    string // the session's agent runtime ("": a plain command)
 	Result     *Result
 	Runner     string // the Runner executing it
 	ExitCode   *int
@@ -97,7 +102,7 @@ func (r Run) Validate() error {
 	if !stageRe.MatchString(r.Stage) {
 		errs = append(errs, fmt.Errorf("stage %q must be 1-32 lowercase letters, digits, - or _", r.Stage))
 	}
-	if len(r.Spec.Command) == 0 || r.Spec.Command[0] == "" {
+	if r.Spec.Session == nil && (len(r.Spec.Command) == 0 || r.Spec.Command[0] == "") {
 		errs = append(errs, errors.New("a run needs a command"))
 	}
 	for k := range r.Spec.Env {

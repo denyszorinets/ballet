@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Schemas } from '$lib/api/client';
+	import SessionTranscript from './SessionTranscript.svelte';
 
 	type Run = Schemas['Run'];
 	type Report = Schemas['Report'];
@@ -53,6 +54,9 @@
 		}
 		return out.sort((a, b) => a.at.localeCompare(b.at));
 	});
+
+	/** Runs whose transcript is shown. */
+	let shown = $state<Record<string, boolean>>({});
 
 	const byCaller = $derived(new Map(usage.map((u) => [u.key ?? '', u])));
 	const total = $derived(
@@ -115,6 +119,14 @@
 							{a.text}
 						</p>
 					{/each}
+					<button
+						type="button"
+						class="link small"
+						aria-expanded={!!shown[e.run.id]}
+						onclick={() => (shown[e.run.id] = !shown[e.run.id])}
+						>{shown[e.run.id] ? 'Hide' : 'Show'} {e.run.adapter ? 'session' : 'output'}</button
+					>
+					{#if shown[e.run.id]}<SessionTranscript run={e.run} />{/if}
 					{#each asked(e.run) as q (q.id)}
 						<p class="small">
 							<span class="badge" class:blocking={q.blocking}
@@ -176,6 +188,14 @@
 	}
 	.event {
 		padding-left: 0.25rem;
+	}
+	button.link {
+		align-self: flex-start;
+		background: none;
+		border: none;
+		padding: 0;
+		color: var(--accent);
+		cursor: pointer;
 	}
 	.badge.blocking {
 		border-color: var(--danger);

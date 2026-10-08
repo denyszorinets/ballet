@@ -3,8 +3,6 @@ package app_test
 import (
 	"context"
 	"errors"
-	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -144,15 +142,15 @@ func TestRuns_DispatchRespectsCapacityAndRecordsReports(t *testing.T) {
 	assert.Len(t, later, 1)
 
 	assert.ErrorIs(t, e.d.Log(t.Context(), "r2", a.ID, "stdout", "x"), app.ErrForbidden, "only the run's runner reports")
-	require.NoError(t, e.d.Finished(t.Context(), "r1", a.ID, 0, "", false))
+	require.NoError(t, e.d.Finished(t.Context(), "r1", a.ID, 0, "", false, nil))
 	done := e.status(t, a.ID)
 	assert.Equal(t, run.StatusSucceeded, done.Status)
 	assert.Equal(t, 0, *done.ExitCode)
 	assert.False(t, done.StartedAt.IsZero())
-	assert.ErrorIs(t, e.d.Finished(t.Context(), "r1", a.ID, 0, "", false), app.ErrForbidden, "finished runs take no reports")
+	assert.ErrorIs(t, e.d.Finished(t.Context(), "r1", a.ID, 0, "", false, nil), app.ErrForbidden, "finished runs take no reports")
 
 	e.eventually(t, b.ID, run.StatusStarting)
-	require.NoError(t, e.d.Finished(t.Context(), "r1", b.ID, 2, "", false))
+	require.NoError(t, e.d.Finished(t.Context(), "r1", b.ID, 2, "", false, nil))
 	failed := e.status(t, b.ID)
 	assert.Equal(t, run.StatusFailed, failed.Status)
 	assert.Equal(t, "exited with code 2", failed.Error)
@@ -176,7 +174,7 @@ func TestRuns_CancelQueuedAndActive(t *testing.T) {
 	_, err = e.runs.Cancel(dave, a.ID)
 	require.NoError(t, err)
 	assert.Equal(t, []string{a.ID}, fr.cancelled, "the runner is asked to stop")
-	require.NoError(t, e.d.Finished(t.Context(), "r1", a.ID, -1, "", true))
+	require.NoError(t, e.d.Finished(t.Context(), "r1", a.ID, -1, "", true, nil))
 	assert.Equal(t, run.StatusCancelled, e.status(t, a.ID).Status)
 }
 
@@ -226,31 +224,10 @@ func TestRuns_ReconnectAndDisconnect(t *testing.T) {
 	assert.Equal(t, "the agent disconnected", failed.Error)
 }
 
-// echoAgent builds a session that prints its prompt; results are lines
-// "RESULT <ok|fail> <summary>".
-type echoAgent struct{}
-
-func (echoAgent) Name() string { return "echo" }
-
-func (echoAgent) Build(s agent.Session) (agent.Built, error) {
-	return agent.Built{Command: []string{"cat", ".ballet/prompt"}, Files: map[string]string{".ballet/prompt": s.Prompt},
-		Env: map[string]string{"SKILLS": fmt.Sprint(len(s.Skills)), "MCP": s.MCP[0].Name}}, nil
-}
-
-func (echoAgent) Result(stdout string) (agent.Result, bool) {
-	i := strings.LastIndex(stdout, "RESULT ")
-	if i < 0 {
-		return agent.Result{}, false
-	}
-	f := strings.SplitN(strings.TrimSpace(stdout[i+7:]), " ", 2)
-	return agent.Result{Success: f[0] == "ok", Summary: f[1], Turns: 2}, true
-}
-
-func TestRuns_AgentRunsAreBuiltByTheirAdapterAndJudgedByTheirResult(t *testing.T) {
+func TestRuns_AgentRunsAreSessionsJudgedByTheirResult(t *testing.T) {
 	e := newRuns(t, time.Minute)
-	e.runs.Agents = map[string]agent.Adapter{"echo": echoAgent{}}
-	e.d.Adapters = e.runs.Agents
-	e.runs.MCP = []agent.MCPServer{{Name: "knowledge", URL: "http://kn/mcp", TokenEnv: "T"}}
+	e.runs.LLMURL, e.runs.TokenEnv = "http://gw", "T"
+	e.runs.MCP = []agent.MCPServer{{Name: "knowledge", URL: "http://kn/mcp"}}
 	e.runs.SessionSkills = func(context.Context, string) ([]agent.Skill, error) {
 		return []agent.Skill{{Name: "gitflow"}}, nil
 	}
@@ -259,48 +236,56 @@ func TestRuns_AgentRunsAreBuiltByTheirAdapterAndJudgedByTheirResult(t *testing.T
 
 	_, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "nope", Prompt: "x"})
 	assert.ErrorIs(t, err, app.ErrInvalid)
-	_, err = e.runs.CreateAgent(user(t, "bob", "acme-devs"), tk.Key, "implement", app.AgentInput{Adapter: "echo", Prompt: "x"})
+	_, err = e.runs.CreateAgent(user(t, "bob", "acme-devs"), tk.Key, "implement", app.AgentInput{Adapter: "claude-code", Prompt: "x"})
 	assert.ErrorIs(t, err, app.ErrForbidden)
 
-	r, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "echo", Prompt: "Do it", TimeoutSeconds: 60})
+	r, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "claude-code", Prompt: "Do it", TimeoutSeconds: 60})
 	require.NoError(t, err)
-	assert.Equal(t, "echo", r.Adapter)
-	assert.Contains(t, r.Spec.Files[".ballet/prompt"], "## Additional instructions\n\nDo it")
-	assert.Equal(t, "1", r.Spec.Env["SKILLS"])
-	assert.Equal(t, "knowledge", r.Spec.Env["MCP"])
+	assert.Equal(t, "claude-code", r.Adapter)
+	require.NotNil(t, r.Spec.Session)
+	ss := r.Spec.Session
+	assert.Equal(t, "claude-code", ss.Runtime)
+	assert.Contains(t, ss.Prompt, "## Additional instructions\n\nDo it")
+	assert.Equal(t, []agent.Skill{{Name: "gitflow"}}, ss.Skills)
+	assert.Equal(t, e.runs.MCP, ss.MCP)
+	assert.Equal(t, "http://gw", ss.LLMURL)
+	assert.Equal(t, "T", ss.TokenEnv)
+	assert.Contains(t, ss.Instructions, "coding agent run by Ballet")
+	assert.Empty(t, r.Spec.Command, "no repository: nothing to prepare")
 	assert.Equal(t, 60, r.Spec.TimeoutSeconds)
 
 	fr := &fakeRunner{}
 	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 3}, fr))
-	finish := func(out string, code int) run.Run {
+	finish := func(res *app.SessionResult, code int) run.Run {
 		t.Helper()
-		v, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "echo", Prompt: "p"})
+		v, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "claude-code", Prompt: "p"})
 		require.NoError(t, err)
 		e.eventually(t, v.ID, run.StatusStarting)
-		if out != "" {
-			require.NoError(t, e.d.Log(t.Context(), "r1", v.ID, "stdout", out))
-		}
-		require.NoError(t, e.d.Finished(t.Context(), "r1", v.ID, code, "", false))
+		require.NoError(t, e.d.Log(t.Context(), "r1", v.ID, "event", `{"kind":"text","text":"working"}`+"\n"))
+		require.NoError(t, e.d.Finished(t.Context(), "r1", v.ID, code, "", false, res))
 		return e.status(t, v.ID)
 	}
 	e.d.MaxLogBytes = 1 << 20
 
-	ok := finish("working\nRESULT ok Added login.\n", 0)
+	ok := finish(&app.SessionResult{Success: true, Summary: "Added login.", Turns: 2, CostUSD: 0.5}, 0)
 	assert.Equal(t, run.StatusSucceeded, ok.Status)
-	assert.Equal(t, &run.Result{Summary: "Added login.", Turns: 2}, ok.Result)
+	assert.Equal(t, &run.Result{Summary: "Added login.", Turns: 2, CostUSD: 0.5}, ok.Result)
+	logs, err := e.runs.Logs(dave, ok.ID, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, logs, 1)
+	assert.Equal(t, "event", logs[0].Stream, "session events are kept with the run's output")
 
-	failed := finish("RESULT fail Tests do not pass.\n", 0)
+	failed := finish(&app.SessionResult{Summary: "Tests do not pass."}, 0)
 	assert.Equal(t, run.StatusFailed, failed.Status, "the agent's own verdict counts")
 	assert.Equal(t, "the agent reported a failure: Tests do not pass.", failed.Error)
 
-	silent := finish("crashed\n", 0)
+	silent := finish(nil, 0)
 	assert.Equal(t, run.StatusFailed, silent.Status)
 	assert.Equal(t, "the agent reported no result", silent.Error)
 }
 
 func TestRuns_AgentPromptIsTheOnboardingBundle(t *testing.T) {
 	e := newRuns(t, time.Minute)
-	e.runs.Agents = map[string]agent.Adapter{"echo": echoAgent{}}
 	e.runs.MCP = []agent.MCPServer{{Name: "knowledge"}}
 	e.runs.Deps = e.st
 	var asked []string
@@ -318,19 +303,17 @@ func TestRuns_AgentPromptIsTheOnboardingBundle(t *testing.T) {
 	require.NoError(t, err)
 
 	// The blocker was implemented by an earlier agent run.
-	e.d.Adapters = e.runs.Agents
 	fr := &fakeRunner{}
 	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 1}, fr))
-	prev, err := e.runs.CreateAgent(dave, store.Key, "implement", app.AgentInput{Adapter: "echo", Prompt: "p"})
+	prev, err := e.runs.CreateAgent(dave, store.Key, "implement", app.AgentInput{Adapter: "claude-code", Prompt: "p"})
 	require.NoError(t, err)
 	e.eventually(t, prev.ID, run.StatusStarting)
-	e.d.MaxLogBytes = 1 << 20
-	require.NoError(t, e.d.Log(t.Context(), "r1", prev.ID, "stdout", "RESULT ok Added a Redis session store.\n"))
-	require.NoError(t, e.d.Finished(t.Context(), "r1", prev.ID, 0, "", false))
+	require.NoError(t, e.d.Finished(t.Context(), "r1", prev.ID, 0, "", false,
+		&app.SessionResult{Success: true, Summary: "Added a Redis session store."}))
 
-	r, err := e.runs.CreateAgent(dave, login.Key, "implement", app.AgentInput{Adapter: "echo", Prompt: "Keep it small."})
+	r, err := e.runs.CreateAgent(dave, login.Key, "implement", app.AgentInput{Adapter: "claude-code", Prompt: "Keep it small."})
 	require.NoError(t, err)
-	prompt := r.Spec.Files[".ballet/prompt"]
+	prompt := r.Spec.Session.Prompt
 	for _, want := range []string{
 		"# " + login.Key + ": Login", "**implement** stage", "Sign in with OIDC.", "- [ ] Works",
 		"### Epic " + epic.Key + ": Auth", "## Depends on " + store.Key + ": Session store",

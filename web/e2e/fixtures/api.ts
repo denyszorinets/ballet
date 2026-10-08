@@ -47,6 +47,8 @@ export interface FakeCore {
 			history?: unknown[];
 		}
 	>;
+	/** Run output by run ID (API shape: seq, stream, text, at). */
+	runLogs: Record<string, { seq: number; stream: string; text: string; at: string }[]>;
 	/** Pull requests by ticket key (API shape). */
 	pullRequests: Record<string, Record<string, unknown>>;
 	/** Flows by ticket key (API shape). */
@@ -253,6 +255,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		gitTokens: {},
 		llmKeys: {},
 		activity: {},
+		runLogs: {},
 		pullRequests: {},
 		flows: {},
 		inbox: [],
@@ -535,6 +538,12 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				return r.fulfill({ json: { items: views } });
 			}
 			return r.fulfill({ json: itemJSON(it) });
+		}
+		if ((m = path.match(/^\/runs\/([^/]+)\/logs$/))) {
+			const after = Number(url.searchParams.get('after') ?? 0);
+			return r.fulfill({
+				json: { items: (core.runLogs[m[1]] ?? []).filter((l) => l.seq > after) }
+			});
 		}
 		if ((m = path.match(/^\/dependencies\/(.+)$/)) && method === 'DELETE') {
 			core.deps = core.deps.filter((d) => d.id !== m![1]);

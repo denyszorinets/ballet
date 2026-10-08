@@ -79,3 +79,19 @@ func TestRuns_PreparedFromExecutionSettingsWithSecretsOnlyAtStart(t *testing.T) 
 	stored, _ := json.Marshal(e.status(t, r.ID))
 	assert.False(t, strings.Contains(string(stored), "s3cret"), "and is not stored with the run")
 }
+
+func TestRuns_AgentSessionsWorkInThePreparedRepository(t *testing.T) {
+	e := newRuns(t, time.Minute)
+	ex := &app.Execution{Store: e.st, Tenancy: e.st, Authz: e.runs.Authz, Now: time.Now}
+	e.runs.Execution = e.st
+	dave := user(t, "dave", "acme-admins")
+	_, err := ex.Set(dave, "WEB", execution.Settings{RepoURL: "https://github.com/acme/web.git", DefaultBranch: "main"}, 0)
+	require.NoError(t, err)
+	tk, err := e.tr.CreateItem(dave, app.CreateItemInput{ProjectKey: "WEB", Kind: tracker.KindTicket, Title: "Export"})
+	require.NoError(t, err)
+
+	r, err := e.runs.CreateAgent(dave, tk.Key, "implement", app.AgentInput{Adapter: "claude-code", Prompt: "p"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"ballet-workspace", "true"}, r.Spec.Command[3:], "the command only prepares the workspace")
+	assert.Equal(t, execution.RepoDir, r.Spec.Session.Dir, "the session works in the clone")
+}

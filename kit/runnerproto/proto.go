@@ -1,8 +1,8 @@
-// Package runnerproto is the protocol between Core and Runners (ADR-0009):
-// JSON-RPC over WebSocket (kit/rpc) at Path. The Runner connects with its
-// runner token, introduces itself with runner.hello, and then receives
-// run.start and run.cancel requests; it reports run.status, run.log and
-// run.finished.
+// Package runnerproto is the protocol between Core and agents (ADR-0025):
+// JSON-RPC over WebSocket (kit/rpc) at Path. The agent connects with its
+// token, introduces itself with runner.hello, and then receives run.start
+// and run.cancel requests; it reports run.status, run.log and
+// run.finished. Method names keep the earlier "runner" prefix.
 package runnerproto
 
 // Path is where Core serves the Runner API.
@@ -42,6 +42,44 @@ type Spec struct {
 	// relative path → content. HOME is <workspace>/.home in every backend.
 	Files          map[string]string `json:"files,omitempty" msgpack:"files,omitempty"`
 	TimeoutSeconds int               `json:"timeout_seconds,omitempty" msgpack:"timeout_seconds,omitempty"` // 0: Runner default
+	// Session, when set, is a coding-agent session the agent runs through
+	// its driver for Session.Runtime after Command (the workspace
+	// preparation; may be empty) succeeded.
+	Session *Session `json:"session,omitempty" msgpack:"session,omitempty"`
+}
+
+// Session is a coding-agent session, independent of the runtime: the
+// agent's driver for Runtime turns it into files, environment and a
+// process (ADR-0003, ADR-0025).
+type Session struct {
+	Runtime      string      `json:"runtime" msgpack:"runtime"` // e.g. "claude-code"
+	Prompt       string      `json:"prompt" msgpack:"prompt"`   // the task
+	Instructions string      `json:"instructions,omitempty" msgpack:"instructions,omitempty"`
+	Skills       []Skill     `json:"skills,omitempty" msgpack:"skills,omitempty"`
+	MCP          []MCPServer `json:"mcp,omitempty" msgpack:"mcp,omitempty"`
+	Model        string      `json:"model,omitempty" msgpack:"model,omitempty"` // "": the runtime's default
+	MaxTurns     int         `json:"max_turns,omitempty" msgpack:"max_turns,omitempty"`
+	// LLMURL is the LLM gateway as reached from the session.
+	LLMURL string `json:"llm_url" msgpack:"llm_url"`
+	// TokenEnv names the secret environment variable holding the run
+	// token: the gateway's API key and the MCP servers' bearer token.
+	TokenEnv string `json:"token_env" msgpack:"token_env"`
+	Dir      string `json:"dir,omitempty" msgpack:"dir,omitempty"` // where the session works, relative to the workspace
+}
+
+// Skill is a skill as a session receives it.
+type Skill struct {
+	Name        string            `json:"name" msgpack:"name"`
+	Description string            `json:"description" msgpack:"description"`
+	Body        string            `json:"body" msgpack:"body"`                       // SKILL.md body
+	Files       map[string]string `json:"files,omitempty" msgpack:"files,omitempty"` // relative to the skill
+}
+
+// MCPServer is an MCP server the session may use, authenticated with the
+// run token.
+type MCPServer struct {
+	Name string `json:"name" msgpack:"name"`
+	URL  string `json:"url" msgpack:"url"`
 }
 
 // Start asks a Runner to execute a run.
@@ -65,8 +103,36 @@ type Status struct {
 const (
 	StreamStdout = "stdout"
 	StreamStderr = "stderr"
-	StreamSystem = "system" // the Runner's own messages (pulling image, ...)
+	StreamSystem = "system" // the agent's own messages
+	// StreamEvent carries a session's normalized events, one JSON Event
+	// per line.
+	StreamEvent = "event"
 )
+
+// Event kinds.
+const (
+	EventText       = "text"        // the agent's text
+	EventToolUse    = "tool_use"    // the agent calls a tool: Tool, Input
+	EventToolResult = "tool_result" // what the tool returned: Text, Error
+	EventResult     = "result"      // a turn ended: Text is the final message, Error a failure
+)
+
+// Event is one normalized event of a coding-agent session.
+type Event struct {
+	Kind  string `json:"kind"`
+	Text  string `json:"text,omitempty"`
+	Tool  string `json:"tool,omitempty"`
+	Input string `json:"input,omitempty"` // tool input, JSON
+	Error bool   `json:"error,omitempty"`
+}
+
+// Result is what a coding-agent session reported at its end.
+type Result struct {
+	Success bool    `json:"success" msgpack:"success"`
+	Summary string  `json:"summary" msgpack:"summary"` // the agent's final message
+	Turns   int     `json:"turns" msgpack:"turns"`
+	CostUSD float64 `json:"cost_usd" msgpack:"cost_usd"`
+}
 
 // Log is a chunk of run output. It is sent as a request: the Runner
 // awaits it, so output reaches Core before run.finished.
@@ -83,4 +149,7 @@ type Finished struct {
 	ExitCode  int    `json:"exit_code" msgpack:"exit_code"`
 	Error     string `json:"error,omitempty" msgpack:"error,omitempty"`
 	Cancelled bool   `json:"cancelled,omitempty" msgpack:"cancelled,omitempty"`
+	// Result is the session's result (sessions only; nil when it reported
+	// none).
+	Result *Result `json:"result,omitempty" msgpack:"result,omitempty"`
 }

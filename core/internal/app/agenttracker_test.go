@@ -80,7 +80,7 @@ func TestAgentTracker_RunsReportOnTheirTicketOnly(t *testing.T) {
 	_, _, err = at.TicketReports(user(t, "eve"), tk.Key)
 	assert.ErrorIs(t, err, app.ErrForbidden)
 
-	require.NoError(t, e.d.Finished(t.Context(), "r1", r.ID, 0, "", false))
+	require.NoError(t, e.d.Finished(t.Context(), "r1", r.ID, 0, "", false, nil))
 	_, err = at.Report(t.Context(), me, report.KindProgress, "", "late", "")
 	assert.ErrorIs(t, err, app.ErrForbidden, "finished runs no longer report")
 }

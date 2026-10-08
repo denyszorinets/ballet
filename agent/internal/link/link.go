@@ -21,7 +21,7 @@ import (
 // Backend executes one run's session. out receives the session's output;
 // the exit code is the session's (meaningless when err is not nil).
 type Backend interface {
-	Run(ctx context.Context, runID string, spec runnerproto.Spec, out func(stream, text string)) (int, error)
+	Run(ctx context.Context, runID string, spec runnerproto.Spec, out func(stream, text string)) (int, *runnerproto.Result, error)
 }
 
 // Agent keeps an agent connected to Core and executes its runs.
@@ -200,9 +200,9 @@ func (r *Agent) execute(runCtx, ctx context.Context, p runnerproto.Start) {
 		}
 	})
 	stop := out.flushEvery(r.flushInterval())
-	code, err := r.Backend.Run(runCtx, p.Run, p.Spec, out.write)
+	code, result, err := r.Backend.Run(runCtx, p.Run, p.Spec, out.write)
 	stop()
-	f := runnerproto.Finished{Run: p.Run, ExitCode: code}
+	f := runnerproto.Finished{Run: p.Run, ExitCode: code, Result: result}
 	switch {
 	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
 		f.Error = "the run timed out"

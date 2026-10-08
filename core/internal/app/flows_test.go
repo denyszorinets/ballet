@@ -45,7 +45,9 @@ func (s *scriptedRunner) Start(_ context.Context, r run.Run, _ map[string]string
 			n++
 		}
 	}
-	s.prompts[r.Stage+"#"+string(rune('0'+n))] = r.Spec.Files[".ballet/prompt"]
+	if r.Spec.Session != nil {
+		s.prompts[r.Stage+"#"+string(rune('0'+n))] = r.Spec.Session.Prompt
+	}
 	hold := s.hold
 	if hold {
 		s.held = append(s.held, r)
@@ -67,13 +69,13 @@ func (s *scriptedRunner) Start(_ context.Context, r run.Run, _ map[string]string
 		_ = s.st.CreateReport(ctx, report.Report{ID: store.NewID(), ProjectID: r.ProjectID, TicketID: r.TicketID, RunID: r.ID,
 			Kind: report.KindStageReport, Outcome: outcome, Text: r.Stage + " " + string(outcome) + " #" + string(rune('0'+n)),
 			CreatedAt: time.Now()}, eventFor(r))
-		_ = s.d.Finished(ctx, "r1", r.ID, 0, "", false)
+		_ = s.d.Finished(ctx, "r1", r.ID, 0, "", false, &app.SessionResult{Success: true, Summary: "done"})
 	}()
 	return nil
 }
 
 func (s *scriptedRunner) Cancel(ctx context.Context, runID string) error {
-	go func() { _ = s.d.Finished(context.Background(), "r1", runID, -1, "", true) }()
+	go func() { _ = s.d.Finished(context.Background(), "r1", runID, -1, "", true, nil) }()
 	return nil
 }
 
@@ -101,7 +103,7 @@ func newFlows(t *testing.T, script func(string, int) report.Outcome, setup ...fu
 		Backoff: func(int) time.Duration { return 20 * time.Millisecond }}
 	d := &app.Dispatcher{Store: st, Tenancy: st, Now: time.Now, Interval: 10 * time.Millisecond, MaxLogBytes: 1 << 20}
 	runs := &app.Runs{Store: st, Execution: st, Items: st, Tenancy: st, Authz: env.rbac, Dispatcher: d,
-		Agents: map[string]agent.Adapter{"claude-code": echoAgent{}}, MCP: []agent.MCPServer{{Name: "tracker"}},
+		MCP:  []agent.MCPServer{{Name: "tracker"}},
 		Deps: st, Now: time.Now, NewID: store.NewID}
 	mf := &memForge{prs: map[string]forge.PullRequest{}}
 	prs := &app.PullRequests{Store: st, Execution: st, Items: st, Tenancy: st, Authz: env.rbac,
@@ -313,7 +315,7 @@ func TestFlows_HumanStagesAndStopping(t *testing.T) {
 	e.runner.mu.Lock()
 	held := e.runner.held[len(e.runner.held)-1]
 	e.runner.mu.Unlock()
-	require.NoError(t, e.runner.d.Finished(t.Context(), "r1", held.ID, 0, "", false))
+	require.NoError(t, e.runner.d.Finished(t.Context(), "r1", held.ID, 0, "", false, nil))
 	stopped := e.waitFlow(t, tk2.Key, func(f app.FlowView) bool { return f.Status == app.FlowStopped })
 	assert.Equal(t, "build", stopped.Stage)
 }

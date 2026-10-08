@@ -141,7 +141,7 @@ func TestScheduler_StoppedFlowsFreeSlots(t *testing.T) {
 		r, _ := e.st.Run(t.Context(), f.RunID)
 		return r.Status == run.StatusStarting || r.Status == run.StatusRunning
 	}, 5*time.Second, 10*time.Millisecond)
-	require.NoError(t, e.runner.d.Finished(t.Context(), "r1", f.RunID, 0, "", false))
+	require.NoError(t, e.runner.d.Finished(t.Context(), "r1", f.RunID, 0, "", false, nil))
 	e.waitFlow(t, a.Key, func(f app.FlowView) bool { return f.Status == app.FlowStopped })
 	n, err := s.Tick(t.Context())
 	require.NoError(t, err)
