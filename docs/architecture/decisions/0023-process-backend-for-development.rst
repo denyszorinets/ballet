@@ -1,8 +1,13 @@
 ADR-0023: Process Backend for Development
 =========================================
 
-:Status: Accepted
+:Status: Superseded
 :Date: 2026-10-02
+
+.. note::
+
+   Superseded by :doc:`0025-agent-fleet-runs-sessions-as-processes`: development
+   runs the agent binary directly.
 
 Context
 -------

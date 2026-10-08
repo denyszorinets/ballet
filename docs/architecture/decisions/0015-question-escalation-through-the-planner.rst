@@ -1,8 +1,14 @@
 ADR-0015: Question Escalation Through the Planner
 =================================================
 
-:Status: Accepted
+:Status: Superseded
 :Date: 2026-10-01
+
+.. note::
+
+   Superseded by :doc:`0026-interactive-sessions-park-when-idle`: sessions
+   wait online for answers and park after a window; planner-first
+   answering and assume-or-ask are kept.
 
 Context
 -------

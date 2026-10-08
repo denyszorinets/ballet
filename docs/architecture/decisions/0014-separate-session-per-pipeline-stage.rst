@@ -4,6 +4,12 @@ ADR-0014: Separate Agent Session per Pipeline Stage
 :Status: Accepted
 :Date: 2026-10-01
 
+.. note::
+
+   Amended by :doc:`0025-agent-fleet-runs-sessions-as-processes`:
+   each stage is a separate session in a fresh clone with its own
+   ``HOME`` on the ticket's agent, not in a fresh container.
+
 Context
 -------
 

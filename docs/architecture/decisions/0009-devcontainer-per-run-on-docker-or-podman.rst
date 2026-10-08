@@ -1,8 +1,14 @@
 ADR-0009: Devcontainer per Run on Docker or Podman
 ==================================================
 
-:Status: Accepted
+:Status: Superseded
 :Date: 2026-10-01
+
+.. note::
+
+   Superseded by :doc:`0025-agent-fleet-runs-sessions-as-processes`: a fleet of
+   long-lived agents runs sessions as processes; Ballet creates no
+   containers.
 
 Context
 -------
