@@ -1300,7 +1300,7 @@ components:
       type: object
       additionalProperties: false
       required: [project, repo_url, default_branch, image, setup, env, branch_template, git_name, git_email, forge,
-        forge_api_url, link_template, answer_window_minutes, version]
+        forge_api_url, link_template, answer_window_minutes, pool, version]
       properties:
         project: { type: string }
         repo_url: { type: string, description: "https, ssh, git@host:path or file URL; empty: no repository" }
@@ -1319,6 +1319,7 @@ components:
           minimum: 0
           maximum: 1440
           description: "How long a session waits online for answers before it parks; 0: Ballet's default"
+        pool: { type: string, description: "Agent pool of the project's runs (agents labelled pool=<pool>); empty: any agent" }
         updated_at: { type: string, format: date-time }
         version: { type: integer, format: int64 }
     SetExecutionSettings:
@@ -1338,6 +1339,7 @@ components:
         forge_api_url: { type: string }
         link_template: { type: string }
         answer_window_minutes: { type: integer, minimum: 0, maximum: 1440 }
+        pool: { type: string }
         version: { type: integer, format: int64, description: "The version read (0 the first time)" }
     Report:
       type: object
@@ -1639,6 +1641,7 @@ components:
         workdir: { type: string }
         timeout_seconds: { type: integer, minimum: 0, description: "0: the agent's default" }
         files: { type: object, additionalProperties: { type: string }, description: "Workspace-relative path → content, written first" }
+        pool: { type: string, description: "Agent pool that executes the run; empty: any agent" }
     RunResult:
       type: object
       additionalProperties: false

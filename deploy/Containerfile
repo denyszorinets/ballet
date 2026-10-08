@@ -53,8 +53,8 @@ ENTRYPOINT ["/usr/local/bin/ballet-knowledge"]
 
 # The agent (ADR-0025): runs coding-agent sessions as processes in this
 # container, as the unprivileged user "ballet". It is a general-purpose
-# image — git, Claude Code, common build tools; projects needing more
-# extend it (deploy/agent/ballet.Containerfile).
+# image — git, Claude Code, common build tools. Projects build their own
+# agent pool from their devcontainer (docs/how-to/agent-pools.rst).
 FROM node:22-bookworm AS agent
 RUN apt-get update && apt-get install -y --no-install-recommends \
         git ca-certificates curl make jq ripgrep python3 && \

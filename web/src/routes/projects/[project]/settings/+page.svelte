@@ -26,7 +26,8 @@
 		forge: '' as '' | 'github' | 'git',
 		forge_api_url: '',
 		link_template: '',
-		answer_window_minutes: 0
+		answer_window_minutes: 0,
+		pool: ''
 	});
 	let token = $state('');
 	let tokenMessage = $state<string>();
@@ -52,7 +53,8 @@
 			forge: x.forge,
 			forge_api_url: x.forge_api_url,
 			link_template: x.link_template,
-			answer_window_minutes: x.answer_window_minutes
+			answer_window_minutes: x.answer_window_minutes,
+			pool: x.pool
 		};
 	}
 
@@ -158,7 +160,17 @@
 					placeholder="ballet/{'{ticket}'}-{'{slug}'}"
 				/></label
 			>
-			<label>Image <input bind:value={form.image} placeholder="golang:1.27" /></label>
+			<label
+				>Agent pool <input
+					bind:value={form.pool}
+					placeholder="any agent"
+					aria-describedby="pool-help"
+				/></label
+			>
+			<p class="muted small" id="pool-help">
+				Runs go to agents labelled with this pool: images built from the project's devcontainer with
+				the Ballet agent Feature. Empty: any agent.
+			</p>
 			<label
 				>Setup commands (one per line) <textarea bind:value={form.setup} rows="3"></textarea></label
 			>

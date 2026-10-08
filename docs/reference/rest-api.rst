@@ -635,6 +635,10 @@ a branch with ``{branch}`` and ``{base}``.
 is how long a session waits online for answers to its blocking questions
 before it parks (:ref:`reference-agents-park`).
 
+``pool`` names the agent pool the project's runs execute on: agents
+labelled ``pool=<pool>`` (:doc:`/how-to/agent-pools`); empty: any agent.
+``image`` is kept but not used by agents.
+
 .. _reference-rest-pull-requests:
 
 Pull requests

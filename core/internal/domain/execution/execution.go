@@ -40,8 +40,12 @@ type Settings struct {
 	// to its blocking questions before it parks (ADR-0026); 0: Ballet's
 	// default.
 	AnswerWindowMinutes int
-	UpdatedAt           time.Time
-	Version             int64
+	// Pool is the agent pool the project's runs execute on: agents
+	// labelled pool=<Pool>, built from the project's devcontainer
+	// (ADR-0025); "": any agent.
+	Pool      string
+	UpdatedAt time.Time
+	Version   int64
 }
 
 // DefaultBranchTemplate names ticket branches when a project sets none.
@@ -50,6 +54,7 @@ const DefaultBranchTemplate = "ballet/{ticket}-{slug}"
 var (
 	envKeyRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 	scpRe    = regexp.MustCompile(`^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[A-Za-z0-9._/~-]+$`)
+	poolRe   = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,62}$`)
 	badRefRe = regexp.MustCompile(`(^[/.]|[/.]$|\.\.|//|@\{|[\x00-\x20~^:?*\[\\\x7f]|\.lock$|\.lock/)`)
 )
 
@@ -103,6 +108,9 @@ func (s Settings) Validate() error {
 			(u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 			errs = append(errs, fmt.Errorf("%s must be an http(s) URL", name))
 		}
+	}
+	if s.Pool != "" && !poolRe.MatchString(s.Pool) {
+		errs = append(errs, fmt.Errorf("pool %q must be 1-63 lowercase letters, digits, ., _ or -", s.Pool))
 	}
 	if s.AnswerWindowMinutes < 0 || s.AnswerWindowMinutes > 24*60 {
 		errs = append(errs, errors.New("answer_window_minutes must be 0 (the default) to 1440"))

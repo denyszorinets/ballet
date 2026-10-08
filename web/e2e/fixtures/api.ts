@@ -994,6 +994,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				git_name: '',
 				git_email: '',
 				answer_window_minutes: 0,
+				pool: '',
 				version: 0
 			};
 			if (method === 'PUT') {

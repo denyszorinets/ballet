@@ -8,5 +8,6 @@ Focused recipes for operating and developing Ballet.
 
    run-locally
    install-single-host
+   agent-pools
    dogfood
    configure-oidc

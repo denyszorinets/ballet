@@ -15,6 +15,8 @@ Environment:
   BALLET_REPO         repository (default https://github.com/denyszorinets/ballet.git)
   ISSUES_REPO         owner/name whose issues --import-issues reads
                       (default: from BALLET_REPO)
+  BALLET_POOL         agent pool of the project's runs (default: none, any
+                      agent; "ballet" for .devcontainer/dogfood)
   BALLET_FORGE        github (default) or git (a repository without GitHub,
                       e.g. a local mirror for a rehearsal)
   ISSUES_TOKEN        token reading GitHub issues for --import-issues
@@ -106,6 +108,7 @@ def setup_execution():
     must("PUT", f"/projects/{PROJECT}/execution", {
         "repo_url": REPO, "default_branch": "develop",
         "branch_template": "feature/{ticket}_{slug}",
+        "pool": os.environ.get("BALLET_POOL", ""),
         "git_name": "Ballet", "git_email": "ballet@users.noreply.github.com",
         "forge": os.environ.get("BALLET_FORGE", "github"), "version": ex["version"]})
 

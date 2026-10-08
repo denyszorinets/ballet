@@ -3,7 +3,8 @@
 /core/core
 /gateway/gateway
 /knowledge/knowledge
-/runner/runner
+/agent/agent
+.devcontainer/ballet-agent/bin/
 !/bin/graph
 *.test
 *.out

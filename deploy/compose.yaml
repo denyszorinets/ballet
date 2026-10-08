@@ -60,8 +60,12 @@ services:
     <<: *service
     build: { context: .., dockerfile: deploy/Containerfile, target: agent }
     image: ${BALLET_AGENT_IMAGE:-ballet-agent}
+    # Also an agent pool image built from a devcontainer with the
+    # ballet-agent Feature (docs/how-to/agent-pools.rst).
+    entrypoint: ["/usr/local/bin/ballet-agent"]
     depends_on: [core]
     environment:
+      BALLET_AGENT_CORE_TOKEN_FILE: /var/lib/ballet/data/service-tokens/agent.token
       BALLET_AGENT_AGENT_NAME: ${BALLET_AGENT_NAME:-host}
       # Concurrent sessions in this container. Host networking gives one
       # agent per host; more hosts (or Kubernetes replicas) scale further.

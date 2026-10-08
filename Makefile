@@ -7,6 +7,7 @@ SERVICES := agent core gateway knowledge
 
 BIN_DIR     := bin
 WEB_DIR     := web
+FEATURE_DIR := .devcontainer/ballet-agent
 DOCS_DIR    := docs
 STATICCHECK := honnef.co/go/tools/cmd/staticcheck@v0.8.1
 # Where `make bundle` copies the built SPA for Core to embed (bindata tag).
@@ -56,6 +57,19 @@ test-standalone: ## Test every module without the workspace (GOWORK=off)
 .PHONY: agent-root-test
 agent-root-test: ## Test running sessions as a separate OS user (needs root, e.g. sudo -E make agent-root-test)
 	cd agent && go test -count=1 -run SessionUser -v ./internal/process/
+
+.PHONY: feature
+feature: ## Bundle the agent binaries (amd64, arm64) into the devcontainer Feature (.devcontainer/ballet-agent)
+	@mkdir -p $(FEATURE_DIR)/bin
+	@set -e; for arch in amd64 arm64; do echo "==> agent linux/$$arch"; \
+		(cd agent && CGO_ENABLED=0 GOOS=linux GOARCH=$$arch go build -trimpath -o ../$(FEATURE_DIR)/bin/ballet-agent-$$arch ./cmd/agent); done
+
+.PHONY: feature-test
+feature-test: feature ## Build the example agent pool with the Feature and check it (needs Docker and the devcontainer CLI)
+	devcontainer build --workspace-folder . --config .devcontainer/agent-pool-example/devcontainer.json \
+		--image-name ballet-pool-example
+	docker run --rm --entrypoint sh ballet-pool-example -c \
+		'ballet-agent -h 2>&1 | grep -q config && id ballet && grep -q "pool=example" /etc/ballet/agent.toml && claude --version'
 
 .PHONY: failure-test
 failure-test: ## Crash Core, the agent and the gateway mid-stage with the real binaries and check recovery
@@ -176,6 +190,6 @@ check: go-check web-check ## Run all Go and web checks (CI entry point)
 .PHONY: clean
 clean: ## Remove build artifacts
 	rm -rf $(BIN_DIR)/core $(BIN_DIR)/gateway $(BIN_DIR)/knowledge $(BIN_DIR)/agent
-	rm -rf $(BIN_DIR)/fake-anthropic $(WEBUI_DIST)
+	rm -rf $(BIN_DIR)/fake-anthropic $(WEBUI_DIST) $(FEATURE_DIR)/bin
 	rm -rf $(DOCS_DIR)/_build $(WEB_DIR)/build $(WEB_DIR)/.svelte-kit
 	rm -rf $(WEB_DIR)/test-results $(WEB_DIR)/playwright-report

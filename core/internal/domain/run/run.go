@@ -69,6 +69,9 @@ type Spec struct {
 	Workdir        string            `json:"workdir,omitempty"`
 	TimeoutSeconds int               `json:"timeout_seconds,omitempty"`
 	Files          map[string]string `json:"files,omitempty"` // written into the workspace first
+	// Pool, when set, is the agent pool that executes the run: agents
+	// labelled pool=<Pool> (ADR-0025).
+	Pool string `json:"pool,omitempty"`
 	// Session, when set, is a coding-agent session run after Command (the
 	// workspace preparation; may be empty).
 	Session *agent.Session `json:"session,omitempty"`
