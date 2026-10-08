@@ -394,6 +394,34 @@ func (rs *Runs) Cancel(ctx context.Context, runID string) (RunView, error) {
 	return v, nil
 }
 
+// Input kinds a human sends to a running session.
+const (
+	InputMessage   = "message"   // delivered when the current turn ends
+	InputInterrupt = "interrupt" // stops the current turn, then delivers the text, if any
+)
+
+// Input sends a human's message or interrupt to a run's running
+// coding-agent session (ADR-0026). It needs run.manage.
+func (rs *Runs) Input(ctx context.Context, runID, kind, text string) error {
+	v, err := rs.view(ctx, runID, ActRunManage)
+	if err != nil {
+		return err
+	}
+	switch {
+	case kind != InputMessage && kind != InputInterrupt:
+		return fmt.Errorf("%w: kind must be message or interrupt", ErrInvalid)
+	case kind == InputMessage && strings.TrimSpace(text) == "":
+		return fmt.Errorf("%w: a message needs text", ErrInvalid)
+	case len(text) > 20_000:
+		return fmt.Errorf("%w: the text must be at most 20000 characters", ErrInvalid)
+	case v.Spec.Session == nil:
+		return fmt.Errorf("%w: the run is not a coding-agent session", ErrInvalid)
+	case v.Status != run.StatusRunning:
+		return fmt.Errorf("%w: the run is %s", ErrConflict, v.Status)
+	}
+	return rs.Dispatcher.input(ctx, v.Run, kind, text)
+}
+
 func (rs *Runs) view(ctx context.Context, runID string, a Action) (RunView, error) {
 	id, err := caller(ctx)
 	if err != nil {
@@ -452,6 +480,8 @@ type RunnerConn interface {
 	// delivered with the start only, never stored with the run.
 	Start(ctx context.Context, r run.Run, secretEnv map[string]string) error
 	Cancel(ctx context.Context, runID string) error
+	// Input delivers a human's input to the run's running session.
+	Input(ctx context.Context, runID, kind, text string) error
 }
 
 // RunnerInfo describes a Runner as it introduced itself.
@@ -822,6 +852,23 @@ func (d *Dispatcher) cancel(ctx context.Context, r run.Run, actor event.Actor) (
 		}
 	}
 	return d.finishRun(ctx, r, run.StatusCancelled, nil, "cancelled")
+}
+
+// input forwards a human's input to the agent executing the run.
+func (d *Dispatcher) input(ctx context.Context, r run.Run, kind, text string) error {
+	d.mu.Lock()
+	d.init()
+	st, connected := d.runners[r.Runner]
+	d.mu.Unlock()
+	if !connected {
+		return fmt.Errorf("%w: the run's agent is not connected", ErrConflict)
+	}
+	callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := st.conn.Input(callCtx, r.ID, kind, text); err != nil {
+		return fmt.Errorf("%w: %v", ErrConflict, err)
+	}
+	return nil
 }
 
 func (d *Dispatcher) finish(ctx context.Context, r run.Run, status run.Status, exitCode *int, errText string) error {

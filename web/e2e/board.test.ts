@@ -226,6 +226,66 @@ test('the item page shows agent activity', async ({ page }) => {
 	await expect(reports).toContainText('Sessions last 8 hours.');
 });
 
+test('admins talk to a running agent session', async ({ page }) => {
+	await fakeOIDC(page);
+	const at = '2026-10-01T10:00:00Z';
+	const core = await fakeCore(page, {
+		me: [{ role: 'customer-admin', scope: 'customer:acme' }],
+		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		projects: [
+			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web shop', description: '', version: 1 }
+		],
+		items: [ticket(1, 'in_progress', 'Login')],
+		activity: {
+			'WEB-1': {
+				runs: [
+					{
+						id: 'r1',
+						project: 'WEB',
+						ticket: 'WEB-1',
+						stage: 'implement',
+						status: 'running',
+						spec: { command: [] },
+						adapter: 'claude-code',
+						created_by: 'ballet',
+						created_at: at,
+						started_at: at,
+						version: 2
+					}
+				]
+			}
+		},
+		runLogs: {
+			r1: [{ seq: 1, stream: 'event', text: '{"kind":"text","text":"Writing the form."}\n', at }]
+		}
+	});
+	await page.goto('/items/WEB-1');
+	await page.getByRole('button', { name: 'Sign in' }).click();
+
+	const session = page.getByRole('listitem', { name: 'Session implement' });
+	await session.getByRole('button', { name: 'Show session' }).click();
+	const transcript = session.getByRole('region', { name: 'Session transcript' });
+	await expect(transcript).toContainText('Writing the form.');
+
+	await transcript.getByLabel('Message to the agent').fill('Use the design system buttons.');
+	await transcript.getByRole('button', { name: 'Send', exact: true }).click();
+	await expect(transcript.getByRole('status')).toContainText('Sent');
+	expect(core.runInputs.r1).toEqual([{ kind: 'message', text: 'Use the design system buttons.' }]);
+
+	// The agent delivers it when the turn ends; the transcript follows live.
+	core.runLogs.r1.push({
+		seq: 2,
+		stream: 'event',
+		text: '{"kind":"user","text":"Use the design system buttons."}\n',
+		at
+	});
+	await expect(transcript).toContainText('You: Use the design system buttons.');
+
+	await transcript.getByRole('button', { name: 'Interrupt' }).click();
+	await expect(transcript.getByRole('status')).toContainText('Interrupted.');
+	expect(core.runInputs.r1.at(-1)).toEqual({ kind: 'interrupt' });
+});
+
 test('engineers open and merge the pull request of a ticket', async ({ page }) => {
 	const core = await open(page, 'engineer', '/items/WEB-2');
 	await expect(page.getByText('No pull request yet.')).toBeVisible();

@@ -38,6 +38,7 @@ type acceptAll struct{}
 
 func (acceptAll) Start(context.Context, run.Run, map[string]string) error { return nil }
 func (acceptAll) Cancel(context.Context, string) error                    { return nil }
+func (acceptAll) Input(context.Context, string, string, string) error     { return nil }
 
 type fixture struct {
 	url    string

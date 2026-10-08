@@ -525,6 +525,14 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
    is answered already. A blocking question's answer resumes the
    ticket's pipeline once no blocking question is open.
 
+``POST /api/v1/runs/{run}/input`` — ``{"kind": "message"|"interrupt", "text"?}`` → ``204``
+   Sends a human's input to the run's running coding-agent session
+   (:ref:`talking to a session <reference-agents-talk>`): a message (``text`` required, at most
+   20 000 characters) is delivered when the current turn ends; an
+   interrupt stops the turn first, then delivers ``text``, if any.
+   ``400`` for a plain-command run, ``409`` when the run is not running
+   or its session has ended. Needs ``run.manage``.
+
 ``POST /api/v1/runs/{run}/cancel`` → ``200``
    Cancels a queued run at once; an active run is cancelled on its agent
    (its status changes when the agent reports). ``409`` if the run has

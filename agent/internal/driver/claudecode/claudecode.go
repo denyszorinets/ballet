@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/denyszorinets/ballet/agent/internal/driver"
 	"github.com/denyszorinets/ballet/kit/runnerproto"
@@ -102,6 +103,13 @@ func (d Driver) Setup(s runnerproto.Session) (driver.Setup, error) {
 // Message encodes a user message.
 func (Driver) Message(text string) []byte {
 	b, _ := json.Marshal(map[string]any{"type": "user", "message": map[string]any{"role": "user", "content": text}})
+	return append(b, '\n')
+}
+
+// Interrupt encodes a control request stopping the current turn.
+func (Driver) Interrupt() []byte {
+	b, _ := json.Marshal(map[string]any{"type": "control_request",
+		"request_id": fmt.Sprintf("ballet-%d", time.Now().UnixNano()), "request": map[string]any{"subtype": "interrupt"}})
 	return append(b, '\n')
 }
 

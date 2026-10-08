@@ -141,3 +141,17 @@ func TestParse_TruncatesLongToolResults(t *testing.T) {
 	require.Len(t, p.Events, 1)
 	assert.Less(t, len(p.Events[0].Text), 5000)
 }
+
+func TestInterrupt_IsAControlRequest(t *testing.T) {
+	var m struct {
+		Type      string `json:"type"`
+		RequestID string `json:"request_id"`
+		Request   struct {
+			Subtype string `json:"subtype"`
+		} `json:"request"`
+	}
+	require.NoError(t, json.Unmarshal(claudecode.Driver{}.Interrupt(), &m))
+	assert.Equal(t, "control_request", m.Type)
+	assert.NotEmpty(t, m.RequestID)
+	assert.Equal(t, "interrupt", m.Request.Subtype)
+}

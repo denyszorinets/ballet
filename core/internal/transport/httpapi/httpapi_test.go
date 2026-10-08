@@ -594,6 +594,10 @@ func TestRunAPI_QueueInspectCancel(t *testing.T) {
 	assert.Empty(t, logs["items"])
 	code, _ = call(t, api, "GET", "/api/v1/runs/"+id+"/logs?after=x", "alice", "")
 	assert.Equal(t, http.StatusBadRequest, code)
+	code, _ = call(t, api, "POST", "/api/v1/runs/"+id+"/input", "alice", `{"kind":"message","text":"hi"}`)
+	assert.Equal(t, http.StatusBadRequest, code, "a plain command takes no input")
+	code, _ = call(t, api, "POST", "/api/v1/runs/"+id+"/input", "alice", `{"kind":"message","extra":1}`)
+	assert.Equal(t, http.StatusBadRequest, code)
 
 	code, c := call(t, api, "POST", "/api/v1/runs/"+id+"/cancel", "alice", "")
 	require.Equal(t, http.StatusOK, code, c)

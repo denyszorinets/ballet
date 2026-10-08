@@ -82,6 +82,10 @@ func session(s *agent.Session) *runnerproto.Session {
 	return out
 }
 
+func (rc conn) Input(ctx context.Context, runID, kind, text string) error {
+	return rc.c.Call(ctx, runnerproto.MethodInput, runnerproto.Input{Run: runID, Kind: kind, Text: text}, nil)
+}
+
 func (rc conn) Cancel(ctx context.Context, runID string) error {
 	return rc.c.Call(ctx, runnerproto.MethodCancel, runnerproto.Cancel{Run: runID}, nil)
 }

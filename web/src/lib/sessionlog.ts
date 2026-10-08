@@ -5,6 +5,7 @@ type RunLog = Schemas['RunLog'];
 /** One entry of a session's transcript. */
 export type Entry =
 	| { kind: 'text'; text: string }
+	| { kind: 'user'; text: string }
 	| { kind: 'tool_use'; tool: string; input: string }
 	| { kind: 'tool_result'; text: string; error: boolean }
 	| { kind: 'result'; text: string; error: boolean }
@@ -52,7 +53,8 @@ export function transcript(logs: RunLog[]): Entry[] {
 			}
 			switch (e.kind) {
 				case 'text':
-					out.push({ kind: 'text', text: e.text ?? '' });
+				case 'user':
+					out.push({ kind: e.kind, text: e.text ?? '' });
 					break;
 				case 'tool_use':
 					out.push({ kind: 'tool_use', tool: e.tool ?? '', input: summarize(e.input ?? '') });

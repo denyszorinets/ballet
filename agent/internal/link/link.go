@@ -18,10 +18,12 @@ import (
 	"github.com/denyszorinets/ballet/kit/runnerproto"
 )
 
-// Backend executes one run's session. out receives the session's output;
-// the exit code is the session's (meaningless when err is not nil).
+// Backend executes runs. Run executes one run: out receives its output;
+// the exit code is its (meaningless when err is not nil). Input delivers a
+// human's input to a run's running coding-agent session.
 type Backend interface {
 	Run(ctx context.Context, runID string, spec runnerproto.Spec, out func(stream, text string)) (int, *runnerproto.Result, error)
+	Input(runID, kind, text string) error
 }
 
 // Agent keeps an agent connected to Core and executes its runs.
@@ -149,6 +151,15 @@ func (r *Agent) handle(ctx context.Context) rpc.Handler {
 				return nil, rpc.Errorf(rpc.CodeNotFound, "run %s is not running here", p.Run)
 			}
 			cancel()
+			return struct{}{}, nil
+		case runnerproto.MethodInput:
+			var p runnerproto.Input
+			if err := req.Decode(&p); err != nil {
+				return nil, err
+			}
+			if err := r.Backend.Input(p.Run, p.Kind, p.Text); err != nil {
+				return nil, rpc.Errorf(rpc.CodeConflict, "%v", err)
+			}
 			return struct{}{}, nil
 		}
 		return nil, rpc.Errorf(rpc.CodeMethodNotFound, "method %s not found", req.Method)

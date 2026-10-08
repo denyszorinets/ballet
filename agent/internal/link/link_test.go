@@ -27,6 +27,7 @@ type core struct {
 	logs     map[string]string
 	finished map[string]runnerproto.Finished
 	release  chan struct{} // ends "gate" runs
+	inputs   chan string   // what sessions received
 }
 
 func (c *core) handler(_ context.Context, req *rpc.Request) (any, error) {
@@ -75,7 +76,18 @@ func (c *core) result(t *testing.T, run string) runnerproto.Finished {
 
 // backend echoes the command; "sleep" blocks until cancelled; "gate"
 // until release is closed; "fail" errors.
-type backend struct{ release chan struct{} }
+type backend struct {
+	release chan struct{}
+	inputs  chan string
+}
+
+func (b backend) Input(runID, kind, text string) error {
+	if runID != "long" {
+		return errors.New("no session of this run is running here")
+	}
+	b.inputs <- kind + ":" + text
+	return nil
+}
 
 func (b backend) Run(ctx context.Context, _ string, spec runnerproto.Spec, out func(string, string)) (int, *runnerproto.Result, error) {
 	switch spec.Command[0] {
@@ -99,7 +111,8 @@ func (b backend) Run(ctx context.Context, _ string, spec runnerproto.Spec, out f
 
 func setup(t *testing.T, capacity int) (*core, *link.Agent) {
 	t.Helper()
-	c := &core{logs: map[string]string{}, finished: map[string]runnerproto.Finished{}, release: make(chan struct{})}
+	c := &core{logs: map[string]string{}, finished: map[string]runnerproto.Finished{}, release: make(chan struct{}),
+		inputs: make(chan string, 4)}
 	srv := httptest.NewServer(rpc.NewServer(rpc.ServerOptions{
 		Options: rpc.Options{Handler: c.handler},
 		Authenticate: func(_ context.Context, tok string) (auth.Identity, time.Time, error) {
@@ -113,7 +126,7 @@ func setup(t *testing.T, capacity int) (*core, *link.Agent) {
 	r := &link.Agent{
 		URL:   "ws" + strings.TrimPrefix(srv.URL, "http"),
 		Token: func(context.Context) (string, error) { return "agent-token", nil },
-		Name:  "r1", Labels: map[string]string{"backend": "fake"}, Capacity: capacity, Backend: backend{release: c.release},
+		Name:  "r1", Labels: map[string]string{"backend": "fake"}, Capacity: capacity, Backend: backend{release: c.release, inputs: c.inputs},
 		FlushInterval: 20 * time.Millisecond,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -156,6 +169,12 @@ func TestAgent_CancelTimeoutCapacity(t *testing.T) {
 	err := start(t, c, "other", "echo", 0)
 	assert.True(t, rpc.IsCode(err, rpc.CodeConflict), "at capacity: %v", err)
 
+	require.NoError(t, c.conn().Call(t.Context(), runnerproto.MethodInput,
+		runnerproto.Input{Run: "long", Kind: "message", Text: "hi"}, nil))
+	assert.Equal(t, "message:hi", <-c.inputs, "input reaches the session")
+	err = c.conn().Call(t.Context(), runnerproto.MethodInput, runnerproto.Input{Run: "nope", Kind: "message", Text: "x"}, nil)
+	assert.True(t, rpc.IsCode(err, rpc.CodeConflict), "no such session: %v", err)
+
 	require.NoError(t, c.conn().Call(t.Context(), runnerproto.MethodCancel, runnerproto.Cancel{Run: "long"}, nil))
 	assert.True(t, c.result(t, "long").Cancelled)
 	err = c.conn().Call(t.Context(), runnerproto.MethodCancel, runnerproto.Cancel{Run: "long"}, nil)
@@ -178,6 +197,12 @@ func TestAgent_ReconnectsAndDeliversResults(t *testing.T) {
 	c.mu.Lock()
 	assert.Equal(t, []string{"long"}, c.hellos[1].Active)
 	c.mu.Unlock()
+
+	require.NoError(t, c.conn().Call(t.Context(), runnerproto.MethodInput,
+		runnerproto.Input{Run: "long", Kind: "message", Text: "hi"}, nil))
+	assert.Equal(t, "message:hi", <-c.inputs, "input reaches the session")
+	err := c.conn().Call(t.Context(), runnerproto.MethodInput, runnerproto.Input{Run: "nope", Kind: "message", Text: "x"}, nil)
+	assert.True(t, rpc.IsCode(err, rpc.CodeConflict), "no such session: %v", err)
 
 	require.NoError(t, c.conn().Call(t.Context(), runnerproto.MethodCancel, runnerproto.Cancel{Run: "long"}, nil))
 	assert.True(t, c.result(t, "long").Cancelled)

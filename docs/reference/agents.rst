@@ -120,6 +120,28 @@ The ticket page shows them as the session's transcript, live while it
 runs. The driver also reports the session's result — final message,
 turns, cost, success — with ``run.finished``.
 
+.. _reference-agents-talk:
+
+**Talking to a running session**
+(:doc:`/architecture/decisions/0026-interactive-sessions-park-when-idle`).
+People with ``run.manage`` send input to a running session from its
+transcript (or ``POST /api/v1/runs/{run}/input``, :ref:`reference-rest-runs`):
+
+- a **message** waits for the end of the current turn, then starts the
+  next turn; it shows in the transcript as an event of kind ``user`` when
+  it reaches the session;
+- an **interrupt** stops the current turn at once (the running tool is
+  rejected and the turn ends with a failed ``result``), then delivers its
+  text, if any, as the next message. An interrupt without text ends the
+  session after the stopped turn, and the run fails.
+
+A session ends when a turn ends with no message waiting; input after
+that is refused (``409``). The run's result is its last turn's, with the
+turns of all turns. Additional event kind:
+
+``user``
+   ``text``: a human's message reached the session.
+
 **Claude Code** (runtime ``claude-code``) runs ``claude -p --input-format
 stream-json --output-format stream-json --permission-mode
 bypassPermissions`` (``IS_SANDBOX=1``) in the repository; the executable
@@ -200,6 +222,11 @@ Core's agent token (``data/service-tokens/agent.token``, audience
    * - ``run.cancel``
      - Core → agent
      - ``{"run"}``
+   * - ``run.input``
+     - Core → agent
+     - ``{"run", "kind": "message"|"interrupt", "text"?}`` — a human's
+       input to the run's session; an error result when it is not
+       running there (any more)
    * - ``run.status``
      - agent → Core
      - ``{"run", "status": "running"}``

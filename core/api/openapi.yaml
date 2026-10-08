@@ -675,6 +675,23 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RunLogList" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/runs/{run}/input:
+    parameters: [{ $ref: "#/components/parameters/Run" }]
+    post:
+      operationId: sendRunInput
+      tags: [runs]
+      summary: Send a message or interrupt to a running coding-agent session (run.manage)
+      description: >
+        A message is delivered when the session's current turn ends; an
+        interrupt stops the current turn first, then delivers the text, if
+        any. 409 when the run is not running or its session has ended.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RunInput" } } }
+      responses:
+        "204": { description: Delivered to the agent }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/runs/{run}/cancel:
     parameters: [{ $ref: "#/components/parameters/Run" }]
     post:
@@ -1667,6 +1684,13 @@ components:
             adapter: { type: string, enum: [claude-code] }
             prompt: { type: string }
             timeout_seconds: { type: integer, minimum: 0 }
+    RunInput:
+      type: object
+      additionalProperties: false
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [message, interrupt] }
+        text: { type: string, maxLength: 20000, description: "Required for a message" }
     RunLog:
       type: object
       additionalProperties: false

@@ -936,6 +936,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{run}/input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run ID */
+                run: components["parameters"]["Run"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a message or interrupt to a running coding-agent session (run.manage)
+         * @description A message is delivered when the session's current turn ends; an interrupt stops the current turn first, then delivers the text, if any. 409 when the run is not running or its session has ended.
+         */
+        post: operations["sendRunInput"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{run}/cancel": {
         parameters: {
             query?: never;
@@ -2018,6 +2041,12 @@ export interface components {
                 prompt: string;
                 timeout_seconds?: number;
             };
+        };
+        RunInput: {
+            /** @enum {string} */
+            kind: "message" | "interrupt";
+            /** @description Required for a message */
+            text?: string;
         };
         RunLog: {
             /** Format: int64 */
@@ -4061,6 +4090,32 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RunLogList"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    sendRunInput: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Run ID */
+                run: components["parameters"]["Run"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunInput"];
+            };
+        };
+        responses: {
+            /** @description Delivered to the agent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

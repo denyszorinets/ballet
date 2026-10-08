@@ -13,7 +13,8 @@
 		reports,
 		questions,
 		history,
-		usage
+		usage,
+		canManage = false
 	}: {
 		runs: Run[];
 		reports: Report[];
@@ -21,6 +22,8 @@
 		history: Event[];
 		/** Usage grouped by caller ("run:<id>", "planner:<session>"). */
 		usage: Usage[];
+		/** The viewer may talk to running sessions (run.manage). */
+		canManage?: boolean;
 	} = $props();
 
 	type Entry =
@@ -126,7 +129,7 @@
 						onclick={() => (shown[e.run.id] = !shown[e.run.id])}
 						>{shown[e.run.id] ? 'Hide' : 'Show'} {e.run.adapter ? 'session' : 'output'}</button
 					>
-					{#if shown[e.run.id]}<SessionTranscript run={e.run} />{/if}
+					{#if shown[e.run.id]}<SessionTranscript run={e.run} {canManage} />{/if}
 					{#each asked(e.run) as q (q.id)}
 						<p class="small">
 							<span class="badge" class:blocking={q.blocking}
