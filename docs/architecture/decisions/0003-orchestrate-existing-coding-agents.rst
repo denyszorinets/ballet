@@ -4,6 +4,12 @@ ADR-0003: Orchestrate Existing Coding Agents Through Runtime Adapters
 :Status: Accepted
 :Date: 2026-10-01
 
+.. note::
+
+   Amended by :doc:`0025-agent-fleet-runs-sessions-as-processes`:
+   runtime adapters live in the agent, not in Core, as drivers of
+   interactive sessions.
+
 Context
 -------
 

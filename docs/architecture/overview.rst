@@ -1,6 +1,14 @@
 Architecture Overview
 =====================
 
+.. note::
+
+   Execution is moving to a fleet of long-lived agents that run sessions
+   as processes and replace the Runner
+   (:doc:`decisions/0025-agent-fleet-runs-sessions-as-processes`,
+   :doc:`decisions/0026-interactive-sessions-park-when-idle`). This page
+   describes the current system until that lands.
+
 System context
 --------------
 

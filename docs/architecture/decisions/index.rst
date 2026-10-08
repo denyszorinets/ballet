@@ -31,3 +31,5 @@ Rejected, Deprecated, Superseded.
    0022-humans-reach-knowledge-through-core
    0023-process-backend-for-development
    0024-authentication-off-by-default
+   0025-agent-fleet-runs-sessions-as-processes
+   0026-interactive-sessions-park-when-idle
