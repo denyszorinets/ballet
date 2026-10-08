@@ -16,7 +16,7 @@ import (
 	"github.com/denyszorinets/ballet/kit/sqlstore"
 )
 
-const runCols = `id, project_id, ticket_id, stage, status, spec, runner, exit_code, error, created_by, created_at,
+const runCols = `id, project_id, ticket_id, stage, status, spec, agent, exit_code, error, created_by, created_at,
 	started_at, finished_at, version, branch, adapter, result`
 
 // CreateRun inserts a queued run and records e.
@@ -27,7 +27,7 @@ func (s *Store) CreateRun(ctx context.Context, r run.Run, e event.Event) error {
 	}
 	return mapWriteErr("create run", s.db.Batch(ctx,
 		sqlstore.Exec(`INSERT INTO runs (`+runCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			r.ID, r.ProjectID, r.TicketID, r.Stage, string(r.Status), string(spec), r.Runner, nullableInt(r.ExitCode),
+			r.ID, r.ProjectID, r.TicketID, r.Stage, string(r.Status), string(spec), r.Agent, nullableInt(r.ExitCode),
 			r.Error, r.CreatedBy, formatTime(r.CreatedAt), nullableTime(r.StartedAt), nullableTime(r.FinishedAt), r.Version,
 			r.Branch, r.Adapter, resultJSON(r.Result)),
 		s.AppendEvent(e),
@@ -37,9 +37,9 @@ func (s *Store) CreateRun(ctx context.Context, r run.Run, e event.Event) error {
 // UpdateRun stores r if the stored run is at expectedVersion, recording e
 // when it is not nil.
 func (s *Store) UpdateRun(ctx context.Context, r run.Run, expectedVersion int64, e *event.Event) error {
-	stmts := []sqlstore.Stmt{sqlstore.ExecOne(`UPDATE runs SET status = ?, runner = ?, exit_code = ?, error = ?,
+	stmts := []sqlstore.Stmt{sqlstore.ExecOne(`UPDATE runs SET status = ?, agent = ?, exit_code = ?, error = ?,
 			started_at = ?, finished_at = ?, result = ?, version = ? WHERE id = ? AND version = ?`,
-		string(r.Status), r.Runner, nullableInt(r.ExitCode), r.Error, nullableTime(r.StartedAt), nullableTime(r.FinishedAt),
+		string(r.Status), r.Agent, nullableInt(r.ExitCode), r.Error, nullableTime(r.StartedAt), nullableTime(r.FinishedAt),
 		resultJSON(r.Result), r.Version, r.ID, expectedVersion)}
 	if e != nil {
 		stmts = append(stmts, s.AppendEvent(*e))
@@ -60,8 +60,8 @@ func (s *Store) ListRuns(ctx context.Context, f app.RunFilter) ([]run.Run, error
 	if f.TicketID != "" {
 		q, args = q+` AND ticket_id = ?`, append(args, f.TicketID)
 	}
-	if f.Runner != "" {
-		q, args = q+` AND runner = ?`, append(args, f.Runner)
+	if f.Agent != "" {
+		q, args = q+` AND agent = ?`, append(args, f.Agent)
 	}
 	if len(f.Statuses) > 0 {
 		q += ` AND status IN (?` + strings.Repeat(", ?", len(f.Statuses)-1) + `)`
@@ -151,7 +151,7 @@ func scanRun(r scanner) (run.Run, error) {
 	var exit sql.NullInt64
 	var started, finished sql.NullString
 	var result string
-	if err := r.Scan(&x.ID, &x.ProjectID, &x.TicketID, &x.Stage, &status, &spec, &x.Runner, &exit, &x.Error,
+	if err := r.Scan(&x.ID, &x.ProjectID, &x.TicketID, &x.Stage, &status, &spec, &x.Agent, &exit, &x.Error,
 		&x.CreatedBy, &created, &started, &finished, &x.Version, &x.Branch, &x.Adapter, &result); err != nil {
 		return run.Run{}, err
 	}

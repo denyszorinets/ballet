@@ -1,4 +1,4 @@
-// Package link connects an agent to Core (kit/runnerproto): it dials with
+// Package link connects an agent to Core (kit/agentproto): it dials with
 // the agent token, reconnects with backoff, executes the runs Core sends
 // through a Backend, streams their output and reports their end.
 package link
@@ -14,21 +14,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/denyszorinets/ballet/kit/agentproto"
 	"github.com/denyszorinets/ballet/kit/rpc"
-	"github.com/denyszorinets/ballet/kit/runnerproto"
 )
 
 // Backend executes runs. Run executes one run: out receives its output;
 // the exit code is its (meaningless when err is not nil). Input delivers a
 // human's input to a run's running coding-agent session.
 type Backend interface {
-	Run(ctx context.Context, runID string, spec runnerproto.Spec, out func(stream, text string)) (int, *runnerproto.Result, error)
+	Run(ctx context.Context, runID string, spec agentproto.Spec, out func(stream, text string)) (int, *agentproto.Result, error)
 	Input(runID, kind, text string) error
 }
 
 // Agent keeps an agent connected to Core and executes its runs.
 type Agent struct {
-	URL            string // ws(s)://<core>/runner/rpc
+	URL            string // ws(s)://<core>/agent/rpc
 	Token          func(ctx context.Context) (string, error)
 	Name           string
 	Labels         map[string]string
@@ -42,7 +42,7 @@ type Agent struct {
 	mu      sync.Mutex
 	conn    *rpc.Conn
 	runs    map[string]context.CancelFunc
-	pending []runnerproto.Finished // results not yet delivered
+	pending []agentproto.Finished // results not yet delivered
 	wg      sync.WaitGroup
 }
 
@@ -103,8 +103,8 @@ func (r *Agent) session(ctx context.Context) error {
 	}
 	sort.Strings(active)
 	r.mu.Unlock()
-	if err := conn.Call(ctx, runnerproto.MethodHello, runnerproto.Hello{
-		Runner: r.Name, Labels: r.Labels, Capacity: r.Capacity, Active: active,
+	if err := conn.Call(ctx, agentproto.MethodHello, agentproto.Hello{
+		Agent: r.Name, Labels: r.Labels, Capacity: r.Capacity, Active: active,
 	}, nil); err != nil {
 		return fmt.Errorf("hello: %w", err)
 	}
@@ -133,14 +133,14 @@ func (r *Agent) session(ctx context.Context) error {
 func (r *Agent) handle(ctx context.Context) rpc.Handler {
 	return func(_ context.Context, req *rpc.Request) (any, error) {
 		switch req.Method {
-		case runnerproto.MethodStart:
-			var p runnerproto.Start
+		case agentproto.MethodStart:
+			var p agentproto.Start
 			if err := req.Decode(&p); err != nil {
 				return nil, err
 			}
 			return struct{}{}, r.start(ctx, p)
-		case runnerproto.MethodCancel:
-			var p runnerproto.Cancel
+		case agentproto.MethodCancel:
+			var p agentproto.Cancel
 			if err := req.Decode(&p); err != nil {
 				return nil, err
 			}
@@ -152,8 +152,8 @@ func (r *Agent) handle(ctx context.Context) rpc.Handler {
 			}
 			cancel()
 			return struct{}{}, nil
-		case runnerproto.MethodInput:
-			var p runnerproto.Input
+		case agentproto.MethodInput:
+			var p agentproto.Input
 			if err := req.Decode(&p); err != nil {
 				return nil, err
 			}
@@ -166,7 +166,7 @@ func (r *Agent) handle(ctx context.Context) rpc.Handler {
 	}
 }
 
-func (r *Agent) start(ctx context.Context, p runnerproto.Start) error {
+func (r *Agent) start(ctx context.Context, p agentproto.Start) error {
 	timeout := r.DefaultTimeout
 	if timeout <= 0 {
 		timeout = 2 * time.Hour
@@ -200,20 +200,20 @@ func (r *Agent) start(ctx context.Context, p runnerproto.Start) error {
 
 // execute runs a session and reports it; reports outlive the run's
 // context (runCtx) but not the agent's (ctx).
-func (r *Agent) execute(runCtx, ctx context.Context, p runnerproto.Start) {
-	r.call(ctx, runnerproto.MethodStatus, runnerproto.Status{Run: p.Run, Status: "running"})
+func (r *Agent) execute(runCtx, ctx context.Context, p agentproto.Start) {
+	r.call(ctx, agentproto.MethodStatus, agentproto.Status{Run: p.Run, Status: "running"})
 	out := newBuffer(func(stream, text string) {
 		// A request, not a notification: Core handles requests and
 		// notifications separately, and output must reach Core before
 		// run.finished does.
-		if err := r.call(ctx, runnerproto.MethodLog, runnerproto.Log{Run: p.Run, Stream: stream, Text: text}); err != nil {
+		if err := r.call(ctx, agentproto.MethodLog, agentproto.Log{Run: p.Run, Stream: stream, Text: text}); err != nil {
 			r.logger().DebugContext(ctx, "run output not delivered", "run", p.Run, "error", err)
 		}
 	})
 	stop := out.flushEvery(r.flushInterval())
 	code, result, err := r.Backend.Run(runCtx, p.Run, p.Spec, out.write)
 	stop()
-	f := runnerproto.Finished{Run: p.Run, ExitCode: code, Result: result}
+	f := agentproto.Finished{Run: p.Run, ExitCode: code, Result: result}
 	switch {
 	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
 		f.Error = "the run timed out"
@@ -226,8 +226,8 @@ func (r *Agent) execute(runCtx, ctx context.Context, p runnerproto.Start) {
 }
 
 // finish delivers a result, or keeps it for the next connection.
-func (r *Agent) finish(ctx context.Context, f runnerproto.Finished) {
-	if err := r.call(ctx, runnerproto.MethodFinished, f); err != nil {
+func (r *Agent) finish(ctx context.Context, f agentproto.Finished) {
+	if err := r.call(ctx, agentproto.MethodFinished, f); err != nil {
 		var rerr *rpc.Error
 		if errors.As(err, &rerr) {
 			r.logger().WarnContext(ctx, "Core rejected the run result", "run", f.Run, "error", err)

@@ -21,8 +21,8 @@ import (
 	"github.com/denyszorinets/ballet/agent/internal/driver/opencode"
 	"github.com/denyszorinets/ballet/agent/internal/link"
 	"github.com/denyszorinets/ballet/agent/internal/process"
+	"github.com/denyszorinets/ballet/kit/agentproto"
 	"github.com/denyszorinets/ballet/kit/config"
-	"github.com/denyszorinets/ballet/kit/runnerproto"
 	"github.com/denyszorinets/ballet/kit/service"
 )
 
@@ -157,7 +157,7 @@ func run() error {
 		}}
 
 	r := &link.Agent{
-		URL: "ws" + strings.TrimPrefix(strings.TrimSuffix(cfg.Core.URL, "/"), "http") + runnerproto.Path,
+		URL: "ws" + strings.TrimPrefix(strings.TrimSuffix(cfg.Core.URL, "/"), "http") + agentproto.Path,
 		Token: func(context.Context) (string, error) {
 			// Read on every connection: Core rotates the token file.
 			data, err := os.ReadFile(cfg.Core.TokenFile)

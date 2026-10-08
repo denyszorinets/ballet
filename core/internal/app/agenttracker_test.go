@@ -31,7 +31,7 @@ func TestAgentTracker_RunsReportOnTheirTicketOnly(t *testing.T) {
 
 	_, err = at.Context(t.Context(), me)
 	assert.ErrorIs(t, err, app.ErrForbidden, "a queued run is not active yet")
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 1}, &fakeRunner{}))
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 1}, &fakeAgent{}))
 	e.eventually(t, r.ID, run.StatusStarting)
 
 	_, err = at.Report(t.Context(), me, report.KindProgress, "", "Started on the login form.", "")

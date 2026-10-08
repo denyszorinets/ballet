@@ -1,4 +1,4 @@
-package runnerapi_test
+package agentapi_test
 
 import (
 	"context"
@@ -18,11 +18,11 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/domain/run"
 	"github.com/denyszorinets/ballet/core/internal/domain/tracker"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
-	"github.com/denyszorinets/ballet/core/internal/transport/runnerapi"
+	"github.com/denyszorinets/ballet/core/internal/transport/agentapi"
+	"github.com/denyszorinets/ballet/kit/agentproto"
 	"github.com/denyszorinets/ballet/kit/auth"
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 	"github.com/denyszorinets/ballet/kit/rpc"
-	"github.com/denyszorinets/ballet/kit/runnerproto"
 )
 
 type env struct {
@@ -58,11 +58,11 @@ func setup(t *testing.T) env {
 	go func() { d.Run(ctx); close(done) }()
 	t.Cleanup(func() { cancel(); <-done })
 	mux := http.NewServeMux()
-	runnerapi.Register(mux, runnerapi.Deps{Verifier: runtoken.NewRingVerifier(ring, time.Now), Dispatcher: d})
+	agentapi.Register(mux, agentapi.Deps{Verifier: runtoken.NewRingVerifier(ring, time.Now), Dispatcher: d})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return env{
-		url: "ws" + strings.TrimPrefix(srv.URL, "http") + runnerproto.Path, issuer: runtoken.NewIssuer(ring, time.Now),
+		url: "ws" + strings.TrimPrefix(srv.URL, "http") + agentproto.Path, issuer: runtoken.NewIssuer(ring, time.Now),
 		runs: &app.Runs{Store: st, Items: st, Tenancy: st, Authz: authz, Dispatcher: d, Now: time.Now, NewID: store.NewID},
 		st:   st, ticket: it.Key,
 	}
@@ -70,21 +70,21 @@ func setup(t *testing.T) env {
 
 func (e env) token(t *testing.T, caps ...string) string {
 	t.Helper()
-	tok, err := e.issuer.Issue(runtoken.Claims{Kind: runtoken.KindService, Subject: "service:runner",
+	tok, err := e.issuer.Issue(runtoken.Claims{Kind: runtoken.KindService, Subject: "service:agent",
 		Audience: []string{"core"}, Capabilities: caps}, time.Hour)
 	require.NoError(t, err)
 	return tok
 }
 
-// runner is a test Runner: it records run.start requests.
-type runner struct {
+// fake is a test agent: it records run.start requests.
+type fake struct {
 	mu     sync.Mutex
-	starts []runnerproto.Start
+	starts []agentproto.Start
 }
 
-func (r *runner) handler(_ context.Context, req *rpc.Request) (any, error) {
-	if req.Method == runnerproto.MethodStart {
-		var s runnerproto.Start
+func (r *fake) handler(_ context.Context, req *rpc.Request) (any, error) {
+	if req.Method == agentproto.MethodStart {
+		var s agentproto.Start
 		if err := req.Decode(&s); err != nil {
 			return nil, err
 		}
@@ -95,7 +95,7 @@ func (r *runner) handler(_ context.Context, req *rpc.Request) (any, error) {
 	return struct{}{}, nil
 }
 
-func (e env) dial(t *testing.T, tok string, r *runner) (*rpc.Conn, error) {
+func (e env) dial(t *testing.T, tok string, r *fake) (*rpc.Conn, error) {
 	t.Helper()
 	c, _, err := rpc.Dial(t.Context(), e.url, rpc.DialOptions{
 		Token:   func(context.Context) (string, error) { return tok, nil },
@@ -107,49 +107,49 @@ func (e env) dial(t *testing.T, tok string, r *runner) (*rpc.Conn, error) {
 	return c, err
 }
 
-func TestRunnerAPI_RunLifecycle(t *testing.T) {
+func TestAgentAPI_RunLifecycle(t *testing.T) {
 	e := setup(t)
 	admin := auth.WithIdentity(t.Context(), auth.Identity{Kind: auth.KindHuman, Subject: "alice", Claims: map[string]any{"groups": []any{"admins"}}})
-	r := &runner{}
-	c, err := e.dial(t, e.token(t, runtoken.CapRunnerConnect), r)
+	r := &fake{}
+	c, err := e.dial(t, e.token(t, runtoken.CapAgentConnect), r)
 	require.NoError(t, err)
 
-	err = c.Call(t.Context(), runnerproto.MethodLog, runnerproto.Log{Run: "x", Text: "x"}, nil)
+	err = c.Call(t.Context(), agentproto.MethodLog, agentproto.Log{Run: "x", Text: "x"}, nil)
 	assert.True(t, rpc.IsCode(err, rpc.CodeInvalidRequest), "hello first: %v", err)
-	require.NoError(t, c.Call(t.Context(), runnerproto.MethodHello, runnerproto.Hello{Runner: "r1", Capacity: 1}, nil))
+	require.NoError(t, c.Call(t.Context(), agentproto.MethodHello, agentproto.Hello{Agent: "r1", Capacity: 1}, nil))
 
 	v, err := e.runs.Create(admin, e.ticket, "implement", run.Spec{Command: []string{"echo", "hi"}, Env: map[string]string{"A": "1"}})
 	require.NoError(t, err)
 	require.Eventually(t, func() bool { r.mu.Lock(); defer r.mu.Unlock(); return len(r.starts) == 1 }, 5*time.Second, 5*time.Millisecond)
 	r.mu.Lock()
-	assert.Equal(t, runnerproto.Start{Run: v.ID, Spec: runnerproto.Spec{Command: []string{"echo", "hi"}, Env: map[string]string{"A": "1"}}}, r.starts[0])
+	assert.Equal(t, agentproto.Start{Run: v.ID, Spec: agentproto.Spec{Command: []string{"echo", "hi"}, Env: map[string]string{"A": "1"}}}, r.starts[0])
 	r.mu.Unlock()
 
-	require.NoError(t, c.Call(t.Context(), runnerproto.MethodStatus, runnerproto.Status{Run: v.ID, Status: "running"}, nil))
-	require.NoError(t, c.Call(t.Context(), runnerproto.MethodLog, runnerproto.Log{Run: v.ID, Stream: "stdout", Text: "hi\n"}, nil))
-	require.NoError(t, c.Call(t.Context(), runnerproto.MethodFinished, runnerproto.Finished{Run: v.ID, ExitCode: 0}, nil))
+	require.NoError(t, c.Call(t.Context(), agentproto.MethodStatus, agentproto.Status{Run: v.ID, Status: "running"}, nil))
+	require.NoError(t, c.Call(t.Context(), agentproto.MethodLog, agentproto.Log{Run: v.ID, Stream: "stdout", Text: "hi\n"}, nil))
+	require.NoError(t, c.Call(t.Context(), agentproto.MethodFinished, agentproto.Finished{Run: v.ID, ExitCode: 0}, nil))
 	got, err := e.runs.Get(admin, v.ID)
 	require.NoError(t, err)
 	assert.Equal(t, run.StatusSucceeded, got.Status)
-	assert.Equal(t, "r1", got.Runner)
+	assert.Equal(t, "r1", got.Agent)
 	logs, err := e.runs.Logs(admin, v.ID, 0, 0)
 	require.NoError(t, err)
 	require.Len(t, logs, 1)
 	assert.Equal(t, "hi\n", logs[0].Text)
 
-	err = c.Call(t.Context(), runnerproto.MethodFinished, runnerproto.Finished{Run: v.ID}, nil)
+	err = c.Call(t.Context(), agentproto.MethodFinished, agentproto.Finished{Run: v.ID}, nil)
 	assert.True(t, rpc.IsCode(err, rpc.CodeForbidden), "%v", err)
 
-	second, err := e.dial(t, e.token(t, runtoken.CapRunnerConnect), &runner{})
+	second, err := e.dial(t, e.token(t, runtoken.CapAgentConnect), &fake{})
 	require.NoError(t, err)
-	err = second.Call(t.Context(), runnerproto.MethodHello, runnerproto.Hello{Runner: "r1", Capacity: 1}, nil)
-	assert.True(t, rpc.IsCode(err, rpc.CodeConflict), "one connection per runner name: %v", err)
+	err = second.Call(t.Context(), agentproto.MethodHello, agentproto.Hello{Agent: "r1", Capacity: 1}, nil)
+	assert.True(t, rpc.IsCode(err, rpc.CodeConflict), "one connection per agent name: %v", err)
 }
 
-func TestRunnerAPI_RequiresRunnerToken(t *testing.T) {
+func TestAgentAPI_RequiresAgentToken(t *testing.T) {
 	e := setup(t)
-	_, err := e.dial(t, e.token(t, runtoken.CapUsageWrite), &runner{})
+	_, err := e.dial(t, e.token(t, runtoken.CapUsageWrite), &fake{})
 	assert.Error(t, err)
-	_, err = e.dial(t, "forged", &runner{})
+	_, err = e.dial(t, "forged", &fake{})
 	assert.Error(t, err)
 }

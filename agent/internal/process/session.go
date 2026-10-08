@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/denyszorinets/ballet/agent/internal/driver"
-	"github.com/denyszorinets/ballet/kit/runnerproto"
+	"github.com/denyszorinets/ballet/kit/agentproto"
 )
 
 // maxLine bounds one line of a session's output.
@@ -41,7 +41,7 @@ type session struct {
 	park      bool     // park when the current turn ends
 	parked    bool     // ended to continue later
 	queue     []string // messages for the next turn
-	last      *runnerproto.Result
+	last      *agentproto.Result
 	turns     int // over all results: each reports its own
 	sessionID string
 	closed    bool
@@ -82,13 +82,13 @@ func (s *session) read(wg *sync.WaitGroup, r io.Reader) {
 	_, _ = io.Copy(io.Discard, r)
 }
 
-func (s *session) event(e runnerproto.Event) {
+func (s *session) event(e agentproto.Event) {
 	b, _ := json.Marshal(e)
-	s.out(runnerproto.StreamEvent, string(b)+"\n")
+	s.out(agentproto.StreamEvent, string(b)+"\n")
 }
 
 // turnEnded delivers the next message, parks, waits or ends the session.
-func (s *session) turnEnded(r *runnerproto.Result) {
+func (s *session) turnEnded(r *agentproto.Result) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.busy = false
@@ -118,7 +118,7 @@ func (s *session) input(kind, text string) error {
 		return ErrSessionEnded
 	}
 	switch kind {
-	case runnerproto.InputMessage:
+	case agentproto.InputMessage:
 		if text == "" {
 			return errors.Join(ErrInvalidInput, errNoMessageText)
 		}
@@ -127,7 +127,7 @@ func (s *session) input(kind, text string) error {
 		} else {
 			s.deliverLocked(text)
 		}
-	case runnerproto.InputInterrupt:
+	case agentproto.InputInterrupt:
 		if !s.busy {
 			if text != "" {
 				s.deliverLocked(text)
@@ -142,14 +142,14 @@ func (s *session) input(kind, text string) error {
 			s.queue = append(s.queue, text)
 		}
 		s.writeLocked(stop)
-	case runnerproto.InputHold:
+	case agentproto.InputHold:
 		s.holding = true
-	case runnerproto.InputRelease:
+	case agentproto.InputRelease:
 		s.holding = false
 		if !s.busy && len(s.queue) == 0 {
 			s.closeLocked()
 		}
-	case runnerproto.InputPark:
+	case agentproto.InputPark:
 		if s.busy {
 			s.park = true
 		} else {
@@ -163,7 +163,7 @@ func (s *session) input(kind, text string) error {
 
 func (s *session) deliverLocked(text string) {
 	s.busy = true
-	s.event(runnerproto.Event{Kind: runnerproto.EventUser, Text: text})
+	s.event(agentproto.Event{Kind: agentproto.EventUser, Text: text})
 	s.writeLocked(s.drv.Message(text))
 }
 
@@ -197,7 +197,7 @@ func (s *session) closeLocked() {
 
 // result is the session's result; parked tells it ended to continue
 // later, as sessionID.
-func (s *session) result() (r *runnerproto.Result, parked bool, sessionID string) {
+func (s *session) result() (r *agentproto.Result, parked bool, sessionID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.last, s.parked, s.sessionID

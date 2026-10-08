@@ -25,7 +25,7 @@ type Service struct {
 var Services = []Service{
 	{Name: "gateway", Audience: []string{"core"}, Capabilities: []string{runtoken.CapCredentialsRead, runtoken.CapUsageWrite}},
 	{Name: "knowledge", Audience: []string{"core", "gateway"}, Capabilities: []string{runtoken.CapLLMEmbed}},
-	{Name: "agent", Audience: []string{"core"}, Capabilities: []string{runtoken.CapRunnerConnect}},
+	{Name: "agent", Audience: []string{"core"}, Capabilities: []string{runtoken.CapAgentConnect}},
 }
 
 // Issuer writes service tokens to Dir/<name>.token.

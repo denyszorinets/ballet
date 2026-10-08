@@ -13,19 +13,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/denyszorinets/ballet/agent/internal/link"
+	"github.com/denyszorinets/ballet/kit/agentproto"
 	"github.com/denyszorinets/ballet/kit/auth"
 	"github.com/denyszorinets/ballet/kit/rpc"
-	"github.com/denyszorinets/ballet/kit/runnerproto"
 )
 
 // core is a fake Core: it records what the agent reports.
 type core struct {
 	mu       sync.Mutex
 	conns    []*rpc.Conn
-	hellos   []runnerproto.Hello
+	hellos   []agentproto.Hello
 	statuses []string
 	logs     map[string]string
-	finished map[string]runnerproto.Finished
+	finished map[string]agentproto.Finished
 	release  chan struct{} // ends "gate" runs
 	inputs   chan string   // what sessions received
 }
@@ -34,21 +34,21 @@ func (c *core) handler(_ context.Context, req *rpc.Request) (any, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	switch req.Method {
-	case runnerproto.MethodHello:
-		var h runnerproto.Hello
+	case agentproto.MethodHello:
+		var h agentproto.Hello
 		_ = req.Decode(&h)
 		c.hellos = append(c.hellos, h)
 		c.conns = append(c.conns, req.Conn)
-	case runnerproto.MethodStatus:
-		var s runnerproto.Status
+	case agentproto.MethodStatus:
+		var s agentproto.Status
 		_ = req.Decode(&s)
 		c.statuses = append(c.statuses, s.Run)
-	case runnerproto.MethodLog:
-		var l runnerproto.Log
+	case agentproto.MethodLog:
+		var l agentproto.Log
 		_ = req.Decode(&l)
 		c.logs[l.Run] += l.Stream + ":" + l.Text
-	case runnerproto.MethodFinished:
-		var f runnerproto.Finished
+	case agentproto.MethodFinished:
+		var f agentproto.Finished
 		_ = req.Decode(&f)
 		c.finished[f.Run] = f
 	}
@@ -61,7 +61,7 @@ func (c *core) conn() *rpc.Conn {
 	return c.conns[len(c.conns)-1]
 }
 
-func (c *core) result(t *testing.T, run string) runnerproto.Finished {
+func (c *core) result(t *testing.T, run string) agentproto.Finished {
 	t.Helper()
 	require.Eventually(t, func() bool {
 		c.mu.Lock()
@@ -89,7 +89,7 @@ func (b backend) Input(runID, kind, text string) error {
 	return nil
 }
 
-func (b backend) Run(ctx context.Context, _ string, spec runnerproto.Spec, out func(string, string)) (int, *runnerproto.Result, error) {
+func (b backend) Run(ctx context.Context, _ string, spec agentproto.Spec, out func(string, string)) (int, *agentproto.Result, error) {
 	switch spec.Command[0] {
 	case "sleep":
 		out("stdout", "sleeping\n")
@@ -101,7 +101,7 @@ func (b backend) Run(ctx context.Context, _ string, spec runnerproto.Spec, out f
 	case "fail":
 		return -1, nil, errors.New("image not found")
 	case "agent":
-		return 0, &runnerproto.Result{Success: true, Summary: "done", Turns: 2}, nil
+		return 0, &agentproto.Result{Success: true, Summary: "done", Turns: 2}, nil
 	}
 	out("stdout", "a ")
 	out("stdout", "b\n")
@@ -111,7 +111,7 @@ func (b backend) Run(ctx context.Context, _ string, spec runnerproto.Spec, out f
 
 func setup(t *testing.T, capacity int) (*core, *link.Agent) {
 	t.Helper()
-	c := &core{logs: map[string]string{}, finished: map[string]runnerproto.Finished{}, release: make(chan struct{}),
+	c := &core{logs: map[string]string{}, finished: map[string]agentproto.Finished{}, release: make(chan struct{}),
 		inputs: make(chan string, 4)}
 	srv := httptest.NewServer(rpc.NewServer(rpc.ServerOptions{
 		Options: rpc.Options{Handler: c.handler},
@@ -139,17 +139,17 @@ func setup(t *testing.T, capacity int) (*core, *link.Agent) {
 
 func start(t *testing.T, c *core, run string, command string, timeout int) error {
 	t.Helper()
-	return c.conn().Call(t.Context(), runnerproto.MethodStart, runnerproto.Start{Run: run,
-		Spec: runnerproto.Spec{Command: []string{command}, TimeoutSeconds: timeout}}, nil)
+	return c.conn().Call(t.Context(), agentproto.MethodStart, agentproto.Start{Run: run,
+		Spec: agentproto.Spec{Command: []string{command}, TimeoutSeconds: timeout}}, nil)
 }
 
 func TestAgent_ExecutesAndReports(t *testing.T) {
 	c, _ := setup(t, 2)
-	assert.Equal(t, runnerproto.Hello{Runner: "r1", Labels: map[string]string{"backend": "fake"}, Capacity: 2, Active: []string{}}, c.hellos[0])
+	assert.Equal(t, agentproto.Hello{Agent: "r1", Labels: map[string]string{"backend": "fake"}, Capacity: 2, Active: []string{}}, c.hellos[0])
 
 	require.NoError(t, start(t, c, "run1", "echo", 0))
 	f := c.result(t, "run1")
-	assert.Equal(t, runnerproto.Finished{Run: "run1", ExitCode: 3}, f)
+	assert.Equal(t, agentproto.Finished{Run: "run1", ExitCode: 3}, f)
 	c.mu.Lock()
 	assert.Equal(t, "stdout:a b\nstderr:warn\n", c.logs["run1"], "batched per stream, in order")
 	assert.Equal(t, []string{"run1"}, c.statuses)
@@ -159,7 +159,7 @@ func TestAgent_ExecutesAndReports(t *testing.T) {
 	assert.Equal(t, "image not found", c.result(t, "run2").Error)
 
 	require.NoError(t, start(t, c, "run3", "agent", 0))
-	assert.Equal(t, &runnerproto.Result{Success: true, Summary: "done", Turns: 2}, c.result(t, "run3").Result,
+	assert.Equal(t, &agentproto.Result{Success: true, Summary: "done", Turns: 2}, c.result(t, "run3").Result,
 		"the session's result is reported")
 }
 
@@ -169,15 +169,15 @@ func TestAgent_CancelTimeoutCapacity(t *testing.T) {
 	err := start(t, c, "other", "echo", 0)
 	assert.True(t, rpc.IsCode(err, rpc.CodeConflict), "at capacity: %v", err)
 
-	require.NoError(t, c.conn().Call(t.Context(), runnerproto.MethodInput,
-		runnerproto.Input{Run: "long", Kind: "message", Text: "hi"}, nil))
+	require.NoError(t, c.conn().Call(t.Context(), agentproto.MethodInput,
+		agentproto.Input{Run: "long", Kind: "message", Text: "hi"}, nil))
 	assert.Equal(t, "message:hi", <-c.inputs, "input reaches the session")
-	err = c.conn().Call(t.Context(), runnerproto.MethodInput, runnerproto.Input{Run: "nope", Kind: "message", Text: "x"}, nil)
+	err = c.conn().Call(t.Context(), agentproto.MethodInput, agentproto.Input{Run: "nope", Kind: "message", Text: "x"}, nil)
 	assert.True(t, rpc.IsCode(err, rpc.CodeConflict), "no such session: %v", err)
 
-	require.NoError(t, c.conn().Call(t.Context(), runnerproto.MethodCancel, runnerproto.Cancel{Run: "long"}, nil))
+	require.NoError(t, c.conn().Call(t.Context(), agentproto.MethodCancel, agentproto.Cancel{Run: "long"}, nil))
 	assert.True(t, c.result(t, "long").Cancelled)
-	err = c.conn().Call(t.Context(), runnerproto.MethodCancel, runnerproto.Cancel{Run: "long"}, nil)
+	err = c.conn().Call(t.Context(), agentproto.MethodCancel, agentproto.Cancel{Run: "long"}, nil)
 	assert.True(t, rpc.IsCode(err, rpc.CodeNotFound))
 
 	require.NoError(t, start(t, c, "slow", "sleep", 1))
@@ -198,13 +198,13 @@ func TestAgent_ReconnectsAndDeliversResults(t *testing.T) {
 	assert.Equal(t, []string{"long"}, c.hellos[1].Active)
 	c.mu.Unlock()
 
-	require.NoError(t, c.conn().Call(t.Context(), runnerproto.MethodInput,
-		runnerproto.Input{Run: "long", Kind: "message", Text: "hi"}, nil))
+	require.NoError(t, c.conn().Call(t.Context(), agentproto.MethodInput,
+		agentproto.Input{Run: "long", Kind: "message", Text: "hi"}, nil))
 	assert.Equal(t, "message:hi", <-c.inputs, "input reaches the session")
-	err := c.conn().Call(t.Context(), runnerproto.MethodInput, runnerproto.Input{Run: "nope", Kind: "message", Text: "x"}, nil)
+	err := c.conn().Call(t.Context(), agentproto.MethodInput, agentproto.Input{Run: "nope", Kind: "message", Text: "x"}, nil)
 	assert.True(t, rpc.IsCode(err, rpc.CodeConflict), "no such session: %v", err)
 
-	require.NoError(t, c.conn().Call(t.Context(), runnerproto.MethodCancel, runnerproto.Cancel{Run: "long"}, nil))
+	require.NoError(t, c.conn().Call(t.Context(), agentproto.MethodCancel, agentproto.Cancel{Run: "long"}, nil))
 	assert.True(t, c.result(t, "long").Cancelled)
 }
 

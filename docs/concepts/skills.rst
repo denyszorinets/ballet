@@ -28,9 +28,9 @@ Ballet keeps a central skill registry
 - **Storage**: skills live only in the Ballet database, authored and
   versioned in the UI; they are searchable like all other content.
 - **Delivery**: when a run starts, Ballet resolves the project's skill
-  set and writes it into the container in the layout the agent runtime
-  expects (``.claude/skills/`` for Claude Code, and equivalents for
-  other runtimes).
+  set and the agent writes it into the session's ``HOME`` in the layout
+  the runtime expects (``.claude/skills/`` for Claude Code,
+  ``.config/opencode/skills/`` for opencode).
 
 Skills are shared across customers only at organization scope; a
 customer-scoped skill is as private as that customer's knowledge.
@@ -58,6 +58,6 @@ Each project's process profile binds together:
 
 - the pipeline definition(s) per ticket type (:doc:`pipeline`);
 - the skill set and pinned versions;
-- the devcontainer template;
+- the agent pool (built from the project's devcontainer);
 - branch naming, base branch and merge strategy;
 - default execution policy (review mode, merge mode).

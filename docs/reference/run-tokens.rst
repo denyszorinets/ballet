@@ -18,14 +18,14 @@ signing key, ``iss: "ballet-core"``.
    * - Claim
      - Meaning
    * - ``sub``
-     - Workload: ``run:<id>``, ``runner:<id>``, ``planner:<session>``, …
+     - Workload: ``run:<id>``, ``service:agent``, ``planner:<session>``, …
    * - ``aud``
      - Services that accept the token: ``core``, ``knowledge``,
        ``gateway``
    * - ``exp``, ``iat``, ``jti``
      - Expiry, issue time, unique id
    * - ``kind``
-     - ``run``, ``runner``, ``planner`` or ``service``
+     - ``run``, ``agent``, ``planner`` or ``service``
    * - ``cust``, ``proj``
      - Customer and project scope (required for ``run`` and ``planner``)
    * - ``tkt``
@@ -57,7 +57,7 @@ Capabilities
      - Create and update knowledge entries
    * - ``llm.invoke``
      - Call the LLM gateway
-   * - ``runner.connect``
+   * - ``agent.connect``
      - Connect an agent to Core
    * - ``credentials.read``
      - (gateway) Read LLM credentials from Core
@@ -98,7 +98,7 @@ per service into ``[services] tokens_dir`` (mode ``0600``):
    * - ``agent.token``
      - ``service:agent``
      - ``core``
-     - ``runner.connect``
+     - ``agent.connect``
 
 Services read their file with ``runtoken.FileSource`` (re-read when it
 changes). In a single-host installation the directory is shared with the

@@ -1,5 +1,5 @@
 // Package runtoken issues and verifies the short-lived tokens Core gives to
-// workloads — agent runs, Runners, planner sessions and services (ADR-0006).
+// workloads — agent runs, agents, planner sessions and services (ADR-0006).
 //
 // Tokens are JWTs signed by Core with Ed25519 keys from a KeyRing. Other
 // services verify them against Core's public JWKS (/.well-known/jwks.json).
@@ -21,7 +21,7 @@ type Kind string
 // Token kinds.
 const (
 	KindRun     Kind = "run"     // one agent session executing a ticket stage
-	KindRunner  Kind = "runner"  // a Runner process
+	KindAgent   Kind = "agent"   // an agent process (ADR-0025)
 	KindPlanner Kind = "planner" // a planner session acting for a human
 	KindService Kind = "service" // a Ballet service calling another
 )
@@ -33,7 +33,7 @@ const (
 	CapKnowledgeRead  = "knowledge.read"  // search and read the customer's knowledge
 	CapKnowledgeWrite = "knowledge.write" // create and update knowledge entries
 	CapLLMInvoke      = "llm.invoke"      // call the LLM gateway
-	CapRunnerConnect  = "runner.connect"  // connect a Runner to Core
+	CapAgentConnect   = "agent.connect"   // connect an agent to Core
 
 	// Service capabilities (KindService tokens of Ballet's own services).
 	CapCredentialsRead = "credentials.read" // gateway: read LLM credentials from Core
@@ -42,7 +42,7 @@ const (
 )
 
 var knownCapabilities = []string{
-	CapTrackerRead, CapTrackerReport, CapKnowledgeRead, CapKnowledgeWrite, CapLLMInvoke, CapRunnerConnect,
+	CapTrackerRead, CapTrackerReport, CapKnowledgeRead, CapKnowledgeWrite, CapLLMInvoke, CapAgentConnect,
 	CapCredentialsRead, CapUsageWrite, CapLLMEmbed,
 }
 
@@ -50,7 +50,7 @@ var knownCapabilities = []string{
 type Claims struct {
 	ID       string    // unique token id (jti); set on issue
 	Kind     Kind      // workload kind
-	Subject  string    // e.g. "run:<id>", "runner:<id>", "planner:<session>"
+	Subject  string    // e.g. "run:<id>", "service:agent", "planner:<session>"
 	Audience []string  // services that accept the token, e.g. "knowledge"
 	Expiry   time.Time // set on issue
 
@@ -72,7 +72,7 @@ func (c Claims) Can(capability string) bool {
 func (c Claims) Validate() error {
 	var errs []error
 	switch c.Kind {
-	case KindRun, KindRunner, KindPlanner, KindService:
+	case KindRun, KindAgent, KindPlanner, KindService:
 	default:
 		errs = append(errs, fmt.Errorf("unknown token kind %q", c.Kind))
 	}

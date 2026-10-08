@@ -2,7 +2,7 @@ Ticket Pipeline
 ===============
 
 Every ticket passes through a pipeline of **stages**. Each agent stage is
-executed by a **separate agent session** in a fresh container, with its
+executed by a **separate agent session** in a fresh workspace, with its
 own skills and role. A session never evaluates its own work.
 
 The pipeline is **defined per project**. Ballet ships a default
@@ -57,12 +57,12 @@ the project's choice.
 
    * - Fixed by Ballet
      - Configured per project
-   * - Each agent stage is a separate session in a fresh container.
+   * - Each agent stage is a separate session in a fresh workspace.
      - Which stages exist, their order and transitions.
    * - Stages exchange artifacts and reports, never transcripts.
      - Each stage's role instructions and skills.
    * - Questions, budgets, timeouts and iteration limits apply.
-     - Runtime, model and container template per stage.
+     - Runtime and model per stage; the project's agent pool.
    * - Every transition is recorded and observable.
      - Branch naming, base branch, merge strategy, gates.
 

@@ -29,7 +29,7 @@ func TestAssumptions_ReviewAndFollowUps(t *testing.T) {
 	require.NoError(t, err)
 	r, err := e.runs.Create(dave, tk.Key, "implement", cmd)
 	require.NoError(t, err)
-	require.NoError(t, e.d.Connect(t.Context(), app.RunnerInfo{Name: "r1", Capacity: 1}, &fakeRunner{}))
+	require.NoError(t, e.d.Connect(t.Context(), app.AgentInfo{Name: "r1", Capacity: 1}, &fakeAgent{}))
 	e.eventually(t, r.ID, run.StatusStarting)
 	me := app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB", Ticket: tk.Key}
 	assume := func(text string) report.Report {

@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/denyszorinets/ballet/kit/runnerproto"
+	"github.com/denyszorinets/ballet/kit/agentproto"
 )
 
 // Setup is what a session process needs.
@@ -22,10 +22,10 @@ type Setup struct {
 
 // Parsed is what one line of a session's standard output said.
 type Parsed struct {
-	Events []runnerproto.Event
+	Events []agentproto.Event
 	// Result is set when a turn ended: the session waits for the next
 	// message or, when none comes, for its standard input to close.
-	Result *runnerproto.Result
+	Result *agentproto.Result
 	// SessionID is the runtime's ID of the session, when the line told it.
 	SessionID string
 	// Reply is written to the session's standard input (protocol
@@ -35,7 +35,7 @@ type Parsed struct {
 
 // Driver drives one runtime.
 type Driver interface {
-	Setup(s runnerproto.Session) (Setup, error)
+	Setup(s agentproto.Session) (Setup, error)
 	// NewCodec returns the codec of a new session working in dir (absolute).
 	NewCodec(dir string) Codec
 	// State reads what continues a session later (its transcript) from
@@ -62,7 +62,7 @@ var skillNameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // SkillFiles lays out skills as <dir>/<name>/SKILL.md with their
 // supporting files, refusing names and paths that escape their skill.
-func SkillFiles(dir string, skills []runnerproto.Skill) (map[string]string, error) {
+func SkillFiles(dir string, skills []agentproto.Skill) (map[string]string, error) {
 	files := map[string]string{}
 	for _, sk := range skills {
 		if !skillNameRe.MatchString(sk.Name) || strings.Contains(sk.Name, "..") {

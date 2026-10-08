@@ -13,7 +13,7 @@ Keep going
 - **Durable state.** All pipeline state lives in the database; a
   restart of any Ballet service resumes work where it was
   (:doc:`/architecture/decisions/0016-durable-orchestration-in-the-database`).
-- **Retries for infrastructure failures** (container start, network,
+- **Retries for infrastructure failures** (an agent gone, network,
   provider errors) with backoff, distinct from agent-level failures.
 - **Heartbeats.** Agents report their own and each session's liveness;
   missed heartbeats trigger reconciliation

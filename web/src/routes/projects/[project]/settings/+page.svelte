@@ -17,7 +17,6 @@
 	let form = $state({
 		repo_url: '',
 		default_branch: '',
-		image: '',
 		setup: '',
 		env: '',
 		branch_template: '',
@@ -42,7 +41,6 @@
 		form = {
 			repo_url: x.repo_url,
 			default_branch: x.default_branch,
-			image: x.image,
 			setup: x.setup.join('\n'),
 			env: Object.entries(x.env)
 				.map(([k, v]) => `${k}=${v}`)
@@ -136,8 +134,8 @@
 <p><a href={resolve('/projects/[project]', { project })}>← {project}</a></p>
 <h1>Execution settings</h1>
 <p class="muted">
-	How agent runs of this project execute: the repository they work on, the devcontainer image, and
-	commands that prepare the workspace.
+	How agent runs of this project execute: the repository they work on, the agent pool, and commands
+	that prepare the workspace.
 </p>
 
 {#if error}

@@ -19,7 +19,7 @@ import (
 
 	"github.com/denyszorinets/ballet/agent/internal/driver"
 	"github.com/denyszorinets/ballet/agent/internal/process"
-	"github.com/denyszorinets/ballet/kit/runnerproto"
+	"github.com/denyszorinets/ballet/kit/agentproto"
 )
 
 type output struct {
@@ -34,27 +34,27 @@ func (o *output) write(stream, text string) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	switch stream {
-	case runnerproto.StreamStdout:
+	case agentproto.StreamStdout:
 		o.stdout.WriteString(text)
-	case runnerproto.StreamStderr:
+	case agentproto.StreamStderr:
 		o.stderr.WriteString(text)
-	case runnerproto.StreamEvent:
+	case agentproto.StreamEvent:
 		o.event.WriteString(text)
 	default:
 		o.system.WriteString(text)
 	}
 }
 
-func sh(script string, env map[string]string) runnerproto.Spec {
-	return runnerproto.Spec{Command: []string{"sh", "-c", script}, Env: env, Workdir: "repo"}
+func sh(script string, env map[string]string) agentproto.Spec {
+	return agentproto.Spec{Command: []string{"sh", "-c", script}, Env: env, Workdir: "repo"}
 }
 
 func TestProcess_RunsInAFreshWorkspace(t *testing.T) {
 	root := t.TempDir()
 	b := &process.Backend{WorkRoot: root}
 	var o output
-	t.Setenv("BALLET_RUNNER_SECRET", "do-not-leak")
-	spec := sh(`pwd; echo "home=$HOME"; echo "x=$X tok=$TOK"; echo "secret=$BALLET_RUNNER_SECRET"; echo oops >&2; touch f; exit 3`,
+	t.Setenv("BALLET_AGENT_SECRET", "do-not-leak")
+	spec := sh(`pwd; echo "home=$HOME"; echo "x=$X tok=$TOK"; echo "secret=$BALLET_AGENT_SECRET"; echo oops >&2; touch f; exit 3`,
 		map[string]string{"X": "1"})
 	spec.SecretEnv = map[string]string{"TOK": "t"}
 	code, _, err := b.Run(t.Context(), "run-1", spec, o.write)
@@ -97,7 +97,7 @@ func TestProcess_CancelStopsTheProcessGroup(t *testing.T) {
 
 func TestProcess_Errors(t *testing.T) {
 	b := &process.Backend{WorkRoot: t.TempDir(), Keep: true}
-	_, _, err := b.Run(t.Context(), "run-3", runnerproto.Spec{Command: []string{"/no/such/binary"}}, func(string, string) {})
+	_, _, err := b.Run(t.Context(), "run-3", agentproto.Spec{Command: []string{"/no/such/binary"}}, func(string, string) {})
 	assert.ErrorContains(t, err, "start /no/such/binary")
 
 	var o output
@@ -110,7 +110,7 @@ func TestProcess_Errors(t *testing.T) {
 	assert.True(t, strings.HasPrefix(dir, b.WorkRoot), "workdirs stay inside the workspace: %s", dir)
 
 	o = output{}
-	_, _, err = b.Run(t.Context(), "run-5", runnerproto.Spec{Command: []string{"pwd"}, Workdir: "../../etc"}, o.write)
+	_, _, err = b.Run(t.Context(), "run-5", agentproto.Spec{Command: []string{"pwd"}, Workdir: "../../etc"}, o.write)
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(strings.TrimSpace(o.stdout.String()), b.WorkRoot), "no escaping the workspace")
 	_ = filepath.Join
@@ -119,14 +119,14 @@ func TestProcess_Errors(t *testing.T) {
 func TestProcess_WritesFilesBeforeTheSession(t *testing.T) {
 	b := &process.Backend{WorkRoot: t.TempDir()}
 	var o output
-	spec := runnerproto.Spec{Command: []string{"sh", "-c", `cat "$HOME/.claude/skills/x/SKILL.md" ../.ballet/mcp.json`}, Workdir: "repo",
+	spec := agentproto.Spec{Command: []string{"sh", "-c", `cat "$HOME/.claude/skills/x/SKILL.md" ../.ballet/mcp.json`}, Workdir: "repo",
 		Files: map[string]string{".home/.claude/skills/x/SKILL.md": "skill\n", ".ballet/mcp.json": "{}\n"}}
 	code, _, err := b.Run(t.Context(), "run-f", spec, o.write)
 	require.NoError(t, err)
 	assert.Zero(t, code, o.stderr.String())
 	assert.Equal(t, "skill\n{}\n", o.stdout.String())
 
-	_, _, err = b.Run(t.Context(), "run-g", runnerproto.Spec{Command: []string{"true"}, Files: map[string]string{"../x": "no"}}, o.write)
+	_, _, err = b.Run(t.Context(), "run-g", agentproto.Spec{Command: []string{"true"}, Files: map[string]string{"../x": "no"}}, o.write)
 	assert.ErrorContains(t, err, "relative to the workspace")
 }
 
@@ -170,7 +170,7 @@ func TestProcess_UnknownSessionUserFails(t *testing.T) {
 // "RESULT <text>" ends a turn.
 type fakeDriver struct{ script string }
 
-func (d fakeDriver) Setup(s runnerproto.Session) (driver.Setup, error) {
+func (d fakeDriver) Setup(s agentproto.Session) (driver.Setup, error) {
 	files := map[string]string{"cfg/skill.md": "skill"}
 	env := map[string]string{"KEY": "${" + s.TokenEnv + "}"}
 	if s.Resume != nil {
@@ -196,9 +196,9 @@ func (fakeDriver) Parse(line []byte) driver.Parsed {
 	l := string(line)
 	switch {
 	case strings.HasPrefix(l, "EV "):
-		return driver.Parsed{Events: []runnerproto.Event{{Kind: "text", Text: l[3:]}}}
+		return driver.Parsed{Events: []agentproto.Event{{Kind: "text", Text: l[3:]}}}
 	case strings.HasPrefix(l, "RESULT "):
-		return driver.Parsed{Result: &runnerproto.Result{Success: true, Summary: l[7:], Turns: 1}}
+		return driver.Parsed{Result: &agentproto.Result{Success: true, Summary: l[7:], Turns: 1}}
 	case strings.HasPrefix(l, "SID "):
 		return driver.Parsed{SessionID: l[4:]}
 	}
@@ -210,7 +210,7 @@ func (o *output) events(t *testing.T) []string {
 	defer o.mu.Unlock()
 	var texts []string
 	for _, l := range strings.Split(strings.TrimSpace(o.event.String()), "\n") {
-		var e runnerproto.Event
+		var e agentproto.Event
 		require.NoError(t, json.Unmarshal([]byte(l), &e))
 		texts = append(texts, e.Text)
 	}
@@ -226,15 +226,15 @@ echo "RESULT finished"
 cat >/dev/null
 echo "EV stdin closed"`}}}
 	var o output
-	spec := runnerproto.Spec{
+	spec := agentproto.Spec{
 		Command:   []string{"sh", "-c", "mkdir repo && echo yes > prepared && echo preparing"},
 		SecretEnv: map[string]string{"TOK": "secret"},
-		Session:   &runnerproto.Session{Runtime: "fake", Prompt: "do it", TokenEnv: "TOK", Dir: "repo"},
+		Session:   &agentproto.Session{Runtime: "fake", Prompt: "do it", TokenEnv: "TOK", Dir: "repo"},
 	}
 	code, res, err := b.Run(t.Context(), "run-s", spec, o.write)
 	require.NoError(t, err)
 	assert.Equal(t, 0, code)
-	assert.Equal(t, &runnerproto.Result{Success: true, Summary: "finished", Turns: 1}, res)
+	assert.Equal(t, &agentproto.Result{Success: true, Summary: "finished", Turns: 1}, res)
 	assert.Equal(t, "preparing\n", o.stdout.String(), "the preparation's output is streamed as is")
 	assert.Equal(t, []string{"prompt=do it", "dir=repo key=secret skill=skill prepared=yes", "stdin closed"}, o.events(t),
 		"the prompt is sent, and standard input closes when the turn ends")
@@ -243,8 +243,8 @@ echo "EV stdin closed"`}}}
 func TestProcess_FailedPreparationSkipsTheSession(t *testing.T) {
 	b := &process.Backend{WorkRoot: t.TempDir(), Drivers: map[string]driver.Driver{"fake": fakeDriver{script: `echo "EV ran"`}}}
 	var o output
-	code, res, err := b.Run(t.Context(), "run-p", runnerproto.Spec{Command: []string{"sh", "-c", "exit 4"},
-		Session: &runnerproto.Session{Runtime: "fake", Prompt: "x"}}, o.write)
+	code, res, err := b.Run(t.Context(), "run-p", agentproto.Spec{Command: []string{"sh", "-c", "exit 4"},
+		Session: &agentproto.Session{Runtime: "fake", Prompt: "x"}}, o.write)
 	require.NoError(t, err)
 	assert.Equal(t, 4, code)
 	assert.Nil(t, res)
@@ -254,22 +254,22 @@ func TestProcess_FailedPreparationSkipsTheSession(t *testing.T) {
 func TestProcess_UnknownRuntimeFails(t *testing.T) {
 	b := &process.Backend{WorkRoot: t.TempDir()}
 	var o output
-	_, _, err := b.Run(t.Context(), "run-r", runnerproto.Spec{Session: &runnerproto.Session{Runtime: "nope", Prompt: "x"}}, o.write)
+	_, _, err := b.Run(t.Context(), "run-r", agentproto.Spec{Session: &agentproto.Session{Runtime: "nope", Prompt: "x"}}, o.write)
 	assert.ErrorContains(t, err, `unknown agent runtime "nope"`)
 }
 
 // running starts a session of the fake driver in the background; done
 // receives its result.
-func running(t *testing.T, script string) (*process.Backend, *output, chan *runnerproto.Result) {
+func running(t *testing.T, script string) (*process.Backend, *output, chan *agentproto.Result) {
 	t.Helper()
-	return runningSpec(t, script, runnerproto.Spec{Session: &runnerproto.Session{Runtime: "fake", Prompt: "go"}})
+	return runningSpec(t, script, agentproto.Spec{Session: &agentproto.Session{Runtime: "fake", Prompt: "go"}})
 }
 
-func runningSpec(t *testing.T, script string, spec runnerproto.Spec) (*process.Backend, *output, chan *runnerproto.Result) {
+func runningSpec(t *testing.T, script string, spec agentproto.Spec) (*process.Backend, *output, chan *agentproto.Result) {
 	t.Helper()
 	b := &process.Backend{WorkRoot: t.TempDir(), Drivers: map[string]driver.Driver{"fake": fakeDriver{script: script}}}
 	o := &output{}
-	done := make(chan *runnerproto.Result, 1)
+	done := make(chan *agentproto.Result, 1)
 	go func() {
 		_, res, err := b.Run(t.Context(), "run-i", spec, o.write)
 		assert.NoError(t, err)
@@ -295,16 +295,16 @@ echo "EV got $m"
 echo "RESULT two"
 cat >/dev/null`)
 	o.waitFor(t, "started")
-	require.NoError(t, b.Input("run-i", runnerproto.InputMessage, "more please"))
-	assert.ErrorIs(t, b.Input("run-i", runnerproto.InputMessage, ""), process.ErrInvalidInput)
+	require.NoError(t, b.Input("run-i", agentproto.InputMessage, "more please"))
+	assert.ErrorIs(t, b.Input("run-i", agentproto.InputMessage, ""), process.ErrInvalidInput)
 	assert.ErrorIs(t, b.Input("run-i", "shout", "x"), process.ErrInvalidInput)
 	// The interrupt line releases the script's gate; nothing is queued with it.
-	require.NoError(t, b.Input("run-i", runnerproto.InputInterrupt, ""))
+	require.NoError(t, b.Input("run-i", agentproto.InputInterrupt, ""))
 	res := <-done
-	assert.Equal(t, &runnerproto.Result{Success: true, Summary: "two", Turns: 2}, res)
+	assert.Equal(t, &agentproto.Result{Success: true, Summary: "two", Turns: 2}, res)
 	assert.Equal(t, []string{"started", "more please", "got more please"}, o.events(t),
 		"the message is shown when it reaches the session")
-	assert.ErrorIs(t, b.Input("run-i", runnerproto.InputMessage, "late"), process.ErrNoSession)
+	assert.ErrorIs(t, b.Input("run-i", agentproto.InputMessage, "late"), process.ErrNoSession)
 }
 
 func TestProcess_InterruptStopsTheTurnThenDelivers(t *testing.T) {
@@ -319,7 +319,7 @@ echo "EV got $m"
 echo "RESULT two"
 cat >/dev/null`)
 	o.waitFor(t, "started")
-	require.NoError(t, b.Input("run-i", runnerproto.InputInterrupt, "do this instead"))
+	require.NoError(t, b.Input("run-i", agentproto.InputInterrupt, "do this instead"))
 	<-done
 	assert.Equal(t, []string{"started", "saw INTERRUPT", "do this instead", "got do this instead"}, o.events(t))
 }
@@ -329,8 +329,8 @@ cat >/dev/null`)
 func hold(t *testing.T, b *process.Backend, o *output) {
 	t.Helper()
 	o.waitFor(t, "ready")
-	require.NoError(t, b.Input("run-i", runnerproto.InputHold, ""))
-	require.NoError(t, b.Input("run-i", runnerproto.InputInterrupt, ""))
+	require.NoError(t, b.Input("run-i", agentproto.InputHold, ""))
+	require.NoError(t, b.Input("run-i", agentproto.InputInterrupt, ""))
 	o.waitFor(t, "asked")
 }
 
@@ -347,7 +347,7 @@ echo "RESULT continued"
 cat >/dev/null`)
 	hold(t, b, o)
 	time.Sleep(100 * time.Millisecond) // the turn has ended: the session waits
-	require.NoError(t, b.Input("run-i", runnerproto.InputMessage, "Postgres"))
+	require.NoError(t, b.Input("run-i", agentproto.InputMessage, "Postgres"))
 	o.waitFor(t, "answer=Postgres")
 	time.Sleep(100 * time.Millisecond)
 	select {
@@ -355,7 +355,7 @@ cat >/dev/null`)
 		t.Fatal("a held session stays open after its turn")
 	default:
 	}
-	require.NoError(t, b.Input("run-i", runnerproto.InputRelease, ""))
+	require.NoError(t, b.Input("run-i", agentproto.InputRelease, ""))
 	res := <-done
 	assert.Equal(t, "continued", res.Summary)
 	assert.Equal(t, 2, res.Turns)
@@ -365,11 +365,11 @@ cat >/dev/null`)
 func TestProcess_ParkingPushesTheWorkAndSavesTheState(t *testing.T) {
 	root := t.TempDir()
 	origin := filepath.Join(root, "origin.git")
-	spec := runnerproto.Spec{
+	spec := agentproto.Spec{
 		Command: []string{"sh", "-c", "git init -q --bare " + origin + " && git clone -q " + origin + " repo"},
 		Env: map[string]string{"GIT_AUTHOR_NAME": "a", "GIT_AUTHOR_EMAIL": "a@x", "GIT_COMMITTER_NAME": "a",
 			"GIT_COMMITTER_EMAIL": "a@x"},
-		Session: &runnerproto.Session{Runtime: "fake", Prompt: "go", Dir: "repo"},
+		Session: &agentproto.Session{Runtime: "fake", Prompt: "go", Dir: "repo"},
 	}
 	b, o, done := runningSpec(t, `
 read p
@@ -383,7 +383,7 @@ echo "RESULT waiting"
 cat >/dev/null`, spec)
 	hold(t, b, o)
 	time.Sleep(100 * time.Millisecond)
-	require.NoError(t, b.Input("run-i", runnerproto.InputPark, ""))
+	require.NoError(t, b.Input("run-i", agentproto.InputPark, ""))
 	res := <-done
 	require.NotNil(t, res)
 	assert.True(t, res.Parked)
@@ -408,8 +408,8 @@ func TestProcess_ResumesAParkedSession(t *testing.T) {
 read p
 echo "EV resumed=$RESUMED state=$(cat "$HOME/state-s-1") message=$p"
 echo "RESULT done"
-cat >/dev/null`, runnerproto.Spec{Session: &runnerproto.Session{Runtime: "fake", Prompt: "The answer is 42.",
-		Resume: &runnerproto.Resume{SessionID: "s-1", State: gz.Bytes()}}})
+cat >/dev/null`, agentproto.Spec{Session: &agentproto.Session{Runtime: "fake", Prompt: "The answer is 42.",
+		Resume: &agentproto.Resume{SessionID: "s-1", State: gz.Bytes()}}})
 	<-done
 	assert.Equal(t, []string{"resumed=s-1 state=earlier turns message=The answer is 42."}, o.events(t))
 }

@@ -1,14 +1,6 @@
 Components
 ==========
 
-.. note::
-
-   Execution is moving to a fleet of long-lived agents that run sessions
-   as processes and replace the Runner
-   (:doc:`decisions/0025-agent-fleet-runs-sessions-as-processes`,
-   :doc:`decisions/0026-interactive-sessions-park-when-idle`). This page
-   describes the current system until that lands.
-
 Core
 ----
 
@@ -36,7 +28,7 @@ The system of record for everything except knowledge.
   fetch review comments, post agent reviews, merge on ``auto`` policy
   (:doc:`decisions/0007-review-on-git-platforms-via-forge-adapters`).
 - **Tracker MCP** for agents; REST for stateless and WebSocket JSON-RPC
-  for stateful traffic with the UI and Runners (:doc:`integration`).
+  for stateful traffic with the UI and agents (:doc:`integration`).
 
 Knowledge
 ---------
@@ -56,31 +48,35 @@ Separate service, separate database
 - Trusts Core-issued tokens for identity and customer scope; holds no
   tracker data beyond entity IDs.
 
-Runner
-------
+Agent
+-----
 
-Executes runs.
+Executes runs (:doc:`decisions/0025-agent-fleet-runs-sessions-as-processes`,
+:doc:`/reference/agents`). A long-lived process, one per container or
+VM; a fleet is N of them — Ballet creates no containers.
 
-- Connects to Core over WebSocket JSON-RPC; heartbeats report Runner and
-  per-session liveness.
-- Container lifecycle through the Docker/Podman API: create from
-  template, mount workspace, stream logs, enforce timeouts, clean up.
-- **Agent adapters** — one per runtime (Claude Code, Codex, opencode):
-  how to install skills, write MCP configuration, pass the prompt,
-  run headless, and parse the result.
+- Dials Core over WebSocket JSON-RPC with its token and pool label;
+  heartbeats report agent and per-session liveness.
+- Runs each session as a process group in a fresh workspace, as an
+  unprivileged session user, and removes the workspace afterwards.
 - Prepares the workspace: clones the repository and creates the run's
-  branch; the agent pushes it.
-- Later: Kubernetes backend behind the same interface
-  (:doc:`decisions/0009-devcontainer-per-run-on-docker-or-podman`).
+  branch; the coding agent pushes it.
+- **Drivers** — one per runtime (Claude Code, opencode): skills, MCP
+  configuration, the gateway, the session protocol; they normalize the
+  session's output into events and keep it open between turns, so
+  humans can talk to it and it can wait for answers, park and resume
+  (:doc:`decisions/0026-interactive-sessions-park-when-idle`).
+- Toolchains come from the project's devcontainer with the ballet-agent
+  Feature (:doc:`/how-to/agent-pools`); Core routes runs by pool.
 
 LLM Gateway
 -----------
 
-A proxy between containers and LLM providers
+A proxy between agent sessions and LLM providers
 (:doc:`decisions/0011-llm-gateway-for-credentials-and-metering`).
 
 - Authenticates the run token, injects the customer's (or project's)
-  provider credentials — containers never see real keys.
+  provider credentials — sessions never see real keys.
 - Meters tokens per request and attributes them to run → ticket →
   project → customer.
 - Exposes usage metrics (:doc:`observability`).

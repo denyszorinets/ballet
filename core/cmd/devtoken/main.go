@@ -18,7 +18,7 @@ import (
 
 func main() {
 	keys := flag.String("keys", "data/token-keys.json", "Core's token key file ([tokens] key_file)")
-	kind := flag.String("kind", "run", "token kind: run, runner, planner or service")
+	kind := flag.String("kind", "run", "token kind: run, agent, planner or service")
 	sub := flag.String("sub", "run:dev", "subject")
 	aud := flag.String("aud", "gateway", "comma-separated audience")
 	customer := flag.String("customer", "", "customer key")

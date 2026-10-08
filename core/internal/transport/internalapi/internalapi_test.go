@@ -31,8 +31,8 @@ func TestInternalAPI_AcceptsOnlyServiceTokensWithCapability(t *testing.T) {
 	}
 	gateway := issue(runtoken.Claims{Kind: runtoken.KindService, Subject: "service:gateway", Audience: []string{"core"},
 		Capabilities: []string{runtoken.CapCredentialsRead}})
-	runner := issue(runtoken.Claims{Kind: runtoken.KindService, Subject: "service:runner", Audience: []string{"core"},
-		Capabilities: []string{runtoken.CapRunnerConnect}})
+	agentTok := issue(runtoken.Claims{Kind: runtoken.KindService, Subject: "service:agent", Audience: []string{"core"},
+		Capabilities: []string{runtoken.CapAgentConnect}})
 	run := issue(runtoken.Claims{Kind: runtoken.KindRun, Subject: "run:1", Audience: []string{"core"},
 		Customer: "c", Project: "p", Ticket: "t", Capabilities: []string{runtoken.CapCredentialsRead}})
 
@@ -48,7 +48,7 @@ func TestInternalAPI_AcceptsOnlyServiceTokensWithCapability(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, call("/internal/v1/whoami", gateway))
 	assert.Equal(t, http.StatusNoContent, call("/internal/v1/secret", gateway))
-	assert.Equal(t, http.StatusForbidden, call("/internal/v1/secret", runner), "capability required")
+	assert.Equal(t, http.StatusForbidden, call("/internal/v1/secret", agentTok), "capability required")
 	assert.Equal(t, http.StatusForbidden, call("/internal/v1/secret", run), "run tokens are not service tokens")
 	assert.Equal(t, http.StatusUnauthorized, call("/internal/v1/whoami", ""))
 	assert.Equal(t, http.StatusUnauthorized, call("/internal/v1/whoami", "not-a-token"))

@@ -14,7 +14,7 @@ import (
 // Status of a run.
 type Status string
 
-// Statuses. A run is queued until a Runner takes it (starting), runs, and
+// Statuses. A run is queued until an agent takes it (starting), runs, and
 // ends succeeded, failed or cancelled.
 const (
 	StatusQueued    Status = "queued"
@@ -30,12 +30,12 @@ func (s Status) Terminal() bool {
 	return s == StatusSucceeded || s == StatusFailed || s == StatusCancelled
 }
 
-// Active reports whether a Runner holds a run in status s.
+// Active reports whether an agent holds a run in status s.
 func (s Status) Active() bool { return s == StatusStarting || s == StatusRunning }
 
 var transitions = map[Status][]Status{
 	StatusQueued: {StatusStarting, StatusCancelled},
-	// A Runner that refuses a run sends it back to the queue.
+	// An agent that refuses a run sends it back to the queue.
 	StatusStarting: {StatusRunning, StatusSucceeded, StatusFailed, StatusCancelled, StatusQueued},
 	StatusRunning:  {StatusSucceeded, StatusFailed, StatusCancelled},
 }
@@ -61,9 +61,8 @@ type Result struct {
 	SessionID string `json:"session_id,omitempty"`
 }
 
-// Spec is what the Runner executes.
+// Spec is what the agent executes.
 type Spec struct {
-	Image          string            `json:"image,omitempty"`
 	Command        []string          `json:"command"`
 	Env            map[string]string `json:"env,omitempty"`
 	Workdir        string            `json:"workdir,omitempty"`
@@ -88,7 +87,7 @@ type Run struct {
 	Branch     string // the ticket branch the run works on ("": no repository)
 	Adapter    string // the session's agent runtime ("": a plain command)
 	Result     *Result
-	Runner     string // the Runner executing it
+	Agent      string // the agent executing it
 	ExitCode   *int
 	Error      string // why it failed or was cancelled
 	CreatedBy  string // subject of who queued it

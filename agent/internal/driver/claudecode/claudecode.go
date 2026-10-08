@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/denyszorinets/ballet/agent/internal/driver"
-	"github.com/denyszorinets/ballet/kit/runnerproto"
+	"github.com/denyszorinets/ballet/kit/agentproto"
 )
 
 // Name of the runtime.
@@ -33,7 +33,7 @@ type Driver struct {
 // Setup returns the session's files, environment and command. Skills,
 // instructions and MCP servers are Claude Code's user-level configuration
 // in HOME — outside the repository, so agents cannot commit them.
-func (d Driver) Setup(s runnerproto.Session) (driver.Setup, error) {
+func (d Driver) Setup(s agentproto.Session) (driver.Setup, error) {
 	if strings.TrimSpace(s.Prompt) == "" {
 		return driver.Setup{}, errors.New("claude-code: the session has no prompt")
 	}
@@ -153,22 +153,22 @@ func (codec) Parse(b []byte) driver.Parsed {
 		for _, c := range l.Message.Content {
 			switch c.Type {
 			case "text":
-				p.Events = append(p.Events, runnerproto.Event{Kind: runnerproto.EventText, Text: c.Text})
+				p.Events = append(p.Events, agentproto.Event{Kind: agentproto.EventText, Text: c.Text})
 			case "tool_use":
-				p.Events = append(p.Events, runnerproto.Event{Kind: runnerproto.EventToolUse, Tool: c.Name, Input: string(c.Input)})
+				p.Events = append(p.Events, agentproto.Event{Kind: agentproto.EventToolUse, Tool: c.Name, Input: string(c.Input)})
 			}
 		}
 	case "user":
 		for _, c := range l.Message.Content {
 			if c.Type == "tool_result" {
-				p.Events = append(p.Events, runnerproto.Event{Kind: runnerproto.EventToolResult,
+				p.Events = append(p.Events, agentproto.Event{Kind: agentproto.EventToolResult,
 					Text: truncate(toolText(c.Content), maxToolResult), Error: c.IsError})
 			}
 		}
 	case "result":
 		ok := l.Subtype == "success" && !l.IsError
-		p.Events = []runnerproto.Event{{Kind: runnerproto.EventResult, Text: l.Result, Error: !ok}}
-		p.Result = &runnerproto.Result{Success: ok, Summary: l.Result, Turns: l.Turns, CostUSD: l.Cost}
+		p.Events = []agentproto.Event{{Kind: agentproto.EventResult, Text: l.Result, Error: !ok}}
+		p.Result = &agentproto.Result{Success: ok, Summary: l.Result, Turns: l.Turns, CostUSD: l.Cost}
 	}
 	return p
 }

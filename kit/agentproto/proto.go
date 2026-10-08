@@ -1,17 +1,17 @@
-// Package runnerproto is the protocol between Core and agents (ADR-0025):
+// Package agentproto is the protocol between Core and agents (ADR-0025):
 // JSON-RPC over WebSocket (kit/rpc) at Path. The agent connects with its
-// token, introduces itself with runner.hello, and then receives run.start
-// and run.cancel requests; it reports run.status, run.log and
-// run.finished. Method names keep the earlier "runner" prefix.
-package runnerproto
+// token, introduces itself with agent.hello, and then receives run.start,
+// run.cancel and run.input requests; it reports run.status, run.log and
+// run.finished.
+package agentproto
 
-// Path is where Core serves the Runner API.
-const Path = "/runner/rpc"
+// Path is where Core serves the agent API.
+const Path = "/agent/rpc"
 
 // Methods. Agent → Core: Hello, Status, Log, Finished. Core → agent:
 // Start, Cancel, Input.
 const (
-	MethodHello    = "runner.hello"
+	MethodHello    = "agent.hello"
 	MethodStatus   = "run.status"
 	MethodLog      = "run.log"
 	MethodFinished = "run.finished"
@@ -20,29 +20,28 @@ const (
 	MethodInput    = "run.input"
 )
 
-// Hello introduces a Runner. Active lists runs it is still executing
-// (after a reconnect); Core fails runs it assigned to this Runner that are
+// Hello introduces an agent. Active lists runs it is still executing
+// (after a reconnect); Core fails runs it assigned to this agent that are
 // not listed.
 type Hello struct {
-	Runner   string            `json:"runner" msgpack:"runner"`     // stable name, unique per Runner
-	Labels   map[string]string `json:"labels" msgpack:"labels"`     // e.g. backend=docker
+	Agent    string            `json:"agent" msgpack:"agent"`       // stable name, unique per agent
+	Labels   map[string]string `json:"labels" msgpack:"labels"`     // e.g. pool=web
 	Capacity int               `json:"capacity" msgpack:"capacity"` // concurrent runs
 	Active   []string          `json:"active" msgpack:"active"`
 }
 
-// Spec is what a Runner executes for a run.
+// Spec is what an agent executes for a run.
 type Spec struct {
-	Image   string            `json:"image,omitempty" msgpack:"image,omitempty"` // container image (container backends)
 	Command []string          `json:"command" msgpack:"command"`
 	Env     map[string]string `json:"env,omitempty" msgpack:"env,omitempty"`
 	// SecretEnv is added to Env for the session; it holds tokens and must
-	// never be logged or persisted by the Runner.
+	// never be logged or persisted by the agent.
 	SecretEnv map[string]string `json:"secret_env,omitempty" msgpack:"secret_env,omitempty"`
 	Workdir   string            `json:"workdir,omitempty" msgpack:"workdir,omitempty"` // relative to the run's workspace
 	// Files are written into the workspace before the session starts:
-	// relative path → content. HOME is <workspace>/.home in every backend.
+	// relative path → content. HOME is <workspace>/.home.
 	Files          map[string]string `json:"files,omitempty" msgpack:"files,omitempty"`
-	TimeoutSeconds int               `json:"timeout_seconds,omitempty" msgpack:"timeout_seconds,omitempty"` // 0: Runner default
+	TimeoutSeconds int               `json:"timeout_seconds,omitempty" msgpack:"timeout_seconds,omitempty"` // 0: the agent's default
 	// Session, when set, is a coding-agent session the agent runs through
 	// its driver for Session.Runtime after Command (the workspace
 	// preparation; may be empty) succeeded.
@@ -92,13 +91,13 @@ type MCPServer struct {
 	URL  string `json:"url" msgpack:"url"`
 }
 
-// Start asks a Runner to execute a run.
+// Start asks an agent to execute a run.
 type Start struct {
 	Run  string `json:"run" msgpack:"run"`
 	Spec Spec   `json:"spec" msgpack:"spec"`
 }
 
-// Cancel asks a Runner to stop a run.
+// Cancel asks an agent to stop a run.
 type Cancel struct {
 	Run string `json:"run" msgpack:"run"`
 }
@@ -171,7 +170,7 @@ type Result struct {
 	State     []byte `json:"state,omitempty" msgpack:"state,omitempty"`
 }
 
-// Log is a chunk of run output. It is sent as a request: the Runner
+// Log is a chunk of run output. It is sent as a request: the agent
 // awaits it, so output reaches Core before run.finished.
 type Log struct {
 	Run    string `json:"run" msgpack:"run"`

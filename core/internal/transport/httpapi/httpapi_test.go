@@ -622,7 +622,7 @@ func TestExecutionAPI_SettingsShapeRuns(t *testing.T) {
 	require.Equal(t, http.StatusOK, code, x)
 	assert.Equal(t, 0.0, x["version"])
 	code, x = call(t, api, "PUT", "/api/v1/projects/WEB/execution", "alice",
-		`{"repo_url":"https://github.com/acme/web.git","default_branch":"main","image":"golang:1.27","setup":["make deps"],"version":0}`)
+		`{"repo_url":"https://github.com/acme/web.git","default_branch":"main","pool":"web","setup":["make deps"],"version":0}`)
 	require.Equal(t, http.StatusOK, code, x)
 	assert.Equal(t, "ballet/{ticket}-{slug}", x["branch_template"])
 	code, _ = call(t, api, "PUT", "/api/v1/projects/WEB/execution", "alice", `{"repo_url":"ftp://x","version":1}`)
@@ -631,7 +631,7 @@ func TestExecutionAPI_SettingsShapeRuns(t *testing.T) {
 	code, r := call(t, api, "POST", "/api/v1/items/WEB-1/runs", "alice", `{"stage":"implement","spec":{"command":["make"]}}`)
 	require.Equal(t, http.StatusCreated, code, r)
 	assert.Equal(t, "ballet/WEB-1-login-page", r["branch"])
-	assert.Equal(t, "golang:1.27", r["spec"].(map[string]any)["image"])
+	assert.Equal(t, "web", r["spec"].(map[string]any)["pool"], "runs go to the project's pool")
 
 	code, c := call(t, api, "PUT", "/api/v1/projects/WEB/credentials/git", "alice", `{"api_key":"ghp_token"}`)
 	require.Equal(t, http.StatusOK, code, c)

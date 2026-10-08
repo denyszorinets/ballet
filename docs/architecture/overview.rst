@@ -1,14 +1,6 @@
 Architecture Overview
 =====================
 
-.. note::
-
-   Execution is moving to a fleet of long-lived agents that run sessions
-   as processes and replace the Runner
-   (:doc:`decisions/0025-agent-fleet-runs-sessions-as-processes`,
-   :doc:`decisions/0026-interactive-sessions-park-when-idle`). This page
-   describes the current system until that lands.
-
 System context
 --------------
 
@@ -23,11 +15,11 @@ System context
      UI[Web UI<br/>Svelte]
      CORE[Core<br/>Go]
      KN[Knowledge<br/>Go]
-     RUN[Runner<br/>Go]
+     AG[Agents × N<br/>Go, in containers or VMs]
      GW[LLM Gateway<br/>Go]
      CDB[(Core DB<br/>SQLite)]
      KDB[(Knowledge DB<br/>SQLite)]
-     CT[Devcontainers<br/>coding agents]
+     CT[Sessions<br/>Claude Code, opencode]
      GIT[(Git platform<br/>GitHub, GitLab, Forgejo, …)]
      LLM[LLM providers]
      PROM[Prometheus / Grafana]
@@ -38,22 +30,22 @@ System context
      UI --> KN
      CORE --- CDB
      KN --- KDB
-     CORE --> RUN
-     RUN -- docker/podman API --> CT
+     AG -- WebSocket: runs, events, input --> CORE
+     AG -- processes --> CT
      CT -- tracker MCP --> CORE
      CT -- knowledge MCP --> KN
      CT -- LLM API --> GW --> LLM
      CT -- git push --> GIT
-     RUN -- clone --> GIT
+     CT -- clone --> GIT
      CORE -- forge API: PRs, state, merge --> GIT
      UI -. links .-> GIT
-     CORE & GW & RUN --> PROM
+     CORE & GW & AG --> PROM
 
 Principles
 ----------
 
 - **Orchestrate, don't reimplement.** Coding agents are external
-  products run in containers through adapters.
+  products, driven by Ballet's agents through drivers.
 - **The customer is the isolation boundary** for data, credentials and
   knowledge — enforced server-side on every request.
 - **Ballet checks, agents don't self-report.** Gates are evaluated by
@@ -61,8 +53,10 @@ Principles
   decisions).
 - **Humans grant autonomy.** Agents may propose; only humans approve
   plans and raise a ticket's autonomy.
-- **Simple first.** Single host, Docker/Podman, SQLite; rqlite,
-  Kubernetes and remote workers later behind the same Runner interface.
+- **Simple first.** SQLite (rqlite later); Ballet manages no
+  containers: a fleet of agents dials in — N containers on one host, a
+  Kubernetes Deployment, or VMs
+  (:doc:`decisions/0025-agent-fleet-runs-sessions-as-processes`).
 
 Code organization
 -----------------
@@ -76,13 +70,13 @@ deployable service, plus the Svelte UI:
    core/        Go module — tenancy, tracker, scheduler, orchestrator,
                 RBAC, skill registry, planner, tracker MCP
    knowledge/   Go module — knowledge spaces, search, lineage, MCP
-   runner/      Go module — container lifecycle, agent adapters
+   agent/       Go module — the agent: sessions as processes, runtime drivers
    gateway/     Go module — LLM proxy and usage metering
    web/         Svelte UI
    docs/        this site
 
 Inside each module, Clean Architecture boundaries apply: domain and
-application code do not depend on HTTP, SQL, Docker or MCP libraries.
+application code do not depend on HTTP, SQL or MCP libraries.
 
 See :doc:`components` for responsibilities and
 :doc:`decisions/index` for the decisions behind this shape.

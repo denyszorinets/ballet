@@ -37,7 +37,7 @@ func TestBudgets_UsedUpTicketBudgetAsksTheHumans(t *testing.T) {
 	require.NoError(t, err)
 
 	e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Waiting == "question" })
-	assert.Empty(t, e.runner.ran(), "no session starts over budget")
+	assert.Empty(t, e.agent.ran(), "no session starts over budget")
 	assert.Equal(t, tracker.StateWaitingForAnswer, e.state(t, tk.Key))
 	qs, err := e.st.Questions(t.Context(), tk.ID)
 	require.NoError(t, err)
@@ -92,7 +92,7 @@ func TestBudgets_AStageCutOffByTheGatewayWaitsInsteadOfFailing(t *testing.T) {
 
 	// The gateway starts refusing calls; the session fails.
 	exceeded.Store(&app.Exceeded{Scope: "customer", Used: 10, Limit: 10})
-	require.NoError(t, e.runner.d.Finished(t.Context(), "r1", f.RunID, 1, "", false, nil))
+	require.NoError(t, e.agent.d.Finished(t.Context(), "r1", f.RunID, 1, "", false, nil))
 	w := e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Waiting == "budget" })
 	assert.Equal(t, "implement", w.Stage, "the stage runs again once there is budget")
 }

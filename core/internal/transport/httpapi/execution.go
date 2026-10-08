@@ -12,7 +12,6 @@ type executionJSON struct {
 	Project        string            `json:"project"`
 	RepoURL        string            `json:"repo_url"`
 	DefaultBranch  string            `json:"default_branch"`
-	Image          string            `json:"image"`
 	Setup          []string          `json:"setup"`
 	Env            map[string]string `json:"env"`
 	BranchTemplate string            `json:"branch_template"`
@@ -28,7 +27,7 @@ type executionJSON struct {
 }
 
 func toExecutionJSON(v app.ExecutionView) executionJSON {
-	j := executionJSON{Project: v.ProjectKey, RepoURL: v.RepoURL, DefaultBranch: v.DefaultBranch, Image: v.Image,
+	j := executionJSON{Project: v.ProjectKey, RepoURL: v.RepoURL, DefaultBranch: v.DefaultBranch,
 		Setup: v.Setup, Env: v.Env, BranchTemplate: v.BranchTemplate, GitName: v.GitName, GitEmail: v.GitEmail,
 		Forge: v.Forge, ForgeAPIURL: v.ForgeAPIURL, LinkTemplate: v.LinkTemplate, AnswerWindow: v.AnswerWindowMinutes,
 		Pool: v.Pool, UpdatedAt: timePtr(v.UpdatedAt), Version: v.Version}
@@ -55,7 +54,6 @@ func registerExecution(mux *router, ex *app.Execution) {
 		var in struct {
 			RepoURL        string            `json:"repo_url"`
 			DefaultBranch  string            `json:"default_branch"`
-			Image          string            `json:"image"`
 			Setup          []string          `json:"setup"`
 			Env            map[string]string `json:"env"`
 			BranchTemplate string            `json:"branch_template"`
@@ -73,7 +71,7 @@ func registerExecution(mux *router, ex *app.Execution) {
 			return
 		}
 		v, err := ex.Set(r.Context(), r.PathValue("project"), execution.Settings{
-			RepoURL: in.RepoURL, DefaultBranch: in.DefaultBranch, Image: in.Image, Setup: in.Setup, Env: in.Env,
+			RepoURL: in.RepoURL, DefaultBranch: in.DefaultBranch, Setup: in.Setup, Env: in.Env,
 			BranchTemplate: in.BranchTemplate, GitName: in.GitName, GitEmail: in.GitEmail,
 			Forge: in.Forge, ForgeAPIURL: in.ForgeAPIURL, LinkTemplate: in.LinkTemplate,
 			AnswerWindowMinutes: in.AnswerWindow, Pool: in.Pool,

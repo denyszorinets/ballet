@@ -10,15 +10,15 @@ import (
 
 	"github.com/denyszorinets/ballet/agent/internal/driver"
 	"github.com/denyszorinets/ballet/agent/internal/driver/opencode"
-	"github.com/denyszorinets/ballet/kit/runnerproto"
+	"github.com/denyszorinets/ballet/kit/agentproto"
 )
 
-func session() runnerproto.Session {
-	return runnerproto.Session{
+func session() agentproto.Session {
+	return agentproto.Session{
 		Runtime: opencode.Name, Prompt: "Do it", Instructions: "Be good",
-		Skills: []runnerproto.Skill{{Name: "tdd", Description: "Test\nfirst", Body: "Write tests.",
+		Skills: []agentproto.Skill{{Name: "tdd", Description: "Test\nfirst", Body: "Write tests.",
 			Files: map[string]string{"ref/a.md": "A"}}},
-		MCP:   []runnerproto.MCPServer{{Name: "tracker", URL: "http://core/mcp/tracker"}},
+		MCP:   []agentproto.MCPServer{{Name: "tracker", URL: "http://core/mcp/tracker"}},
 		Model: "claude-x", LLMURL: "http://gw", TokenEnv: "BALLET_RUN_TOKEN",
 	}
 }
@@ -54,11 +54,11 @@ func TestSetup_ConfiguresTheGatewaySkillsAndMCPInHome(t *testing.T) {
 }
 
 func TestSetup_RejectsIncompleteSessions(t *testing.T) {
-	for name, mut := range map[string]func(*runnerproto.Session){
-		"no prompt":      func(s *runnerproto.Session) { s.Prompt = "" },
-		"no gateway":     func(s *runnerproto.Session) { s.LLMURL = "" },
-		"bad skill name": func(s *runnerproto.Session) { s.Skills[0].Name = "../x" },
-		"escaping file":  func(s *runnerproto.Session) { s.Skills[0].Files = map[string]string{"../x": ""} },
+	for name, mut := range map[string]func(*agentproto.Session){
+		"no prompt":      func(s *agentproto.Session) { s.Prompt = "" },
+		"no gateway":     func(s *agentproto.Session) { s.LLMURL = "" },
+		"bad skill name": func(s *agentproto.Session) { s.Skills[0].Name = "../x" },
+		"escaping file":  func(s *agentproto.Session) { s.Skills[0].Files = map[string]string{"../x": ""} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := session()
@@ -112,7 +112,7 @@ func started(t *testing.T) (driver.Codec, int64) {
 
 func TestCodec_NormalizesATurn(t *testing.T) {
 	c, id := started(t)
-	var events []runnerproto.Event
+	var events []agentproto.Event
 	for _, l := range [][]byte{
 		update(map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]any{"type": "text", "text": "Look"}}),
 		update(map[string]any{"sessionUpdate": "agent_message_chunk", "content": map[string]any{"type": "text", "text": "ing."}}),
@@ -135,7 +135,7 @@ func TestCodec_NormalizesATurn(t *testing.T) {
 	}
 	end := c.Parse(line(map[string]any{"jsonrpc": "2.0", "id": id, "result": map[string]any{"stopReason": "end_turn"}}))
 	events = append(events, end.Events...)
-	assert.Equal(t, []runnerproto.Event{
+	assert.Equal(t, []agentproto.Event{
 		{Kind: "text", Text: "Looking."},
 		{Kind: "tool_use", Tool: "bash", Input: `{"command":"ls"}`},
 		{Kind: "tool_result", Text: "a.go"},
@@ -143,14 +143,14 @@ func TestCodec_NormalizesATurn(t *testing.T) {
 		{Kind: "text", Text: "Done."},
 		{Kind: "result", Text: "Done."},
 	}, events)
-	assert.Equal(t, &runnerproto.Result{Success: true, Summary: "Done.", Turns: 1, CostUSD: 0.25}, end.Result)
+	assert.Equal(t, &agentproto.Result{Success: true, Summary: "Done.", Turns: 1, CostUSD: 0.25}, end.Result)
 
 	next := decode(t, c.Message("More"))
 	assert.Equal(t, "session/prompt", next.Method)
 	assert.Greater(t, *next.ID, id)
 	failed := c.Parse(line(map[string]any{"jsonrpc": "2.0", "id": *next.ID, "error": map[string]any{"code": -32603,
 		"message": "Internal error"}}))
-	assert.Equal(t, []runnerproto.Event{{Kind: "result", Text: "Internal error", Error: true}}, failed.Events)
+	assert.Equal(t, []agentproto.Event{{Kind: "result", Text: "Internal error", Error: true}}, failed.Events)
 	assert.False(t, failed.Result.Success)
 	assert.Equal(t, 1, failed.Result.Turns, "each result is one turn")
 }

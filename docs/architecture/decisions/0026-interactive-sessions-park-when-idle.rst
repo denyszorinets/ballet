@@ -135,6 +135,17 @@ Follow-up
   (done).
 - Update :doc:`/concepts/questions` as the implementation lands.
 
+Validation
+----------
+
+Tested end to end with the real Claude Code against the fake LLM
+(M7, :issue:`162`): a message sent during a turn is delivered when it
+ends; an interrupt stops a running tool call within seconds; an answer
+given while the session waits continues the same session; past a
+one-minute window the session parks (work pushed, transcript saved) and
+the next session of its stage resumes the same conversation. opencode
+sessions take messages and interrupts but start afresh after parking.
+
 References
 ----------
 

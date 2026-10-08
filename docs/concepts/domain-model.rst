@@ -16,8 +16,8 @@ Tenancy
 
 **Organization**
    The single operator of a Ballet installation. Owns organization-wide
-   resources: the skill registry, devcontainer templates, agent runtime
-   definitions and role bindings.
+   resources: the skill registry, agent pools, agent runtime definitions
+   and role bindings.
 
 **Customer**
    Identified by an immutable key such as ``acme``. The isolation
@@ -69,7 +69,8 @@ Execution entities
 
 **Run**
    One agent session executing one pipeline stage (Implement, Review,
-   Verify, Integrate) of one ticket in one devcontainer. Records the
+   Verify, Integrate) of one ticket on one agent of the project's pool, in
+   a fresh workspace. Records the
    stage, runtime, model, logs, token usage, cost, outcome and its
    structured **stage report**. A ticket has many runs: one per stage,
    plus rework and retries.
@@ -107,7 +108,7 @@ Configuration entities
 ----------------------
 
 **Process Profile**
-   Per project: which skills (and versions), which devcontainer template,
+   Per project: which skills (and versions), which agent pool,
    which gates, and the default execution policy for new tickets.
 
 **Skill**

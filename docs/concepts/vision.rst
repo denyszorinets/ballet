@@ -24,7 +24,8 @@ get tired of writing documentation. What agents lack is *context* and
 Ballet supplies both:
 
 **Fresh developer, perfect onboarding.**
-   Every ticket is executed by a new agent session in a new devcontainer.
+   Every ticket is executed by new agent sessions in fresh workspaces,
+   in the project's devcontainer environment.
    Nothing is carried over implicitly. Instead, the run receives an
    onboarding bundle: the ticket, its place in the plan, the relevant
    knowledge and the feature's history, plus the process it must follow
@@ -103,8 +104,8 @@ real project**. In scope:
 - configurable per-project pipelines, with the four-stage default
   template (:doc:`pipeline`);
 - the questions inbox and per-ticket sub-chats in the Ballet UI;
-- one agent runtime (Claude Code), one forge adapter (GitHub), local
-  Docker/Podman;
+- two agent runtimes (Claude Code, opencode), one forge adapter
+  (GitHub), a fleet of agents in containers or VMs;
 - skill registry, budgets, the digest and token/cost metrics.
 
 Later: Gantt chart UI, further runtimes and forge adapters, the lineage
