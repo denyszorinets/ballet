@@ -19,6 +19,8 @@ type Parsed struct {
 	// Result is set when a turn ended: the session waits for the next
 	// message or, when none comes, for its standard input to close.
 	Result *runnerproto.Result
+	// SessionID is the runtime's ID of the session, when the line told it.
+	SessionID string
 }
 
 // Driver drives one runtime.
@@ -30,4 +32,8 @@ type Driver interface {
 	// ends with a result; nil when the runtime cannot be interrupted.
 	Interrupt() []byte
 	Parse(line []byte) Parsed
+	// State reads what continues a session later (its transcript) from
+	// the session's HOME; Setup restores it for a Session.Resume, whose
+	// State is then uncompressed.
+	State(home, sessionID string) ([]byte, error)
 }

@@ -28,6 +28,7 @@ type fakeRunner struct {
 	secrets   []map[string]string
 	inputs    []string
 	inputErr  error
+	runs      []run.Run
 }
 
 func (f *fakeRunner) Start(_ context.Context, r run.Run, secrets map[string]string) error {
@@ -39,6 +40,7 @@ func (f *fakeRunner) Start(_ context.Context, r run.Run, secrets map[string]stri
 		return errors.New("busy")
 	}
 	f.started = append(f.started, r.ID)
+	f.runs = append(f.runs, r)
 	return nil
 }
 

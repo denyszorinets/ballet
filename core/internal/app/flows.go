@@ -481,9 +481,9 @@ func (fl *Flows) handleFinished(ctx context.Context, j Job) error {
 	if err != nil {
 		return err
 	}
-	if len(asked) > 0 {
-		// The session ended to wait for answers (ADR-0015): the stage
-		// continues in a new session once they are answered.
+	if waitsForAnswers(r, asked, outcome) {
+		// The session ended to wait for answers (ADR-0015, ADR-0026): the
+		// stage continues in a new session once they are answered.
 		return fl.awaitAnswers(ctx, f, it, c, r, text)
 	}
 	_, err = fl.transition(ctx, f, it, c, outcome, text, event.System)
@@ -589,6 +589,25 @@ func (fl *Flows) unpause(ctx context.Context, f Flow) error {
 	}
 	fl.kick()
 	return nil
+}
+
+// waitsForAnswers reports whether a stage run ended to wait for answers
+// to the blocking questions it asked: it parked, or one is still open, or
+// it reported itself blocked. A session that got its answers online and
+// went on to finish its stage does not wait.
+func waitsForAnswers(r run.Run, asked []report.Question, outcome pipeline.Outcome) bool {
+	if len(asked) == 0 {
+		return false
+	}
+	if r.Result != nil && r.Result.Parked || outcome == pipeline.OutcomeBlocked {
+		return true
+	}
+	for _, q := range asked {
+		if q.Status == report.QuestionOpen {
+			return true
+		}
+	}
+	return false
 }
 
 // blockingQuestions returns the blocking questions a run asked.

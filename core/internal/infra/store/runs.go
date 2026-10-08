@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -104,6 +105,21 @@ func (s *Store) AppendRunLog(ctx context.Context, runID, stream, text string, at
 		return false, nil // the log is full
 	}
 	return false, mapWriteErr("append run log", err)
+}
+
+// SaveRunState keeps what continues a parked run's session.
+func (s *Store) SaveRunState(ctx context.Context, runID string, data []byte) error {
+	return mapWriteErr("save run state", s.db.Batch(ctx, sqlstore.Exec(`INSERT INTO run_states (run_id, data) VALUES (?, ?)
+		ON CONFLICT (run_id) DO UPDATE SET data = excluded.data`, runID, base64.StdEncoding.EncodeToString(data))))
+}
+
+// RunState returns what continues a parked run's session.
+func (s *Store) RunState(ctx context.Context, runID string) ([]byte, error) {
+	var data string
+	if err := s.db.QueryRow(ctx, `SELECT data FROM run_states WHERE run_id = ?`, runID).Scan(&data); err != nil {
+		return nil, mapReadErr("run state", err)
+	}
+	return base64.StdEncoding.DecodeString(data)
 }
 
 // RunLogs returns up to limit chunks of a run's output after seq.

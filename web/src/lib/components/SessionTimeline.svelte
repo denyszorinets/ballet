@@ -99,6 +99,7 @@
 						<strong>{e.run.stage}</strong>
 						<span class="badge" data-status={e.run.status}>{e.run.status}</span>
 						{#if rep?.outcome}<span class="badge">outcome: {rep.outcome}</span>{/if}
+						{#if e.run.result?.parked}<span class="badge">parked: waiting for answers</span>{/if}
 						<span class="muted small">
 							{new Date(e.run.created_at).toLocaleString()}
 							{#if duration(e.run)}· {duration(e.run)}{/if}

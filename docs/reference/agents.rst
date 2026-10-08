@@ -122,8 +122,10 @@ turns, cost, success — with ``run.finished``.
 
 .. _reference-agents-talk:
 
-**Talking to a running session**
-(:doc:`/architecture/decisions/0026-interactive-sessions-park-when-idle`).
+Talking to a running session
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+(:doc:`/architecture/decisions/0026-interactive-sessions-park-when-idle`)
 People with ``run.manage`` send input to a running session from its
 transcript (or ``POST /api/v1/runs/{run}/input``, :ref:`reference-rest-runs`):
 
@@ -140,7 +142,39 @@ that is refused (``409``). The run's result is its last turn's, with the
 turns of all turns. Additional event kind:
 
 ``user``
-   ``text``: a human's message reached the session.
+   ``text``: a human's message (or an answer) reached the session.
+
+.. _reference-agents-park:
+
+Waiting for answers, parking, resuming
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+(:doc:`/concepts/questions`) When a session raises a blocking question
+through the tracker MCP, Core tells its agent to **hold** it: a turn
+that ends with nothing to deliver no longer ends the session, which
+waits; messages then reach it at once. An answer goes to the waiting
+session as a message; once none of its blocking questions is open, Core
+**releases** it and it ends with its next turn.
+
+Core checks every 30 seconds for sessions that waited longer than their
+project's ``answer_window_minutes`` (execution settings; 0: Core's
+``agents.answer_window``, default ``15m``) and **parks** them: the agent
+commits all changes in the repository as ``WIP: parked while waiting for
+answers`` and pushes, reads the session's state from the driver (Claude
+Code: its transcript, ``~/.claude/projects/*/<session>.jsonl``),
+compresses it (at most 3 MiB; larger states are not kept) and reports
+a result with ``parked``, ``session_id`` and ``state``. Core keeps the
+state with the run; the run succeeds with ``result.parked``.
+
+The next session of the same stage **resumes** the parked one when its
+state was saved: its spec's session carries ``resume`` (the session ID;
+the state is added when the run starts, never stored with it) and its
+prompt is the answers. Claude Code restores the transcript and runs with
+``--resume <session>``. Without a saved state the stage starts a new
+session with the questions and answers in its onboarding bundle.
+
+Claude Code
+~~~~~~~~~~~
 
 **Claude Code** (runtime ``claude-code``) runs ``claude -p --input-format
 stream-json --output-format stream-json --permission-mode
@@ -155,6 +189,9 @@ cannot commit it:
 - ``.claude.json`` — MCP servers: the tracker (:doc:`tracker-mcp`) and
   the customer's knowledge (:doc:`knowledge-mcp`), authenticated with the
   run's token (``Bearer ${BALLET_RUN_TOKEN}``, expanded by Claude Code).
+
+Prompt and run token
+~~~~~~~~~~~~~~~~~~~~
 
 **Onboarding bundle.** The prompt is the run's onboarding bundle, built
 by Core when the run is queued (Markdown, at most 60 000 bytes):
@@ -224,9 +261,10 @@ Core's agent token (``data/service-tokens/agent.token``, audience
      - ``{"run"}``
    * - ``run.input``
      - Core → agent
-     - ``{"run", "kind": "message"|"interrupt", "text"?}`` — a human's
-       input to the run's session; an error result when it is not
-       running there (any more)
+     - ``{"run", "kind", "text"?}`` — input to the run's session: a
+       human's ``message`` or ``interrupt``; Core's ``hold``,
+       ``release`` and ``park`` (:ref:`reference-agents-park`). An error
+       result when the session is not running there (any more)
    * - ``run.status``
      - agent → Core
      - ``{"run", "status": "running"}``
@@ -236,8 +274,8 @@ Core's agent token (``data/service-tokens/agent.token``, audience
    * - ``run.finished``
      - agent → Core
      - ``{"run", "exit_code", "error"?, "cancelled"?, "result"?}``;
-       ``result`` (``{"success", "summary", "turns", "cost_usd"}``) is a
-       session's
+       ``result`` (``{"success", "summary", "turns", "cost_usd",
+       "parked"?, "session_id"?, "state"?}``) is a session's
 
 Every agent → Core message is a request the agent awaits, so a run's
 output always reaches Core before its ``run.finished``. The agent

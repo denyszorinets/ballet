@@ -993,6 +993,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				branch_template: 'ballet/{ticket}-{slug}',
 				git_name: '',
 				git_email: '',
+				answer_window_minutes: 0,
 				version: 0
 			};
 			if (method === 'PUT') {

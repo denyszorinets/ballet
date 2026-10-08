@@ -2,6 +2,8 @@ package claudecode_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -90,7 +92,7 @@ func TestParse_NormalizesEvents(t *testing.T) {
 		events []runnerproto.Event
 		result *runnerproto.Result
 	}{
-		{name: "init is ignored", line: `{"type":"system","subtype":"init","session_id":"s"}`},
+		{name: "init has no events", line: `{"type":"system","subtype":"init","session_id":"s"}`},
 		{name: "not json is ignored", line: `warming up`},
 		{
 			name: "assistant text and tool use",
@@ -154,4 +156,34 @@ func TestInterrupt_IsAControlRequest(t *testing.T) {
 	assert.Equal(t, "control_request", m.Type)
 	assert.NotEmpty(t, m.RequestID)
 	assert.Equal(t, "interrupt", m.Request.Subtype)
+}
+
+func TestParse_KeepsTheSessionID(t *testing.T) {
+	p := claudecode.Driver{}.Parse([]byte(`{"type":"system","subtype":"init","session_id":"abc-1"}`))
+	assert.Equal(t, "abc-1", p.SessionID)
+}
+
+func TestResume_RestoresTheTranscriptAndResumes(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".claude", "projects", "-tmp-ws-repo")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "abc-1.jsonl"), []byte("{\"x\":1}\n"), 0o644))
+	d := claudecode.Driver{}
+	state, err := d.State(home, "abc-1")
+	require.NoError(t, err)
+	_, err = d.State(home, "other")
+	assert.Error(t, err)
+	_, err = d.State(home, "../x")
+	assert.Error(t, err)
+
+	s := session()
+	s.Resume = &runnerproto.Resume{SessionID: "abc-1", State: state}
+	setup, err := d.Setup(s)
+	require.NoError(t, err)
+	assert.Equal(t, "{\"x\":1}\n", setup.Files[".claude/projects/ballet-resumed/abc-1.jsonl"])
+	assert.Equal(t, []string{"--resume", "abc-1"}, setup.Command[len(setup.Command)-2:])
+
+	s.Resume.SessionID = "../../etc"
+	_, err = d.Setup(s)
+	assert.Error(t, err)
 }

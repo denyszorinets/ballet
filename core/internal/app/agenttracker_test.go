@@ -42,9 +42,10 @@ func TestAgentTracker_RunsReportOnTheirTicketOnly(t *testing.T) {
 	assert.ErrorIs(t, err, app.ErrInvalid)
 	_, err = at.Report(t.Context(), me, report.KindStageReport, report.OutcomeDone, "Login works; tests added.", "Details.")
 	require.NoError(t, err)
-	q, err := at.RaiseQuestion(t.Context(), me, "Which IdP for staff?", "Keycloak or Entra.", true)
+	q, held, err := at.RaiseQuestion(t.Context(), me, "Which IdP for staff?", "Keycloak or Entra.", true)
 	require.NoError(t, err)
 	assert.Equal(t, report.QuestionOpen, q.Status)
+	assert.False(t, held, "without OnBlocking the session is not held")
 
 	text, err := at.Context(t.Context(), me)
 	require.NoError(t, err)

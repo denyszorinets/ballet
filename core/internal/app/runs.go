@@ -27,6 +27,9 @@ type RunStore interface {
 	ListRuns(ctx context.Context, f RunFilter) ([]run.Run, error)
 	AppendRunLog(ctx context.Context, runID, stream, text string, at time.Time, maxBytes int64) (bool, error)
 	RunLogs(ctx context.Context, runID string, afterSeq int64, limit int) ([]RunLog, error)
+	// SaveRunState and RunState keep what continues a parked session.
+	SaveRunState(ctx context.Context, runID string, data []byte) error
+	RunState(ctx context.Context, runID string) ([]byte, error)
 }
 
 // RunFilter selects runs; zero fields do not filter.
@@ -72,8 +75,22 @@ type Runs struct {
 	Tenancy    TenancyStore
 	Authz      Authorizer
 	Dispatcher *Dispatcher
-	Now        func() time.Time
-	NewID      func() string
+	// Questions lets parked sessions resume with their answers (ADR-0026);
+	// nil: a stage always starts a new session.
+	Questions QuestionLister
+	// AnswerWindow is how long sessions wait for answers before they park
+	// when the project sets none; 0: DefaultAnswerWindow.
+	AnswerWindow time.Duration
+	Logger       *slog.Logger
+	Now          func() time.Time
+	NewID        func() string
+}
+
+func (rs *Runs) logger() *slog.Logger {
+	if rs.Logger != nil {
+		return rs.Logger
+	}
+	return slog.Default()
 }
 
 // AgentInput describes an agent run.
@@ -134,10 +151,16 @@ func (rs *Runs) agentSpec(ctx context.Context, it tracker.Item, p tenancy.Projec
 	if opts.Model != "" {
 		model = opts.Model
 	}
-	return run.Spec{TimeoutSeconds: in.TimeoutSeconds, Session: &agent.Session{
+	sess := &agent.Session{
 		Runtime: in.Adapter, Prompt: bundle.Render(onboarding.DefaultMaxBytes), Instructions: sessionInstructions,
 		Skills: skills, MCP: rs.MCP, Model: model, LLMURL: rs.LLMURL, TokenEnv: rs.TokenEnv,
-	}}, in.Adapter, nil
+	}
+	if resume, answers, ok := rs.resumable(ctx, it.ID, stage); ok {
+		// The parked session continues with its context; its next message
+		// is the answers.
+		sess.Resume, sess.Prompt = resume, answers
+	}
+	return run.Spec{TimeoutSeconds: in.TimeoutSeconds, Session: sess}, in.Adapter, nil
 }
 
 // CreateForStage queues the agent run of a pipeline stage for Core's
@@ -160,8 +183,9 @@ func (rs *Runs) CreateForStage(ctx context.Context, it tracker.Item, stage, adap
 }
 
 // sessionInstructions are the standing instructions of every agent session.
-const sessionInstructions = `You are a coding agent run by Ballet. You work unattended: nobody answers
-in this session. Your task, the ticket and its context are in the prompt.
+const sessionInstructions = `You are a coding agent run by Ballet. You work unattended; humans may send
+you messages, and answers to your blocking questions arrive as messages.
+Your task, the ticket and its context are in the prompt.
 Use the knowledge tools to look up and record what the project knows.
 Work in the current repository on the current branch, commit and push.
 End with a short summary of what you did and what is left.`
@@ -683,6 +707,15 @@ func (d *Dispatcher) dispatch(ctx context.Context) {
 				continue
 			}
 		}
+		if rs := assigned.Spec.Session; rs != nil && rs.Resume != nil {
+			resume := *rs.Resume
+			if resume.State, err = d.Store.RunState(ctx, resume.RunID); err != nil {
+				d.logger().WarnContext(ctx, "parked session state unavailable", "run", r.ID, "error", err)
+			}
+			sess := *rs
+			sess.Resume = &resume
+			assigned.Spec.Session = &sess
+		}
 		callCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		err := st.conn.Start(callCtx, assigned, secrets)
 		cancel()
@@ -789,6 +822,11 @@ type SessionResult struct {
 	Summary string
 	Turns   int
 	CostUSD float64
+	// Parked: the session ended to wait for answers; SessionID and State
+	// (nil when the agent could not save it) continue it.
+	Parked    bool
+	SessionID string
+	State     []byte
 }
 
 // Finished records the end of a run reported by its agent; res is the
@@ -802,7 +840,16 @@ func (d *Dispatcher) Finished(ctx context.Context, runner, runID string, exitCod
 	if r.Spec.Session != nil && !cancelled {
 		switch {
 		case res != nil:
-			r.Result = &run.Result{Summary: truncate(res.Summary, 10_000), Turns: res.Turns, CostUSD: res.CostUSD}
+			r.Result = &run.Result{Summary: truncate(res.Summary, 10_000), Turns: res.Turns, CostUSD: res.CostUSD,
+				Parked: res.Parked, SessionID: res.SessionID}
+			if res.Parked && len(res.State) > 0 {
+				if err := d.Store.SaveRunState(ctx, r.ID, res.State); err != nil {
+					d.logger().ErrorContext(ctx, "save parked session state failed", "run", r.ID, "error", err)
+					r.Result.SessionID = "" // cannot resume: the next session starts afresh
+				}
+			} else if res.Parked {
+				r.Result.SessionID = ""
+			}
 			if !res.Success && exitCode == 0 && errText == "" {
 				errText = "the agent reported a failure: " + truncate(res.Summary, 500)
 			}

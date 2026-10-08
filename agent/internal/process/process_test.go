@@ -1,9 +1,13 @@
 package process_test
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -167,8 +171,17 @@ func TestProcess_UnknownSessionUserFails(t *testing.T) {
 type fakeDriver struct{ script string }
 
 func (d fakeDriver) Setup(s runnerproto.Session) (driver.Setup, error) {
-	return driver.Setup{Files: map[string]string{"cfg/skill.md": "skill"}, Env: map[string]string{"KEY": "${" + s.TokenEnv + "}"},
-		Command: []string{"sh", "-c", d.script}}, nil
+	files := map[string]string{"cfg/skill.md": "skill"}
+	env := map[string]string{"KEY": "${" + s.TokenEnv + "}"}
+	if s.Resume != nil {
+		files["state-"+s.Resume.SessionID] = string(s.Resume.State)
+		env["RESUMED"] = s.Resume.SessionID
+	}
+	return driver.Setup{Files: files, Env: env, Command: []string{"sh", "-c", d.script}}, nil
+}
+
+func (fakeDriver) State(home, sessionID string) ([]byte, error) {
+	return os.ReadFile(filepath.Join(home, "state-"+sessionID))
 }
 
 func (fakeDriver) Message(text string) []byte { return []byte(text + "\n") }
@@ -181,7 +194,9 @@ func (fakeDriver) Parse(line []byte) driver.Parsed {
 	case strings.HasPrefix(l, "EV "):
 		return driver.Parsed{Events: []runnerproto.Event{{Kind: "text", Text: l[3:]}}}
 	case strings.HasPrefix(l, "RESULT "):
-		return driver.Parsed{Result: &runnerproto.Result{Success: true, Summary: l[7:]}}
+		return driver.Parsed{Result: &runnerproto.Result{Success: true, Summary: l[7:], Turns: 1}}
+	case strings.HasPrefix(l, "SID "):
+		return driver.Parsed{SessionID: l[4:]}
 	}
 	return driver.Parsed{}
 }
@@ -215,7 +230,7 @@ echo "EV stdin closed"`}}}
 	code, res, err := b.Run(t.Context(), "run-s", spec, o.write)
 	require.NoError(t, err)
 	assert.Equal(t, 0, code)
-	assert.Equal(t, &runnerproto.Result{Success: true, Summary: "finished"}, res)
+	assert.Equal(t, &runnerproto.Result{Success: true, Summary: "finished", Turns: 1}, res)
 	assert.Equal(t, "preparing\n", o.stdout.String(), "the preparation's output is streamed as is")
 	assert.Equal(t, []string{"prompt=do it", "dir=repo key=secret skill=skill prepared=yes", "stdin closed"}, o.events(t),
 		"the prompt is sent, and standard input closes when the turn ends")
@@ -243,12 +258,16 @@ func TestProcess_UnknownRuntimeFails(t *testing.T) {
 // receives its result.
 func running(t *testing.T, script string) (*process.Backend, *output, chan *runnerproto.Result) {
 	t.Helper()
+	return runningSpec(t, script, runnerproto.Spec{Session: &runnerproto.Session{Runtime: "fake", Prompt: "go"}})
+}
+
+func runningSpec(t *testing.T, script string, spec runnerproto.Spec) (*process.Backend, *output, chan *runnerproto.Result) {
+	t.Helper()
 	b := &process.Backend{WorkRoot: t.TempDir(), Drivers: map[string]driver.Driver{"fake": fakeDriver{script: script}}}
 	o := &output{}
 	done := make(chan *runnerproto.Result, 1)
 	go func() {
-		_, res, err := b.Run(t.Context(), "run-i", runnerproto.Spec{
-			Session: &runnerproto.Session{Runtime: "fake", Prompt: "go"}}, o.write)
+		_, res, err := b.Run(t.Context(), "run-i", spec, o.write)
 		assert.NoError(t, err)
 		done <- res
 	}()
@@ -278,7 +297,7 @@ cat >/dev/null`)
 	// The interrupt line releases the script's gate; nothing is queued with it.
 	require.NoError(t, b.Input("run-i", runnerproto.InputInterrupt, ""))
 	res := <-done
-	assert.Equal(t, &runnerproto.Result{Success: true, Summary: "two"}, res)
+	assert.Equal(t, &runnerproto.Result{Success: true, Summary: "two", Turns: 2}, res)
 	assert.Equal(t, []string{"started", "more please", "got more please"}, o.events(t),
 		"the message is shown when it reaches the session")
 	assert.ErrorIs(t, b.Input("run-i", runnerproto.InputMessage, "late"), process.ErrNoSession)
@@ -299,4 +318,94 @@ cat >/dev/null`)
 	require.NoError(t, b.Input("run-i", runnerproto.InputInterrupt, "do this instead"))
 	<-done
 	assert.Equal(t, []string{"started", "saw INTERRUPT", "do this instead", "got do this instead"}, o.events(t))
+}
+
+// hold holds a fake session that printed "ready" and waits for a line,
+// then releases it with an interrupt line so its turn ends.
+func hold(t *testing.T, b *process.Backend, o *output) {
+	t.Helper()
+	o.waitFor(t, "ready")
+	require.NoError(t, b.Input("run-i", runnerproto.InputHold, ""))
+	require.NoError(t, b.Input("run-i", runnerproto.InputInterrupt, ""))
+	o.waitFor(t, "asked")
+}
+
+func TestProcess_AHeldSessionWaitsAndTakesMessagesAtOnce(t *testing.T) {
+	b, o, done := running(t, `
+read p
+echo "EV ready"
+read gate
+echo "EV asked"
+echo "RESULT waiting"
+read answer
+echo "EV answer=$answer"
+echo "RESULT continued"
+cat >/dev/null`)
+	hold(t, b, o)
+	time.Sleep(100 * time.Millisecond) // the turn has ended: the session waits
+	require.NoError(t, b.Input("run-i", runnerproto.InputMessage, "Postgres"))
+	o.waitFor(t, "answer=Postgres")
+	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-done:
+		t.Fatal("a held session stays open after its turn")
+	default:
+	}
+	require.NoError(t, b.Input("run-i", runnerproto.InputRelease, ""))
+	res := <-done
+	assert.Equal(t, "continued", res.Summary)
+	assert.Equal(t, 2, res.Turns)
+	assert.False(t, res.Parked)
+}
+
+func TestProcess_ParkingPushesTheWorkAndSavesTheState(t *testing.T) {
+	root := t.TempDir()
+	origin := filepath.Join(root, "origin.git")
+	spec := runnerproto.Spec{
+		Command: []string{"sh", "-c", "git init -q --bare " + origin + " && git clone -q " + origin + " repo"},
+		Env: map[string]string{"GIT_AUTHOR_NAME": "a", "GIT_AUTHOR_EMAIL": "a@x", "GIT_COMMITTER_NAME": "a",
+			"GIT_COMMITTER_EMAIL": "a@x"},
+		Session: &runnerproto.Session{Runtime: "fake", Prompt: "go", Dir: "repo"},
+	}
+	b, o, done := runningSpec(t, `
+read p
+echo "SID s-1"
+echo "transcript of s-1" > "$HOME/state-s-1"
+echo "half done" > work.txt
+echo "EV ready"
+read gate
+echo "EV asked"
+echo "RESULT waiting"
+cat >/dev/null`, spec)
+	hold(t, b, o)
+	time.Sleep(100 * time.Millisecond)
+	require.NoError(t, b.Input("run-i", runnerproto.InputPark, ""))
+	res := <-done
+	require.NotNil(t, res)
+	assert.True(t, res.Parked)
+	assert.Equal(t, "s-1", res.SessionID)
+	assert.Equal(t, "waiting", res.Summary)
+	zr, err := gzip.NewReader(bytes.NewReader(res.State))
+	require.NoError(t, err)
+	state, _ := io.ReadAll(zr)
+	assert.Equal(t, "transcript of s-1\n", string(state))
+	log, err := exec.Command("git", "--git-dir", origin, "log", "--all", "--format=%s", "--name-only").CombinedOutput()
+	require.NoError(t, err, string(log))
+	assert.Contains(t, string(log), "WIP: parked while waiting for answers")
+	assert.Contains(t, string(log), "work.txt")
+}
+
+func TestProcess_ResumesAParkedSession(t *testing.T) {
+	var gz bytes.Buffer
+	w := gzip.NewWriter(&gz)
+	_, _ = w.Write([]byte("earlier turns"))
+	require.NoError(t, w.Close())
+	_, o, done := runningSpec(t, `
+read p
+echo "EV resumed=$RESUMED state=$(cat "$HOME/state-s-1") message=$p"
+echo "RESULT done"
+cat >/dev/null`, runnerproto.Spec{Session: &runnerproto.Session{Runtime: "fake", Prompt: "The answer is 42.",
+		Resume: &runnerproto.Resume{SessionID: "s-1", State: gz.Bytes()}}})
+	<-done
+	assert.Equal(t, []string{"resumed=s-1 state=earlier turns message=The answer is 42."}, o.events(t))
 }

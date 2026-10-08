@@ -36,8 +36,12 @@ type Settings struct {
 	Forge          string // "github", "git" or "" (github for github.com, else git)
 	ForgeAPIURL    string // GitHub Enterprise API; "" : https://api.github.com
 	LinkTemplate   string // generic git: link of a branch, {branch} and {base}
-	UpdatedAt      time.Time
-	Version        int64
+	// AnswerWindowMinutes is how long a session waits online for answers
+	// to its blocking questions before it parks (ADR-0026); 0: Ballet's
+	// default.
+	AnswerWindowMinutes int
+	UpdatedAt           time.Time
+	Version             int64
 }
 
 // DefaultBranchTemplate names ticket branches when a project sets none.
@@ -99,6 +103,9 @@ func (s Settings) Validate() error {
 			(u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 			errs = append(errs, fmt.Errorf("%s must be an http(s) URL", name))
 		}
+	}
+	if s.AnswerWindowMinutes < 0 || s.AnswerWindowMinutes > 24*60 {
+		errs = append(errs, errors.New("answer_window_minutes must be 0 (the default) to 1440"))
 	}
 	if len(s.Image) > 300 || strings.ContainsAny(s.Image, " \t\n") {
 		errs = append(errs, errors.New("image must be an image reference"))

@@ -25,12 +25,14 @@ test('admins configure execution and the git token', async ({ page }) => {
 	await form.getByLabel('Image').fill('golang:1.27');
 	await form.getByLabel('Setup commands (one per line)').fill('make deps\n\ngo mod download');
 	await form.getByLabel('Environment (KEY=value per line)').fill('CI=1\nGOFLAGS=-mod=mod');
+	await form.getByLabel('Answer window (minutes)').fill('30');
 	await form.getByRole('button', { name: 'Save' }).click();
 	await expect(page.getByText('Saved.')).toBeVisible();
 	expect(core.execution.WEB).toMatchObject({
 		repo_url: 'https://github.com/acme/web.git',
 		setup: ['make deps', 'go mod download'],
 		env: { CI: '1', GOFLAGS: '-mod=mod' },
+		answer_window_minutes: 30,
 		version: 1
 	});
 
