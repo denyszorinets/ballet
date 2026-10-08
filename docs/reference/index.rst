@@ -11,7 +11,7 @@ Exact, exhaustive descriptions of configuration and interfaces.
    realtime-api
    planner
    pipelines
-   runners
+   agents
    llm-gateway
    metrics
    knowledge-mcp

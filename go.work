@@ -5,5 +5,5 @@ use (
 	./gateway
 	./kit
 	./knowledge
-	./runner
+	./agent
 )

@@ -70,7 +70,7 @@ usage = dashboard("ballet-llm-usage", "Ballet · LLM usage", "Tokens and request
 ])
 
 platform = dashboard("ballet-platform", "Ballet · Platform", "Services, jobs, runs and sessions.", [
-    panel(1, "Services up", "stat", [('up{job=~"core|knowledge|gateway|runner"}', "{{job}}")], 0, 0, 12, 4),
+    panel(1, "Services up", "stat", [('up{job=~"core|knowledge|gateway|agent"}', "{{job}}")], 0, 0, 12, 4),
     panel(2, "Dead jobs in range", "stat", [('sum(increase(ballet_jobs_total{result="dead"}[$__range])) or vector(0)', "dead")], 12, 0, 6, 4),
     panel(3, "Runs active", "stat", [(f'sum(ballet_runs_active{{{SEL}}}) or vector(0)', "active")], 18, 0, 6, 4),
     panel(4, "Jobs by kind and result", "timeseries", [('sum by (kind, result) (increase(ballet_jobs_total[1h]))', "{{kind}} {{result}}")], 0, 4),

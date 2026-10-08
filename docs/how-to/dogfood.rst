@@ -16,15 +16,16 @@ What you need
 - Agent sessions need Ballet's toolchains (Go, Bun, uv, git, Claude
   Code):
 
-  - with the **Docker backend**, build the dogfooding image:
+  - with the compose installation, run the agent from the dogfooding
+    image:
 
     .. code-block:: bash
 
-       docker build -f deploy/agent/Containerfile -t ballet-agent deploy/agent
+       make images
        docker build -f deploy/agent/ballet.Containerfile -t ballet-dogfood deploy/agent
+       BALLET_AGENT_IMAGE=ballet-dogfood docker compose -f deploy/compose.yaml up -d agent
 
-  - with the **process backend** (``make run`` in the devcontainer), the
-    sessions use the host's tools.
+  - with ``make run`` in the devcontainer, the sessions use its tools.
 
 Set up the project
 ------------------
@@ -40,7 +41,7 @@ after changing skills or settings. It
 - stores the Anthropic key (customer) and the git token (project);
 - configures execution: this repository, branches
   ``feature/{ticket}_{slug}`` from ``develop`` (GitFlow), the GitHub
-  forge, and the ``ballet-dogfood`` image;
+  forge;
 - imports ``.claude/skills`` as the project's skills (development, TDD,
   documentation, architecture, GitFlow, …), so sessions follow the same
   rules as this repository's human-guided work;
@@ -54,7 +55,7 @@ Other settings: ``BALLET_FORGE`` (``github`` or ``git``),
 ``BALLET_URL`` (default ``http://localhost:8080``),
 ``BALLET_TOKEN`` (an organization admin's bearer token; not needed
 without authentication, else default: the development realm's
-``alice``), ``BALLET_REPO``, ``BALLET_AGENT_IMAGE``.
+``alice``), ``BALLET_REPO``.
 
 Rehearse first
 --------------

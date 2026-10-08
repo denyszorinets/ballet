@@ -78,7 +78,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "up{job=~\"core|knowledge|gateway|runner\"}",
+          "expr": "up{job=~\"core|knowledge|gateway|agent\"}",
           "legendFormat": "{{job}}"
         }
       ],

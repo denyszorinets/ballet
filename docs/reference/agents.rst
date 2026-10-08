@@ -1,39 +1,42 @@
-Runners
-=======
+Agents
+======
 
-A **Runner** executes agent sessions — **runs** — for Core
-(:doc:`/architecture/decisions/0009-devcontainer-per-run-on-docker-or-podman`).
-Runners connect to Core; Core never connects to them, so Runners can sit
-behind NAT on any machine with a container runtime.
+An **agent** executes coding-agent sessions — **runs** — for Core
+(:doc:`/architecture/decisions/0025-agent-fleet-runs-sessions-as-processes`).
+It is a long-lived process, one per container or VM, that connects to
+Core and runs each session as an OS process in its own environment.
+Agents connect to Core; Core never connects to them, so agents can sit
+behind NAT. Ballet does not create containers: a fleet is N agent
+containers (a Kubernetes Deployment, compose, systemd on VMs).
 
 Runs
 ----
 
 A run is one session executing one pipeline **stage** of one ticket. Its
 **spec** says what to execute: ``command``, ``env``, ``workdir``,
-``timeout_seconds`` and, for container backends, ``image``.
+``timeout_seconds``. ``image`` is recorded but not used by agents.
 
 .. mermaid::
 
    stateDiagram-v2
      [*] --> queued
-     queued --> starting: assigned to a Runner
+     queued --> starting: assigned to an agent
      queued --> cancelled
-     starting --> queued: Runner refused it
+     starting --> queued: agent refused it
      starting --> running: session started
      starting --> failed
      running --> succeeded: exit code 0
-     running --> failed: non-zero exit, error, timeout, Runner gone
+     running --> failed: non-zero exit, error, timeout, agent gone
      running --> cancelled
      succeeded --> [*]
      failed --> [*]
      cancelled --> [*]
 
-- Core assigns queued runs, oldest first, to the connected Runner with
+- Core assigns queued runs, oldest first, to the connected agent with
   the most free capacity.
 - A run fails when its session exits non-zero, cannot start, times out
-  (the spec's ``timeout_seconds`` or the Runner's
-  ``runner.default_timeout``), or when its Runner stays disconnected for
+  (the spec's ``timeout_seconds`` or the agent's
+  ``session.default_timeout``), or when its agent stays disconnected for
   more than **2 minutes**.
 - Output is kept per run up to **8 MiB**; later output is dropped.
 - Every change records an event (``run.queued``, ``run.started``,
@@ -43,7 +46,7 @@ Runs are listed on their ticket and over REST
 (:ref:`reference-rest-runs`). Until the orchestrator queues runs
 automatically (M5), people with ``run.manage`` queue them by hand.
 
-.. _reference-runners-workspace:
+.. _reference-agents-workspace:
 
 Workspace preparation
 ---------------------
@@ -64,19 +67,17 @@ preparing its workspace, in the session itself, before the run's command:
 #. the ``setup`` commands, in order (any failure fails the run);
 #. the run's command, in the repository.
 
-Runs also get the project's ``image`` (unless their spec sets one), its
-``env``, and ``BALLET_TICKET``, ``BALLET_STAGE`` and ``BALLET_BRANCH``.
+Runs also get the project's ``env``, and ``BALLET_TICKET``, ``BALLET_STAGE`` and ``BALLET_BRANCH``.
 The run records its branch.
 
 **Git token.** Set it as the project's (or customer's) ``git`` credential
 (``PUT /api/v1/projects/{project}/credentials/git``). It is stored
-encrypted and delivered to the Runner only with ``run.start``, in the
+encrypted and delivered to the agent only with ``run.start``, in the
 spec's ``secret_env``: never stored with the run, never in the remote URL,
-logs or events, and never served to other services. With the Docker
-backend it is part of the container's configuration while the container
-exists.
+logs or events, and never served to other services. It exists only in
+the session's environment.
 
-.. _reference-runners-agents:
+.. _reference-agents-runs:
 
 Agent runs
 ----------
@@ -140,9 +141,10 @@ Protocol
 
 JSON-RPC over WebSocket (the transport of :doc:`realtime-api`, same
 authentication, refresh and heartbeats) at ``/runner/rpc``. The token is
-Core's runner token (``data/service-tokens/runner.token``, audience
+Core's agent token (``data/service-tokens/agent.token``, audience
 ``core``, capability ``runner.connect``). Types are in
-:repo:`kit/runnerproto/proto.go`.
+:repo:`kit/runnerproto/proto.go`; method names keep the earlier
+``runner`` prefix.
 
 .. list-table::
    :header-rows: 1
@@ -151,69 +153,78 @@ Core's runner token (``data/service-tokens/runner.token``, audience
      - Direction
      - Params
    * - ``runner.hello``
-     - Runner → Core
+     - agent → Core
      - ``{"runner", "labels", "capacity", "active"}`` — first, once per
-       connection. ``runner`` is unique among connected Runners
-       (``-32009`` otherwise). Runs Core assigned to this Runner that are
+       connection. ``runner`` is the agent's name, unique among connected agents
+       (``-32009`` otherwise). Runs Core assigned to this agent that are
        not in ``active`` fail.
    * - ``run.start``
-     - Core → Runner
-     - ``{"run", "spec"}``; ``spec.secret_env`` holds secrets the Runner
+     - Core → agent
+     - ``{"run", "spec"}``; ``spec.secret_env`` holds secrets the agent
        adds to the session's environment and must never log or store. An
        error result (e.g. at capacity) requeues the run
    * - ``run.cancel``
-     - Core → Runner
+     - Core → agent
      - ``{"run"}``
    * - ``run.status``
-     - Runner → Core
+     - agent → Core
      - ``{"run", "status": "running"}``
    * - ``run.log``
-     - Runner → Core
+     - agent → Core
      - ``{"run", "stream": "stdout"|"stderr"|"system", "text"}``
    * - ``run.finished``
-     - Runner → Core
+     - agent → Core
      - ``{"run", "exit_code", "error"?, "cancelled"?}``
 
-Every Runner → Core message is a request the Runner awaits, so a run's
-output always reaches Core before its ``run.finished``. The Runner
+Every agent → Core message is a request the agent awaits, so a run's
+output always reaches Core before its ``run.finished``. The agent
 batches output per stream (every 200 ms, at a stream change, or at
 16 KiB).
 
-A Runner reconnects with exponential backoff (0.5 s doubling to 30 s,
+An agent reconnects with exponential backoff (0.5 s doubling to 30 s,
 with jitter), introduces itself with the runs it still executes or
 holds an undelivered result for, and then delivers those results. Core
-fails the runs a reconnecting Runner does not claim. Output produced
+fails the runs a reconnecting agent does not claim. Output produced
 while disconnected is lost.
 
-Backends
+.. _reference-agents-sessions:
+
+Sessions
 --------
 
-``docker`` (default)
-   Each run gets a **fresh container** from the spec's ``image``, through
-   the Docker Engine API (Podman's compatible API works too; API
-   ``v1.41``). The Runner pulls the image if needed, creates the container
-   (named ``ballet-run-<run>``, label ``ballet.run``, ``--init``, CPU and
-   memory limits), streams its stdout and stderr, waits for it, and
-   removes it. The workspace is ``/workspace`` in the container; the
-   spec's ``workdir`` is relative to it. Cancelling stops the container
-   (``SIGTERM``, killed after 10 s).
+Each run executes as a process group in a **fresh workspace** (a
+temporary directory under ``session.work_dir``), removed afterwards. The
+spec's ``files`` are written into it first and its ``workdir`` is
+relative to it.
 
-``process`` — **development only**
-   Each run executes as a local process in a fresh temporary workspace,
-   removed afterwards (:doc:`/architecture/decisions/0023-process-backend-for-development`).
-   The environment is minimal — ``PATH``, ``LANG``, ``TZ``, ``HOME``
-   inside the workspace, ``BALLET_WORKSPACE`` and the spec's ``env``;
-   ``image`` is ignored. Cancelling stops the whole process group. There
-   is **no isolation**: the session can do anything the Runner's user can.
-   The Runner logs a warning when it starts with this backend.
+- The environment is minimal — ``PATH``, ``LANG``, ``TZ``, ``HOME``
+  (``<workspace>/.home``), ``BALLET_WORKSPACE``, the spec's ``env`` and
+  ``secret_env`` — so sessions do not inherit the agent's configuration.
+- With ``session.user`` set, the session runs as that OS user and owns
+  its workspace. The agent must run as root to switch users; sessions
+  then cannot read the agent's token file (mode ``0600``) or signal the
+  agent. Without it, sessions run as the agent's own user, and the agent
+  warns at start-up when that is root.
+- Cancelling stops the whole process group (``SIGTERM``, ``SIGKILL``
+  after 10 s).
 
-Run the Docker backend's integration tests against a local engine with
-``make runner-docker-test`` (CI runs them on every pull request).
+The container or VM is the isolation boundary: sessions share it with the
+agent and with later sessions, separated by workspaces and the session
+user. Run agents of different customers in different containers.
+
+The agent image (``make images`` builds ``ballet-agent`` from
+:repo:`deploy/Containerfile`) has git, Claude Code and common build
+tools, a session user ``ballet`` and ``BALLET_AGENT_SESSION_USER=ballet``.
+Projects needing more toolchains extend it, as
+:repo:`deploy/agent/ballet.Containerfile` does for Ballet itself.
+
+Test switching users (needs root; CI runs it on every pull request) with
+``sudo -E make agent-root-test``.
 
 Configuration
 -------------
 
-``BALLET_RUNNER_*`` environment variables override the TOML file
+``BALLET_AGENT_*`` environment variables override the TOML file
 (``-config``), as for every service (:doc:`configuration`).
 
 .. list-table::
@@ -226,43 +237,33 @@ Configuration
      - ``http://localhost:8080``
      - Core's base URL (``http`` → ``ws``)
    * - ``core.token_file``
-     - ``data/service-tokens/runner.token``
-     - The runner token Core writes; read on every connection
-   * - ``runner.name``
-     - host name
-     - Unique name of this Runner
-   * - ``runner.capacity``
-     - ``2``
-     - Concurrent runs
-   * - ``runner.labels``
+     - ``data/service-tokens/agent.token``
+     - The agent token Core writes; read on every connection
+   * - ``agent.name``
+     - host name plus a random suffix
+     - Unique name of this agent. Set a stable name to let a restarted
+       agent tell Core at once which runs it lost
+   * - ``agent.capacity``
+     - ``1``
+     - Concurrent sessions
+   * - ``agent.labels``
      - ``[]``
-     - ``key=value`` labels; ``backend=<runner.backend>`` is added
-   * - ``runner.backend``
-     - ``docker``
-     - Execution backend
-   * - ``runner.default_timeout``
+     - ``key=value`` labels
+   * - ``session.user``
+     - none: the agent's user
+     - OS user sessions run as (needs the agent to run as root)
+   * - ``session.work_dir``
+     - OS temp dir
+     - Parent of the session workspaces
+   * - ``session.keep_workspaces``
+     - ``false``
+     - Keep workspaces after sessions, for debugging
+   * - ``session.default_timeout``
      - ``2h``
      - Timeout of runs whose spec sets none (at least ``1m``)
-   * - ``docker.host``
-     - ``DOCKER_HOST`` or ``unix:///var/run/docker.sock``
-     - Engine endpoint: ``unix://``, ``tcp://`` or ``http(s)://``; checked
-       at start-up
-   * - ``docker.cpus`` / ``docker.memory_mb``
-     - ``0`` (unlimited)
-     - Limits per container
-   * - ``docker.network``
-     - engine default
-     - Network of the containers
-   * - ``process.work_dir``
-     - OS temp dir
-     - Parent of the run workspaces (process backend)
-   * - ``process.keep_workspaces``
-     - ``false``
-     - Keep workspaces after runs, for debugging
 
-Run a development Runner next to Core (no container runtime needed):
+Run an agent next to Core:
 
 .. code-block:: bash
 
-   BALLET_RUNNER_RUNNER_BACKEND=process BALLET_RUNNER_RUNNER_NAME=dev-1 \
-     go run ./runner/cmd/runner
+   BALLET_AGENT_AGENT_NAME=dev-1 go run ./agent/cmd/agent

@@ -118,5 +118,5 @@ References
 ----------
 
 - :doc:`0009-devcontainer-per-run-on-docker-or-podman`
-- :doc:`/reference/runners`
+- :doc:`/reference/agents`
 - :issue:`109`

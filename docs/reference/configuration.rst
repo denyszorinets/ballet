@@ -1,7 +1,7 @@
 Configuration
 =============
 
-Every Ballet service (``core``, ``knowledge``, ``gateway``, ``runner``) is
+Every Ballet service (``core``, ``knowledge``, ``gateway``, ``agent``) is
 configured the same way.
 
 Sources and precedence
@@ -14,7 +14,7 @@ From lowest to highest precedence:
    ``BALLET_<SERVICE>_CONFIG``;
 #. environment variables ``BALLET_<SERVICE>_<SECTION>_<KEY>``.
 
-``<SERVICE>`` is ``CORE``, ``KNOWLEDGE``, ``GATEWAY`` or ``RUNNER``. For
+``<SERVICE>`` is ``CORE``, ``KNOWLEDGE``, ``GATEWAY`` or ``AGENT``. For
 example, ``[server] addr`` of Core is ``BALLET_CORE_SERVER_ADDR``.
 
 Configuration is read once at startup; changes require a restart. The
@@ -55,7 +55,7 @@ Address the HTTP server listens on.
 
 :Type: string (``host:port``; empty host means all interfaces)
 :Default: ``:8080`` (core), ``:8081`` (knowledge), ``:8082`` (gateway),
-   ``:8083`` (runner)
+   ``:8083`` (agent)
 :Environment: ``BALLET_<SERVICE>_SERVER_ADDR``
 
 ``shutdown_timeout``
@@ -200,7 +200,7 @@ Identities of Ballet's own services (:ref:`run tokens <reference-run-tokens-serv
 ~~~~~~~~~~~~~~
 
 Directory where Core writes ``gateway.token``, ``knowledge.token`` and
-``runner.token``.
+``agent.token``.
 
 :Type: string (path)
 :Default: ``"data/service-tokens"``
@@ -356,11 +356,11 @@ The scheduler starts the pipelines of runnable tickets on its own (see
 ``[agents]`` (core)
 -------------------
 
-Coding-agent runs (:ref:`reference-runners-agents`).
+Coding-agent runs (:ref:`reference-agents-runs`).
 
 ``gateway_url`` / ``knowledge_mcp_url``
    The LLM gateway and the knowledge MCP endpoint **as reached from inside
-   run sessions** (containers may need other host names than Core).
+   run sessions** (agents on other hosts need other host names than Core).
    Default ``gateway.url`` and ``knowledge.url`` + ``/mcp``;
    ``BALLET_CORE_AGENTS_GATEWAY_URL``, ``…_KNOWLEDGE_MCP_URL``.
 

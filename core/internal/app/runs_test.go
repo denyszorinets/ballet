@@ -223,7 +223,7 @@ func TestRuns_ReconnectAndDisconnect(t *testing.T) {
 	// Gone for longer than Grace: its runs fail.
 	e.d.Disconnect("r1", second)
 	failed := e.eventually(t, a.ID, run.StatusFailed)
-	assert.Equal(t, "the runner disconnected", failed.Error)
+	assert.Equal(t, "the agent disconnected", failed.Error)
 }
 
 // echoAgent builds a session that prints its prompt; results are lines

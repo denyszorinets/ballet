@@ -15,8 +15,6 @@ Environment:
   BALLET_REPO         repository (default https://github.com/denyszorinets/ballet.git)
   ISSUES_REPO         owner/name whose issues --import-issues reads
                       (default: from BALLET_REPO)
-  BALLET_AGENT_IMAGE  image of agent sessions with the Docker backend
-                      (default ballet-dogfood, deploy/agent/ballet.Containerfile)
   BALLET_FORGE        github (default) or git (a repository without GitHub,
                       e.g. a local mirror for a rehearsal)
   ISSUES_TOKEN        token reading GitHub issues for --import-issues
@@ -107,7 +105,6 @@ def setup_execution():
     ex = must("GET", f"/projects/{PROJECT}/execution")
     must("PUT", f"/projects/{PROJECT}/execution", {
         "repo_url": REPO, "default_branch": "develop",
-        "image": os.environ.get("BALLET_AGENT_IMAGE", "ballet-dogfood"),
         "branch_template": "feature/{ticket}_{slug}",
         "git_name": "Ballet", "git_email": "ballet@users.noreply.github.com",
         "forge": os.environ.get("BALLET_FORGE", "github"), "version": ex["version"]})

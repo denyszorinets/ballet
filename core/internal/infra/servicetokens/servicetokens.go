@@ -1,5 +1,5 @@
 // Package servicetokens issues the long-lived service tokens of Ballet's own
-// services (gateway, knowledge, runner) into token files those services
+// services (gateway, knowledge, agent) into token files those services
 // read. Tokens are re-issued periodically, well before they expire.
 package servicetokens
 
@@ -25,7 +25,7 @@ type Service struct {
 var Services = []Service{
 	{Name: "gateway", Audience: []string{"core"}, Capabilities: []string{runtoken.CapCredentialsRead, runtoken.CapUsageWrite}},
 	{Name: "knowledge", Audience: []string{"core", "gateway"}, Capabilities: []string{runtoken.CapLLMEmbed}},
-	{Name: "runner", Audience: []string{"core"}, Capabilities: []string{runtoken.CapRunnerConnect}},
+	{Name: "agent", Audience: []string{"core"}, Capabilities: []string{runtoken.CapRunnerConnect}},
 }
 
 // Issuer writes service tokens to Dir/<name>.token.

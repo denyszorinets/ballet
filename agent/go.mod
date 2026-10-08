@@ -1,4 +1,4 @@
-module github.com/denyszorinets/ballet/runner
+module github.com/denyszorinets/ballet/agent
 
 go 1.27.1
 

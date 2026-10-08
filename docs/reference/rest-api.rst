@@ -130,7 +130,7 @@ Representation — the key itself is **never returned**:
 ``provider`` is ``anthropic`` (messages), ``openai`` (OpenAI-compatible
 API, used for embeddings) or ``git`` (token for cloning and pushing the
 project repository, delivered only to runs —
-:ref:`reference-runners-workspace`). ``project`` is absent for the customer
+:ref:`reference-agents-workspace`). ``project`` is absent for the customer
 default.
 
 ``GET /api/v1/customers/{customer}/credentials`` → ``200`` list
@@ -453,7 +453,7 @@ Representation: ``{"id", "type", "item": {"key", "kind", "title", "state"}}``.
 Runs
 ----
 
-Agent sessions executed by Runners (:doc:`/reference/runners`).
+Agent sessions executed by agents (:doc:`/reference/agents`).
 Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
 "branch"?, "adapter"?, "result"?: {"summary", "turns", "cost_usd"},
 "runner"?, "exit_code"?, "error"?, "created_by", "created_at",
@@ -461,7 +461,7 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
 
 ``POST /api/v1/items/{item}/runs`` — ``{"stage", "spec": {"command", "env"?, "image"?, "workdir"?, "timeout_seconds"?, "files"?}}`` or ``{"stage", "agent": {"adapter": "claude-code", "prompt", "timeout_seconds"?}}`` → ``201``
    Queues a run of a ticket by hand: a command (``spec``) or a coding
-   agent session (``agent``, :ref:`reference-runners-agents`). Needs
+   agent session (``agent``, :ref:`reference-agents-runs`). Needs
    ``run.manage`` on the project (organization and customer admins).
    ``400`` for non-tickets, both or neither of ``spec`` and ``agent``, an
    unknown adapter, an empty command or prompt, a stage not matching
@@ -523,8 +523,8 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
    ticket's pipeline once no blocking question is open.
 
 ``POST /api/v1/runs/{run}/cancel`` → ``200``
-   Cancels a queued run at once; an active run is cancelled on its Runner
-   (its status changes when the Runner reports). ``409`` if the run has
+   Cancels a queued run at once; an active run is cancelled on its agent
+   (its status changes when the agent reports). ``409`` if the run has
    ended. Needs ``run.manage``.
 
 .. _reference-rest-digest:
@@ -602,7 +602,7 @@ Execution settings
    ``version`` 0 when never set. Needs ``tracker.read``.
 
 ``PUT /api/v1/projects/{project}/execution`` — the same fields and the ``version`` read → ``200``
-   Replaces the settings (:ref:`reference-runners-workspace`). Needs
+   Replaces the settings (:ref:`reference-agents-workspace`). Needs
    ``project.update``. ``400`` for a ``repo_url`` that is not an https,
    ssh, ``git@host:path`` or file URL or that contains credentials, a
    ``branch_template`` without ``{ticket}`` or producing an invalid

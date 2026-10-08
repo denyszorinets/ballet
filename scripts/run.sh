@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Runs Ballet locally in one terminal: Core with the embedded web UI,
-# Knowledge, the LLM gateway and a Runner. Build first with `make bundle`
+# Knowledge, the LLM gateway and an agent. Build first with `make bundle`
 # (`make run` does both). Ctrl-C stops everything.
 #
 # By default there is no authentication: you are the local user, an
@@ -14,7 +14,6 @@
 #
 #   BALLET_AUTH=oidc         multiple users: sign in through the development Keycloak
 #   BALLET_FAKE_LLM=1        route the gateway to a fake Anthropic API
-#   BALLET_RUNNER_BACKEND    docker or process (default: docker when it answers)
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -25,7 +24,7 @@ if [[ -z $ISSUER && ${BALLET_AUTH:-} == oidc ]]; then
   ISSUER=http://localhost:8180/realms/ballet
 fi
 
-for b in core knowledge gateway runner; do
+for b in core knowledge gateway agent; do
   [[ -x "$BIN/$b" ]] || { echo "run: $BIN/$b is missing: run 'make bundle' first" >&2; exit 1; }
 done
 
@@ -82,7 +81,7 @@ fi
 start core "$BIN/core"
 wait_for core http://localhost:8080/healthz 60
 # Core writes the other services' tokens at start.
-for t in knowledge gateway runner; do
+for t in knowledge gateway agent; do
   i=0
   while [[ ! -s data/service-tokens/$t.token ]] && ((i++ < 20)); do sleep 0.5; done
 done
@@ -98,29 +97,16 @@ fi
 start gateway "$BIN/gateway"
 wait_for gateway http://localhost:8082/healthz 30
 
-if [[ -z ${BALLET_RUNNER_RUNNER_BACKEND:-} ]]; then
-  if [[ -n ${BALLET_RUNNER_BACKEND:-} ]]; then
-    BALLET_RUNNER_RUNNER_BACKEND=$BALLET_RUNNER_BACKEND
-  elif command -v docker >/dev/null && docker info >/dev/null 2>&1; then
-    BALLET_RUNNER_RUNNER_BACKEND=docker
-  else
-    BALLET_RUNNER_RUNNER_BACKEND=process
-  fi
-fi
-export BALLET_RUNNER_RUNNER_BACKEND
-export BALLET_RUNNER_RUNNER_NAME=${BALLET_RUNNER_RUNNER_NAME:-local}
-# Claude Code refuses to skip permission prompts as root outside a sandbox
-# (ADR-0023); runs of the process backend share this machine.
-if [[ $BALLET_RUNNER_RUNNER_BACKEND == process && $(id -u) == 0 ]]; then
-  export IS_SANDBOX=${IS_SANDBOX:-1}
-fi
-start runner "$BIN/runner"
+# Sessions run as processes on this machine (ADR-0025).
+export BALLET_AGENT_AGENT_NAME=${BALLET_AGENT_AGENT_NAME:-local}
+export BALLET_AGENT_AGENT_CAPACITY=${BALLET_AGENT_AGENT_CAPACITY:-2}
+start agent "$BIN/agent"
 
 cat <<EOF
 
   Ballet is running on http://localhost:8080
   $SIGN_IN
-  Runner backend: $BALLET_RUNNER_RUNNER_BACKEND. State and logs: $RUN_DIR
+  Agent sessions run on this machine. State and logs: $RUN_DIR
   Press Ctrl-C to stop.
 
 EOF

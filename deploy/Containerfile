@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Images of Ballet's services, one target each:
 #   docker build -f deploy/Containerfile --target core -t ballet-core .
-# Targets: core (with the web UI embedded), gateway, knowledge, runner.
+# Targets: core (with the web UI embedded), gateway, knowledge, agent.
 
 FROM oven/bun:1 AS web
 WORKDIR /src/web
@@ -18,19 +18,19 @@ COPY kit/go.mod kit/go.sum kit/
 COPY core/go.mod core/go.sum core/
 COPY gateway/go.mod gateway/go.sum gateway/
 COPY knowledge/go.mod knowledge/go.sum knowledge/
-COPY runner/go.mod runner/go.sum runner/
+COPY agent/go.mod agent/go.sum agent/
 RUN go mod download
 COPY kit/ kit/
 COPY core/ core/
 COPY gateway/ gateway/
 COPY knowledge/ knowledge/
-COPY runner/ runner/
+COPY agent/ agent/
 # Core serves the UI from its binary (bindata), like `make bundle`.
 COPY --from=web /src/web/build core/internal/transport/webui/dist
 RUN go build -trimpath -tags bindata -o /out/core ./core/cmd/core && \
     go build -trimpath -o /out/gateway ./gateway/cmd/gateway && \
     go build -trimpath -o /out/knowledge ./knowledge/cmd/knowledge && \
-    go build -trimpath -o /out/runner ./runner/cmd/runner
+    go build -trimpath -o /out/agent ./agent/cmd/agent
 
 # The services keep their state under /var/lib/ballet (data/ by default).
 FROM gcr.io/distroless/static-debian12 AS base
@@ -51,6 +51,17 @@ COPY --from=build /out/knowledge /usr/local/bin/ballet-knowledge
 EXPOSE 8081
 ENTRYPOINT ["/usr/local/bin/ballet-knowledge"]
 
-FROM base AS runner
-COPY --from=build /out/runner /usr/local/bin/ballet-runner
-ENTRYPOINT ["/usr/local/bin/ballet-runner"]
+# The agent (ADR-0025): runs coding-agent sessions as processes in this
+# container, as the unprivileged user "ballet". It is a general-purpose
+# image — git, Claude Code, common build tools; projects needing more
+# extend it (deploy/agent/ballet.Containerfile).
+FROM node:22-bookworm AS agent
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git ca-certificates curl make jq ripgrep python3 && \
+    rm -rf /var/lib/apt/lists/*
+RUN npm install -g @anthropic-ai/claude-code && npm cache clean --force
+RUN useradd --create-home --shell /bin/bash ballet
+COPY --from=build /out/agent /usr/local/bin/ballet-agent
+ENV BALLET_AGENT_SESSION_USER=ballet
+WORKDIR /var/lib/ballet
+ENTRYPOINT ["/usr/local/bin/ballet-agent"]

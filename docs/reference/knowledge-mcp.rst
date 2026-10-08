@@ -17,7 +17,7 @@ with a tool error. Entries are recorded with the run's subject as author.
 Configuring an agent
 --------------------
 
-For Claude Code (``.mcp.json`` in the run's workspace — the Runner writes
+For Claude Code (``.mcp.json`` in the run's workspace — the agent writes
 it):
 
 .. code-block:: json

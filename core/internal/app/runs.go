@@ -578,7 +578,7 @@ func (d *Dispatcher) Connect(ctx context.Context, info RunnerInfo, conn RunnerCo
 			d.mu.Unlock()
 			continue
 		}
-		d.finish(ctx, r, run.StatusFailed, nil, "the runner restarted and no longer executes this run")
+		d.finish(ctx, r, run.StatusFailed, nil, "the agent restarted and no longer executes this run")
 	}
 	d.mu.Lock()
 	st.ready = true
@@ -711,7 +711,7 @@ func (d *Dispatcher) sweep(ctx context.Context) {
 			continue
 		}
 		if now.Sub(since) > grace {
-			d.finish(ctx, r, run.StatusFailed, nil, "the runner disconnected")
+			d.finish(ctx, r, run.StatusFailed, nil, "the agent disconnected")
 		}
 	}
 }

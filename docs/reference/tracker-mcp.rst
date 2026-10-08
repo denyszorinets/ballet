@@ -4,7 +4,7 @@ Tracker MCP
 Agent runs reach the tracker through an MCP server in Core (streamable
 HTTP, stateless) at ``/mcp/tracker``. Every agent session gets it as the
 ``tracker`` server, next to ``knowledge`` (:doc:`knowledge-mcp`), set up
-by its adapter (:ref:`reference-runners-agents`).
+by its adapter (:ref:`reference-agents-runs`).
 
 Authentication
 --------------

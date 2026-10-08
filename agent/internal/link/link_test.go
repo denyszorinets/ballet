@@ -12,13 +12,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/denyszorinets/ballet/agent/internal/link"
 	"github.com/denyszorinets/ballet/kit/auth"
 	"github.com/denyszorinets/ballet/kit/rpc"
 	"github.com/denyszorinets/ballet/kit/runnerproto"
-	"github.com/denyszorinets/ballet/runner/internal/link"
 )
 
-// core is a fake Core: it records what the Runner reports.
+// core is a fake Core: it records what the agent reports.
 type core struct {
 	mu       sync.Mutex
 	conns    []*rpc.Conn
@@ -95,22 +95,22 @@ func (b backend) Run(ctx context.Context, _ string, spec runnerproto.Spec, out f
 	return 3, nil
 }
 
-func setup(t *testing.T, capacity int) (*core, *link.Runner) {
+func setup(t *testing.T, capacity int) (*core, *link.Agent) {
 	t.Helper()
 	c := &core{logs: map[string]string{}, finished: map[string]runnerproto.Finished{}, release: make(chan struct{})}
 	srv := httptest.NewServer(rpc.NewServer(rpc.ServerOptions{
 		Options: rpc.Options{Handler: c.handler},
 		Authenticate: func(_ context.Context, tok string) (auth.Identity, time.Time, error) {
-			if tok != "runner-token" {
+			if tok != "agent-token" {
 				return auth.Identity{}, time.Time{}, errors.New("bad token")
 			}
-			return auth.Identity{Kind: auth.KindService, Subject: "service:runner"}, time.Time{}, nil
+			return auth.Identity{Kind: auth.KindService, Subject: "service:agent"}, time.Time{}, nil
 		},
 	}))
 	t.Cleanup(srv.Close)
-	r := &link.Runner{
+	r := &link.Agent{
 		URL:   "ws" + strings.TrimPrefix(srv.URL, "http"),
-		Token: func(context.Context) (string, error) { return "runner-token", nil },
+		Token: func(context.Context) (string, error) { return "agent-token", nil },
 		Name:  "r1", Labels: map[string]string{"backend": "fake"}, Capacity: capacity, Backend: backend{release: c.release},
 		FlushInterval: 20 * time.Millisecond,
 	}
@@ -128,7 +128,7 @@ func start(t *testing.T, c *core, run string, command string, timeout int) error
 		Spec: runnerproto.Spec{Command: []string{command}, TimeoutSeconds: timeout}}, nil)
 }
 
-func TestRunner_ExecutesAndReports(t *testing.T) {
+func TestAgent_ExecutesAndReports(t *testing.T) {
 	c, _ := setup(t, 2)
 	assert.Equal(t, runnerproto.Hello{Runner: "r1", Labels: map[string]string{"backend": "fake"}, Capacity: 2, Active: []string{}}, c.hellos[0])
 
@@ -144,7 +144,7 @@ func TestRunner_ExecutesAndReports(t *testing.T) {
 	assert.Equal(t, "image not found", c.result(t, "run2").Error)
 }
 
-func TestRunner_CancelTimeoutCapacity(t *testing.T) {
+func TestAgent_CancelTimeoutCapacity(t *testing.T) {
 	c, _ := setup(t, 1)
 	require.NoError(t, start(t, c, "long", "sleep", 0))
 	err := start(t, c, "other", "echo", 0)
@@ -161,12 +161,12 @@ func TestRunner_CancelTimeoutCapacity(t *testing.T) {
 	assert.False(t, f.Cancelled)
 }
 
-func TestRunner_ReconnectsAndDeliversResults(t *testing.T) {
+func TestAgent_ReconnectsAndDeliversResults(t *testing.T) {
 	c, _ := setup(t, 1)
 	require.NoError(t, start(t, c, "long", "sleep", 0))
 	require.Eventually(t, func() bool { c.mu.Lock(); defer c.mu.Unlock(); return len(c.statuses) == 1 }, 5*time.Second, 5*time.Millisecond)
 
-	// Core drops the connection; the Runner comes back with its active run.
+	// Core drops the connection; the agent comes back with its active run.
 	_ = c.conn().Close()
 	require.Eventually(t, func() bool { c.mu.Lock(); defer c.mu.Unlock(); return len(c.hellos) == 2 }, 10*time.Second, 10*time.Millisecond)
 	c.mu.Lock()
@@ -177,12 +177,12 @@ func TestRunner_ReconnectsAndDeliversResults(t *testing.T) {
 	assert.True(t, c.result(t, "long").Cancelled)
 }
 
-func TestRunner_KeepsResultsFinishedWhileDisconnected(t *testing.T) {
+func TestAgent_KeepsResultsFinishedWhileDisconnected(t *testing.T) {
 	c, _ := setup(t, 1)
 	require.NoError(t, start(t, c, "quick", "gate", 0))
 	require.Eventually(t, func() bool { c.mu.Lock(); defer c.mu.Unlock(); return len(c.statuses) == 1 }, 5*time.Second, 5*time.Millisecond)
 
-	// The run ends while Core is away: on reconnect the Runner still
+	// The run ends while Core is away: on reconnect the agent still
 	// claims it, so Core waits for its result instead of failing it.
 	_ = c.conn().Close()
 	close(c.release)
