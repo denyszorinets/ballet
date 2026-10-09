@@ -25,6 +25,7 @@ type Deps struct {
 	RBAC         *app.RBAC
 	RoleBindings *app.RoleBindings
 	Tracker      *app.Tracker
+	Features     *app.Features
 	Changesets   *app.Changesets
 	Planner      *app.Planner
 	Runs         *app.Runs
@@ -62,6 +63,7 @@ func Register(mux *http.ServeMux, d Deps) []string {
 	registerRBAC(r, d.RoleBindings)
 	registerTracker(r, d.Tracker)
 	registerDependencies(r, d.Tracker)
+	registerFeatures(r, d.Features)
 	registerChangesets(r, d.Changesets)
 	registerPlanner(r, d.Planner)
 	registerRuns(r, d.Runs)

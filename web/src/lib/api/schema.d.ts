@@ -537,6 +537,134 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations/{organization}/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+            };
+            cookie?: never;
+        };
+        /** The organization's features the caller can see (tracker.read on the organization, or on a project for its features) */
+        get: operations["listFeatures"];
+        put?: never;
+        /** Add a feature (tracker.write on the organization, or on every listed project) */
+        post: operations["createFeature"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization}/features/{feature}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+                /** @description Feature key, e.g. F-12 */
+                feature: components["parameters"]["Feature"];
+            };
+            cookie?: never;
+        };
+        /** A feature with its current links */
+        get: operations["getFeature"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change a feature; appends a revision */
+        patch: operations["updateFeature"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization}/features/{feature}/revisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+                /** @description Feature key, e.g. F-12 */
+                feature: components["parameters"]["Feature"];
+            };
+            cookie?: never;
+        };
+        /** A feature's revisions, newest first */
+        get: operations["listFeatureRevisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization}/feature-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link two features ("from <type> to") */
+        post: operations["linkFeatures"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization}/feature-links/{link}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+                /** @description Feature link ID */
+                link: components["parameters"]["FeatureLink"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a link; it stays in the map's history */
+        delete: operations["unlinkFeatures"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization}/feature-graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+            };
+            cookie?: never;
+        };
+        /** The feature map as it was at a time, and every change in its history */
+        get: operations["getFeatureGraph"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations/{organization}/budget": {
         parameters: {
             query?: never;
@@ -1573,6 +1701,139 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        /** @enum {string} */
+        FeatureStatus: "planned" | "in_progress" | "live" | "changing" | "deprecated" | "removed";
+        /** @enum {string} */
+        FeatureLinkType: "derived_from" | "split_from" | "merged_into" | "supersedes" | "depends_on" | "relates";
+        Feature: {
+            /** @description F-<n>, unique within the organization */
+            key: string;
+            organization: string;
+            title: string;
+            /** @description Markdown: what the feature does now */
+            description: string;
+            status: components["schemas"]["FeatureStatus"];
+            /** @description Project keys */
+            projects: string[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /**
+             * Format: int64
+             * @description Number of the latest revision
+             */
+            version: number;
+        };
+        FeatureList: {
+            items: components["schemas"]["Feature"][];
+        };
+        FeatureDetail: {
+            key: string;
+            organization: string;
+            title: string;
+            description: string;
+            status: components["schemas"]["FeatureStatus"];
+            projects: string[];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: int64 */
+            version: number;
+            /** @description Current links from and to the feature */
+            links: components["schemas"]["FeatureLink"][];
+        };
+        CreateFeature: {
+            title: string;
+            description?: string;
+            status?: components["schemas"]["FeatureStatus"];
+            projects?: string[];
+            /** @description Why the feature exists; recorded on its first revision */
+            reason?: string;
+        };
+        UpdateFeature: {
+            /** Format: int64 */
+            version: number;
+            title?: string;
+            description?: string;
+            status?: components["schemas"]["FeatureStatus"];
+            projects?: string[];
+            /** @description Why it changed; recorded on the revision */
+            reason?: string;
+        };
+        FeatureRevision: {
+            feature: string;
+            /** Format: int64 */
+            number: number;
+            title: string;
+            description: string;
+            status: components["schemas"]["FeatureStatus"];
+            projects: string[];
+            author: components["schemas"]["Actor"];
+            reason?: string;
+            /** @description changeset, ticket, run or revert */
+            cause_kind?: string;
+            cause_ref?: string;
+            /**
+             * @description Absent: needs no review
+             * @enum {string}
+             */
+            review?: "pending" | "confirmed" | "reverted";
+            reviewed_by?: string;
+            /** Format: date-time */
+            reviewed_at?: string;
+            /** Format: date-time */
+            created_at: string;
+        };
+        FeatureRevisionList: {
+            items: components["schemas"]["FeatureRevision"][];
+        };
+        FeatureLink: {
+            id: string;
+            /** @description Feature key */
+            from: string;
+            /** @description Feature key */
+            to: string;
+            type: components["schemas"]["FeatureLinkType"];
+            created_by: components["schemas"]["Actor"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        CreateFeatureLink: {
+            from: string;
+            to: string;
+            type: components["schemas"]["FeatureLinkType"];
+        };
+        FeatureGraph: {
+            /** Format: date-time */
+            at: string;
+            features: {
+                key: string;
+                title: string;
+                status: components["schemas"]["FeatureStatus"];
+                projects: string[];
+                /**
+                 * Format: int64
+                 * @description Its latest revision at that time
+                 */
+                version: number;
+                /** Format: date-time */
+                created_at: string;
+                /** Format: date-time */
+                updated_at: string;
+            }[];
+            links: components["schemas"]["FeatureLink"][];
+            /** @description Every change of the map, oldest first */
+            changes: {
+                /** Format: date-time */
+                at: string;
+                feature: string;
+                /** @enum {string} */
+                kind: "revision" | "linked" | "unlinked";
+                summary: string;
+            }[];
+        };
         Actor: {
             /** @enum {string} */
             kind: "human" | "service" | "system";
@@ -2476,6 +2737,10 @@ export interface components {
         Provider: "anthropic" | "openai" | "git";
         /** @description Item key, e.g. WEB-42 */
         Item: string;
+        /** @description Feature key, e.g. F-12 */
+        Feature: string;
+        /** @description Feature link ID */
+        FeatureLink: string;
     };
     requestBodies: never;
     headers: never;
@@ -3478,6 +3743,225 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KillResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listFeatures: {
+        parameters: {
+            query?: {
+                /** @description Only features of this project */
+                project?: string;
+                status?: components["schemas"]["FeatureStatus"];
+            };
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createFeature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFeature"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feature"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFeature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+                /** @description Feature key, e.g. F-12 */
+                feature: components["parameters"]["Feature"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureDetail"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateFeature: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+                /** @description Feature key, e.g. F-12 */
+                feature: components["parameters"]["Feature"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFeature"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Feature"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listFeatureRevisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+                /** @description Feature key, e.g. F-12 */
+                feature: components["parameters"]["Feature"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureRevisionList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    linkFeatures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFeatureLink"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureLink"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    unlinkFeatures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+                /** @description Feature link ID */
+                link: components["parameters"]["FeatureLink"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFeatureGraph: {
+        parameters: {
+            query?: {
+                /** @description Default: now */
+                at?: string;
+                /** @description Only features of this project at that time */
+                project?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureGraph"];
                 };
             };
             default: components["responses"]["Error"];

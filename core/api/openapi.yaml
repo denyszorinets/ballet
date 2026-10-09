@@ -415,6 +415,95 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KillResult" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/organizations/{organization}/features:
+    parameters: [{ $ref: "#/components/parameters/Organization" }]
+    get:
+      operationId: listFeatures
+      tags: [features]
+      summary: The organization's features the caller can see (tracker.read on the organization, or on a project for its features)
+      parameters:
+        - { name: project, in: query, schema: { type: string }, description: Only features of this project }
+        - { name: status, in: query, schema: { $ref: "#/components/schemas/FeatureStatus" } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FeatureList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      operationId: createFeature
+      tags: [features]
+      summary: Add a feature (tracker.write on the organization, or on every listed project)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateFeature" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Feature" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/organizations/{organization}/features/{feature}:
+    parameters: [{ $ref: "#/components/parameters/Organization" }, { $ref: "#/components/parameters/Feature" }]
+    get:
+      operationId: getFeature
+      tags: [features]
+      summary: A feature with its current links
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FeatureDetail" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      operationId: updateFeature
+      tags: [features]
+      summary: Change a feature; appends a revision
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateFeature" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Feature" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/organizations/{organization}/features/{feature}/revisions:
+    parameters: [{ $ref: "#/components/parameters/Organization" }, { $ref: "#/components/parameters/Feature" }]
+    get:
+      operationId: listFeatureRevisions
+      tags: [features]
+      summary: A feature's revisions, newest first
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FeatureRevisionList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/organizations/{organization}/feature-links:
+    parameters: [{ $ref: "#/components/parameters/Organization" }]
+    post:
+      operationId: linkFeatures
+      tags: [features]
+      summary: Link two features ("from <type> to")
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateFeatureLink" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/FeatureLink" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/organizations/{organization}/feature-links/{link}:
+    parameters: [{ $ref: "#/components/parameters/Organization" }, { $ref: "#/components/parameters/FeatureLink" }]
+    delete:
+      operationId: unlinkFeatures
+      tags: [features]
+      summary: Remove a link; it stays in the map's history
+      responses:
+        "204": { description: Removed }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/organizations/{organization}/feature-graph:
+    parameters: [{ $ref: "#/components/parameters/Organization" }]
+    get:
+      operationId: getFeatureGraph
+      tags: [features]
+      summary: The feature map as it was at a time, and every change in its history
+      parameters:
+        - { name: at, in: query, schema: { type: string, format: date-time }, description: "Default: now" }
+        - { name: project, in: query, schema: { type: string }, description: Only features of this project at that time }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FeatureGraph" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/organizations/{organization}/budget:
     parameters: [{ $ref: "#/components/parameters/Organization" }]
     get:
@@ -1035,6 +1124,8 @@ components:
     Entry: { name: entry, in: path, required: true, schema: { type: string }, description: Knowledge entry ID }
     Provider: { name: provider, in: path, required: true, schema: { type: string, enum: [anthropic, openai, git] } }
     Item: { name: item, in: path, required: true, schema: { type: string }, description: "Item key, e.g. WEB-42" }
+    Feature: { name: feature, in: path, required: true, schema: { type: string }, description: "Feature key, e.g. F-12" }
+    FeatureLink: { name: link, in: path, required: true, schema: { type: string }, description: Feature link ID }
 
   responses:
     Error:
@@ -1241,6 +1332,139 @@ components:
         state: { $ref: "#/components/schemas/ItemState" }
         version: { type: integer, format: int64 }
 
+    FeatureStatus: { type: string, enum: [planned, in_progress, live, changing, deprecated, removed] }
+    FeatureLinkType: { type: string, enum: [derived_from, split_from, merged_into, supersedes, depends_on, relates] }
+    Feature:
+      type: object
+      additionalProperties: false
+      required: [key, organization, title, description, status, projects, created_at, updated_at, version]
+      properties:
+        key: { type: string, description: "F-<n>, unique within the organization" }
+        organization: { type: string }
+        title: { type: string }
+        description: { type: string, description: "Markdown: what the feature does now" }
+        status: { $ref: "#/components/schemas/FeatureStatus" }
+        projects: { type: array, items: { type: string }, description: Project keys }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, format: int64, description: Number of the latest revision }
+    FeatureList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Feature" } } }
+    FeatureDetail:
+      type: object
+      additionalProperties: false
+      required: [key, organization, title, description, status, projects, created_at, updated_at, version, links]
+      properties:
+        key: { type: string }
+        organization: { type: string }
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/FeatureStatus" }
+        projects: { type: array, items: { type: string } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+        links: { type: array, items: { $ref: "#/components/schemas/FeatureLink" }, description: Current links from and to the feature }
+    CreateFeature:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/FeatureStatus" }
+        projects: { type: array, items: { type: string } }
+        reason: { type: string, description: Why the feature exists; recorded on its first revision }
+    UpdateFeature:
+      type: object
+      additionalProperties: false
+      required: [version]
+      properties:
+        version: { type: integer, format: int64 }
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/FeatureStatus" }
+        projects: { type: array, items: { type: string } }
+        reason: { type: string, description: Why it changed; recorded on the revision }
+    FeatureRevision:
+      type: object
+      additionalProperties: false
+      required: [feature, number, title, description, status, projects, author, created_at]
+      properties:
+        feature: { type: string }
+        number: { type: integer, format: int64 }
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/FeatureStatus" }
+        projects: { type: array, items: { type: string } }
+        author: { $ref: "#/components/schemas/Actor" }
+        reason: { type: string }
+        cause_kind: { type: string, description: "changeset, ticket, run or revert" }
+        cause_ref: { type: string }
+        review: { type: string, enum: [pending, confirmed, reverted], description: "Absent: needs no review" }
+        reviewed_by: { type: string }
+        reviewed_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    FeatureRevisionList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/FeatureRevision" } } }
+    FeatureLink:
+      type: object
+      additionalProperties: false
+      required: [id, from, to, type, created_by, created_at]
+      properties:
+        id: { type: string }
+        from: { type: string, description: Feature key }
+        to: { type: string, description: Feature key }
+        type: { $ref: "#/components/schemas/FeatureLinkType" }
+        created_by: { $ref: "#/components/schemas/Actor" }
+        created_at: { type: string, format: date-time }
+    CreateFeatureLink:
+      type: object
+      additionalProperties: false
+      required: [from, to, type]
+      properties:
+        from: { type: string }
+        to: { type: string }
+        type: { $ref: "#/components/schemas/FeatureLinkType" }
+    FeatureGraph:
+      type: object
+      additionalProperties: false
+      required: [at, features, links, changes]
+      properties:
+        at: { type: string, format: date-time }
+        features:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, title, status, projects, version, created_at, updated_at]
+            properties:
+              key: { type: string }
+              title: { type: string }
+              status: { $ref: "#/components/schemas/FeatureStatus" }
+              projects: { type: array, items: { type: string } }
+              version: { type: integer, format: int64, description: Its latest revision at that time }
+              created_at: { type: string, format: date-time }
+              updated_at: { type: string, format: date-time }
+        links: { type: array, items: { $ref: "#/components/schemas/FeatureLink" } }
+        changes:
+          type: array
+          description: Every change of the map, oldest first
+          items:
+            type: object
+            additionalProperties: false
+            required: [at, feature, kind, summary]
+            properties:
+              at: { type: string, format: date-time }
+              feature: { type: string }
+              kind: { type: string, enum: [revision, linked, unlinked] }
+              summary: { type: string }
     Actor:
       type: object
       additionalProperties: false

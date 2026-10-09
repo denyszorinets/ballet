@@ -94,6 +94,7 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		Search:       &app.Search{Store: st, Tenancy: st, Authz: authz},
 		Credentials:  &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID},
 		Tracker:      tracker,
+		Features:     &app.Features{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID},
 		Changesets:   &app.Changesets{Store: st, Tracker: tracker},
 		Planner:      pl,
 		Execution:    &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},

@@ -14,5 +14,6 @@ How Ballet thinks about work, agents, knowledge and process.
    unattended-operation
    scheduling
    knowledge
+   feature-map
    skills
    comparison
