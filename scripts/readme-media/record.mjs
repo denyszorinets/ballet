@@ -150,8 +150,8 @@ const move = async (key, to) => {
 	const r = recording('question');
 	await move('GREET-2', 'ready');
 	await page.goto(base + '/inbox');
-	await r.until(async () => (await page.getByRole('textbox', { name: 'Your answer' }).count()) > 0, { timeout: 90000 });
-	await r.frame(1500);
+	await page.getByRole('textbox', { name: 'Your answer' }).waitFor({ timeout: 90000 });
+	await r.frame(2000);
 	await r.type(page.getByRole('textbox', { name: 'Your answer' }), 'Yes: accept `fr` and `french`, case-insensitive.');
 	await r.frame(800);
 	await page.getByRole('button', { name: 'Answer and resume' }).click();
