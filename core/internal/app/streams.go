@@ -315,11 +315,11 @@ func (st *Streams) resolve(ctx context.Context, stream string) (streamSpec, erro
 	if err != nil {
 		return streamSpec{}, err
 	}
-	c, err := st.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := st.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return streamSpec{}, err
 	}
-	if err := st.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := st.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return streamSpec{}, err
 	}
 	return spec, nil

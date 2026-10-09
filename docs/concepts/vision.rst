@@ -79,7 +79,7 @@ What Ballet is not
 - **Not a coding agent.** Ballet runs existing agents through adapters
   (:doc:`/architecture/decisions/0003-orchestrate-existing-coding-agents`).
 - **Not a git platform.** Code, diffs and code review stay on the
-  customer's git platform (GitHub, GitLab, Forgejo, Bitbucket, …); Ballet
+  organization's git platform (GitHub, GitLab, Forgejo, Bitbucket, …); Ballet
   links tickets to pull requests and tracks their state
   (:doc:`/architecture/decisions/0007-review-on-git-platforms-via-forge-adapters`).
 - **Not a general project tracker for humans.** The tracker is designed
@@ -89,9 +89,10 @@ What Ballet is not
 Operating model
 ---------------
 
-Ballet is designed to run an **AI development shop**: one platform
-serving many customers, each with several projects. Customer data —
-especially knowledge — is strictly isolated per customer
+One Ballet **platform** hosts many **organizations** — independent
+companies and teams, or a development shop and the clients it works
+for — each with several projects. Organization data — especially
+knowledge — is strictly isolated per organization
 (:doc:`domain-model`, :doc:`/architecture/security`).
 
 First version
@@ -109,4 +110,4 @@ real project**. In scope:
 - skill registry, budgets, the digest and token/cost metrics.
 
 Later: Gantt chart UI, further runtimes and forge adapters, the lineage
-graph, customer-facing roles, notification channels, Kubernetes.
+graph, roles for people outside an organization, notification channels, Kubernetes.

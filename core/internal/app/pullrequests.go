@@ -48,18 +48,18 @@ type PullRequests struct {
 	// Forges builds the adapter for a project's settings.
 	Forges func(s execution.Settings) (forge.Forge, error)
 	// Token returns the project's git token ("" when none).
-	Token  func(ctx context.Context, customerKey, projectKey string) (string, error)
+	Token  func(ctx context.Context, organizationKey, projectKey string) (string, error)
 	Now    func() time.Time
 	Logger *slog.Logger
 }
 
 type prScope struct {
-	ticket   tracker.Item
-	project  tenancy.Project
-	customer tenancy.Customer
-	settings execution.Settings
-	forge    forge.Forge
-	repo     forge.Repo
+	ticket       tracker.Item
+	project      tenancy.Project
+	organization tenancy.Organization
+	settings     execution.Settings
+	forge        forge.Forge
+	repo         forge.Repo
 }
 
 func (ps *PullRequests) scope(ctx context.Context, ticketKey string, a Action) (prScope, identity, error) {
@@ -75,7 +75,7 @@ func (ps *PullRequests) scope(ctx context.Context, ticketKey string, a Action) (
 	if err != nil {
 		return prScope{}, identity{}, err
 	}
-	if err := ps.Authz.Authorize(ctx, id, a, Scope{Customer: s.customer.Key, Project: s.project.Key}); err != nil {
+	if err := ps.Authz.Authorize(ctx, id, a, Scope{Organization: s.organization.Key, Project: s.project.Key}); err != nil {
 		return prScope{}, identity{}, err
 	}
 	return s, id, nil
@@ -87,11 +87,11 @@ func (ps *PullRequests) load(ctx context.Context, it tracker.Item) (prScope, err
 	if err != nil {
 		return prScope{}, err
 	}
-	c, err := ps.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := ps.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return prScope{}, err
 	}
-	s := prScope{ticket: it, project: p, customer: c}
+	s := prScope{ticket: it, project: p, organization: c}
 	if s.settings, err = ps.Execution.ExecutionSettings(ctx, p.ID); errors.Is(err, ErrNotFound) || (err == nil && s.settings.RepoURL == "") {
 		return s, fmt.Errorf("%w: project %s has no repository", ErrInvalid, p.Key)
 	} else if err != nil {
@@ -124,11 +124,11 @@ func (ps *PullRequests) Get(ctx context.Context, ticketKey string) (PRView, erro
 	if err != nil {
 		return PRView{}, err
 	}
-	c, err := ps.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := ps.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return PRView{}, err
 	}
-	if err := ps.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := ps.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return PRView{}, err
 	}
 	pr, err := ps.Store.PullRequest(ctx, it.ID)
@@ -260,7 +260,7 @@ func (ps *PullRequests) save(ctx context.Context, s prScope, pr forge.PullReques
 	if t.UpdatedAt.IsZero() {
 		t.UpdatedAt = ps.Now()
 	}
-	e := event.Event{Customer: s.customer.ID, Project: s.project.ID, EntityType: "item", EntityID: s.ticket.ID,
+	e := event.Event{Organization: s.organization.ID, Project: s.project.ID, EntityType: "item", EntityID: s.ticket.ID,
 		Type: "item.pr_updated", Actor: actor, OccurredAt: ps.Now(),
 		Payload: mustJSON(map[string]any{"number": pr.Number, "state": pr.State, "checks": pr.Checks, "review": pr.Review})}
 	if err := ps.Store.SavePullRequest(ctx, t, &e); err != nil {
@@ -320,9 +320,9 @@ func (ps *PullRequests) Poll(ctx context.Context, interval time.Duration) {
 }
 
 // GitToken resolves a project's git token for Core's own forge calls.
-func GitToken(cr *Credentials) func(ctx context.Context, customerKey, projectKey string) (string, error) {
-	return func(ctx context.Context, customerKey, projectKey string) (string, error) {
-		c, err := cr.Resolve(ctx, customerKey, projectKey, credential.ProviderGit)
+func GitToken(cr *Credentials) func(ctx context.Context, organizationKey, projectKey string) (string, error) {
+	return func(ctx context.Context, organizationKey, projectKey string) (string, error) {
+		c, err := cr.Resolve(ctx, organizationKey, projectKey, credential.ProviderGit)
 		if errors.Is(err, ErrNotFound) {
 			return "", nil
 		}

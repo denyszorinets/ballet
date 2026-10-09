@@ -3,11 +3,11 @@
 	import { getSession, type Session } from '$lib/session';
 
 	let {
-		customer,
+		organization,
 		project
 	}: {
-		customer: string;
-		/** The project; absent: the customer's budget. */
+		organization: string;
+		/** The project; absent: the organization's budget. */
 		project?: string;
 	} = $props();
 
@@ -19,8 +19,8 @@
 	let saved = $state(false);
 
 	const canEdit = $derived(
-		!!session?.permissions.can(project ? 'project.update' : 'customer.update', {
-			customer,
+		!!session?.permissions.can(project ? 'project.update' : 'organization.update', {
+			organization,
 			project
 		})
 	);
@@ -32,7 +32,9 @@
 	async function load(s: Session) {
 		const res = project
 			? await s.api.GET('/api/v1/projects/{project}/budget', { params: { path: { project } } })
-			: await s.api.GET('/api/v1/customers/{customer}/budget', { params: { path: { customer } } });
+			: await s.api.GET('/api/v1/organizations/{organization}/budget', {
+					params: { path: { organization } }
+				});
 		if (!res.data) {
 			error = apiError(res.error);
 			return;
@@ -44,7 +46,7 @@
 
 	$effect(() => {
 		void project;
-		void customer;
+		void organization;
 		getSession()
 			.then((s) => {
 				session = s;
@@ -68,8 +70,8 @@
 					params: { path: { project } },
 					body
 				})
-			: await session.api.PUT('/api/v1/customers/{customer}/budget', {
-					params: { path: { customer } },
+			: await session.api.PUT('/api/v1/organizations/{organization}/budget', {
+					params: { path: { organization } },
 					body
 				});
 		if (!res.data) {
@@ -86,7 +88,7 @@
 	<p class="muted">
 		Tokens unattended work may use (input, output and cache writes; 0: no limit). Work over budget
 		waits: a used-up ticket budget asks the humans, a daily budget waits for the next day (UTC).
-		{#if project}The ticket budget overrides the customer's.{/if}
+		{#if project}The ticket budget overrides the organization's.{/if}
 	</p>
 	{#if budget}
 		<p role="status" class:exhausted>

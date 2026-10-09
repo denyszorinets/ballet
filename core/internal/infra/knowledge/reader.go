@@ -14,7 +14,7 @@ import (
 )
 
 // Reader reads knowledge for Core itself (onboarding bundles), with a
-// short-lived Core service token limited to reading one customer's space.
+// short-lived Core service token limited to reading one organization's space.
 type Reader struct {
 	URL    *url.URL
 	Tokens *runtoken.TokenIssuer
@@ -30,16 +30,16 @@ type entryJSON struct {
 
 // ForTicket returns the entries linked to ticket and up to limit more
 // found by searching query in the project.
-func (r *Reader) ForTicket(ctx context.Context, customer, project, ticket, query string, limit int) ([]onboarding.Knowledge, error) {
+func (r *Reader) ForTicket(ctx context.Context, organization, project, ticket, query string, limit int) ([]onboarding.Knowledge, error) {
 	tok, err := r.Tokens.Issue(runtoken.Claims{Kind: runtoken.KindService, Subject: "service:core",
-		Audience: []string{"knowledge"}, Customer: customer, Capabilities: []string{runtoken.CapKnowledgeRead}}, time.Minute)
+		Audience: []string{"knowledge"}, Organization: organization, Capabilities: []string{runtoken.CapKnowledgeRead}}, time.Minute)
 	if err != nil {
 		return nil, err
 	}
 	var linked struct {
 		Items []entryJSON `json:"items"`
 	}
-	if err := r.get(ctx, tok, customer, "entries", url.Values{"item": {ticket}}, &linked); err != nil {
+	if err := r.get(ctx, tok, organization, "entries", url.Values{"item": {ticket}}, &linked); err != nil {
 		return nil, err
 	}
 	out := make([]onboarding.Knowledge, 0, len(linked.Items)+limit)
@@ -57,7 +57,7 @@ func (r *Reader) ForTicket(ctx context.Context, customer, project, ticket, query
 		} `json:"items"`
 	}
 	q := url.Values{"q": {query}, "project": {project}, "limit": {fmt.Sprint(limit + len(linked.Items))}}
-	if err := r.get(ctx, tok, customer, "search", q, &found); err != nil {
+	if err := r.get(ctx, tok, organization, "search", q, &found); err != nil {
 		return nil, err
 	}
 	for _, h := range found.Items {
@@ -70,8 +70,8 @@ func (r *Reader) ForTicket(ctx context.Context, customer, project, ticket, query
 	return out, nil
 }
 
-func (r *Reader) get(ctx context.Context, tok, customer, path string, q url.Values, out any) error {
-	u := r.URL.JoinPath("v1", "customers", customer, "knowledge", path)
+func (r *Reader) get(ctx context.Context, tok, organization, path string, q url.Values, out any) error {
+	u := r.URL.JoinPath("v1", "organizations", organization, "knowledge", path)
 	u.RawQuery = q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {

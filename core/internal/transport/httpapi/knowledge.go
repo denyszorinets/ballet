@@ -45,14 +45,14 @@ func registerKnowledge(mux *router, kp *KnowledgeProxy) {
 	}
 	forward := func(w http.ResponseWriter, r *http.Request) {
 		write := r.Method != http.MethodGet && r.Method != http.MethodHead
-		g, err := kp.Access.Authorize(r.Context(), r.PathValue("customer"), write)
+		g, err := kp.Access.Authorize(r.Context(), r.PathValue("organization"), write)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
 		tok, err := kp.Tokens.Issue(runtoken.Claims{
 			Kind: runtoken.KindService, Subject: "service:core", Audience: []string{"knowledge"},
-			Customer: g.Customer, ActingFor: g.ActingFor, Capabilities: g.Capabilities,
+			Organization: g.Organization, ActingFor: g.ActingFor, Capabilities: g.Capabilities,
 		}, knowledgeTokenTTL)
 		if err != nil {
 			writeError(w, err)
@@ -60,11 +60,11 @@ func registerKnowledge(mux *router, kp *KnowledgeProxy) {
 		}
 		proxy.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), knowledgeTokenKey{}, tok)))
 	}
-	const base = "/api/v1/customers/{customer}/knowledge/entries"
+	const base = "/api/v1/organizations/{organization}/knowledge/entries"
 	mux.handle("GET "+base, forward)
 	mux.handle("POST "+base, forward)
 	mux.handle("GET "+base+"/{entry}", forward)
 	mux.handle("PATCH "+base+"/{entry}", forward)
 	mux.handle("GET "+base+"/{entry}/versions", forward)
-	mux.handle("GET /api/v1/customers/{customer}/knowledge/search", forward)
+	mux.handle("GET /api/v1/organizations/{organization}/knowledge/search", forward)
 }

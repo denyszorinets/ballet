@@ -16,7 +16,7 @@
 	let session = $state<Session>();
 	let skill = $state<Skill>();
 	let versions = $state<Version[]>([]);
-	let projectCustomer = $state<string>();
+	let projectOrganization = $state<string>();
 	let error = $state<string>();
 	let actionError = $state<string>();
 	let notice = $state<string>();
@@ -30,7 +30,7 @@
 
 	const scope = $derived(parseScope(skill?.scope ?? 'platform'));
 	const canWrite = $derived(
-		!!session?.permissions.can('skill.write', scopeTarget(scope, projectCustomer))
+		!!session?.permissions.can('skill.write', scopeTarget(scope, projectOrganization))
 	);
 	const latest = $derived(versions[0]);
 	const draftFiles = $derived(Object.fromEntries(files.map((f) => [f.path, f.content])));
@@ -73,11 +73,11 @@
 		versions = [...(v.data?.items ?? [])].sort((a, b) => b.number - a.number);
 		reset(sk.data);
 		const sc = parseScope(sk.data.scope);
-		if (sc.kind === 'project' && !projectCustomer) {
+		if (sc.kind === 'project' && !projectOrganization) {
 			const p = await s.api.GET('/api/v1/projects/{project}', {
 				params: { path: { project: sc.key } }
 			});
-			projectCustomer = p.data?.customer;
+			projectOrganization = p.data?.organization;
 		}
 	}
 

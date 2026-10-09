@@ -91,7 +91,7 @@ func TestBudgets_AStageCutOffByTheGatewayWaitsInsteadOfFailing(t *testing.T) {
 	}, 5*time.Second, 10*time.Millisecond)
 
 	// The gateway starts refusing calls; the session fails.
-	exceeded.Store(&app.Exceeded{Scope: "customer", Used: 10, Limit: 10})
+	exceeded.Store(&app.Exceeded{Scope: "organization", Used: 10, Limit: 10})
 	require.NoError(t, e.agent.d.Finished(t.Context(), "r1", f.RunID, 1, "", false, nil))
 	w := e.waitFlow(t, tk.Key, func(f app.FlowView) bool { return f.Waiting == "budget" })
 	assert.Equal(t, "implement", w.Stage, "the stage runs again once there is budget")

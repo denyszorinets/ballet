@@ -25,10 +25,10 @@ type ReportStore interface {
 
 // RunCaller is an agent run calling Core, as its run token says.
 type RunCaller struct {
-	RunID    string // from the token subject "run:<id>"
-	Customer string
-	Project  string
-	Ticket   string
+	RunID        string // from the token subject "run:<id>"
+	Organization string
+	Project      string
+	Ticket       string
 }
 
 // AgentTracker is the tracker as agent runs see it (the tracker MCP
@@ -54,10 +54,10 @@ type AgentTracker struct {
 }
 
 type runScope struct {
-	run      run.Run
-	ticket   tracker.Item
-	project  tenancy.Project
-	customer tenancy.Customer
+	run          run.Run
+	ticket       tracker.Item
+	project      tenancy.Project
+	organization tenancy.Organization
 }
 
 // scope checks that the caller is an active run of its ticket.
@@ -74,17 +74,17 @@ func (a *AgentTracker) scope(ctx context.Context, c RunCaller) (runScope, error)
 	if err != nil {
 		return runScope{}, err
 	}
-	cu, err := a.Tenancy.CustomerByID(ctx, p.CustomerID)
+	cu, err := a.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return runScope{}, err
 	}
-	if it.Key != c.Ticket || p.Key != c.Project || cu.Key != c.Customer {
+	if it.Key != c.Ticket || p.Key != c.Project || cu.Key != c.Organization {
 		return runScope{}, fmt.Errorf("%w: the token does not match the run", ErrForbidden)
 	}
 	if !r.Status.Active() {
 		return runScope{}, fmt.Errorf("%w: run %s has ended", ErrForbidden, r.ID)
 	}
-	return runScope{run: r, ticket: it, project: p, customer: cu}, nil
+	return runScope{run: r, ticket: it, project: p, organization: cu}, nil
 }
 
 func (s runScope) actor() event.Actor {
@@ -92,7 +92,7 @@ func (s runScope) actor() event.Actor {
 }
 
 func (a *AgentTracker) itemEvent(s runScope, typ string, payload map[string]any) event.Event {
-	return event.Event{Customer: s.customer.ID, Project: s.project.ID, EntityType: "item", EntityID: s.ticket.ID,
+	return event.Event{Organization: s.organization.ID, Project: s.project.ID, EntityType: "item", EntityID: s.ticket.ID,
 		Type: typ, Actor: s.actor(), OccurredAt: a.Now(), Payload: mustJSON(payload)}
 }
 
@@ -220,7 +220,7 @@ func (a *AgentTracker) ProposeWork(ctx context.Context, c RunCaller, title, desc
 		typ = tracker.TypeFeature
 	}
 	summary := fmt.Sprintf("Proposed by run %s (%s stage of %s).\n\n%s", s.run.ID, s.run.Stage, s.ticket.Key, strings.TrimSpace(reason))
-	return a.Changesets.proposeAs(ctx, s.project, s.customer, ProposeInput{
+	return a.Changesets.proposeAs(ctx, s.project, s.organization, ProposeInput{
 		ProjectKey: s.project.Key, Title: "Discovered: " + title, Summary: summary,
 		Ops: []changeset.Op{
 			{Kind: changeset.OpCreateItem, Ref: "work", Create: &changeset.CreateItem{Kind: tracker.KindTicket, Title: title,
@@ -245,11 +245,11 @@ func (a *AgentTracker) TicketReports(ctx context.Context, ticketKey string) ([]r
 	if err != nil {
 		return nil, nil, err
 	}
-	cu, err := a.Tenancy.CustomerByID(ctx, p.CustomerID)
+	cu, err := a.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := a.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: cu.Key, Project: p.Key}); err != nil {
+	if err := a.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Organization: cu.Key, Project: p.Key}); err != nil {
 		return nil, nil, err
 	}
 	rs, err := a.Reports.Reports(ctx, it.ID, "")

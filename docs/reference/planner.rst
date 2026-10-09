@@ -11,7 +11,7 @@ Instructions
 ------------
 
 The system prompt is Ballet's built-in planner instructions, the project
-and customer, and — if the project uses one — the SKILL.md of its
+and organization, and — if the project uses one — the SKILL.md of its
 ``planner`` skill (``planner.skill``) in the version the project resolves
 (pins apply, :doc:`/concepts/skills`). Write a ``planner`` skill to give a
 project's planner its own process rules.
@@ -67,7 +67,7 @@ Tools
      - SKILL.md of a skill in the version the project uses
      - ``skill.read``
    * - ``search_knowledge``
-     - Search the customer's knowledge base; optional ``kind``, ``limit``
+     - Search the organization's knowledge base; optional ``kind``, ``limit``
      - ``knowledge.read``
    * - ``get_knowledge``
      - Read an entry

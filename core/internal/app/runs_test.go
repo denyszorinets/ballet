@@ -303,8 +303,8 @@ func TestRuns_AgentPromptIsTheOnboardingBundle(t *testing.T) {
 	e.runs.MCP = []agent.MCPServer{{Name: "knowledge"}}
 	e.runs.Deps = e.st
 	var asked []string
-	e.runs.Knowledge = func(_ context.Context, customer, project, ticket, query string, limit int) ([]onboarding.Knowledge, error) {
-		asked = append(asked, customer, project, ticket, query)
+	e.runs.Knowledge = func(_ context.Context, organization, project, ticket, query string, limit int) ([]onboarding.Knowledge, error) {
+		asked = append(asked, organization, project, ticket, query)
 		return []onboarding.Knowledge{{ID: "k1", Kind: "decision", Title: "Use OIDC", Body: "Keycloak.", Linked: true}}, nil
 	}
 	dave := user(t, "dave", "acme-admins")

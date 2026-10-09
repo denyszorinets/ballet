@@ -17,8 +17,8 @@
   "templating": {
     "list": [
       {
-        "name": "customer",
-        "label": "Customer",
+        "name": "organization",
+        "label": "Organization",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -34,7 +34,7 @@
         "refresh": 2,
         "sort": 1,
         "query": {
-          "query": "label_values({__name__=~\"ballet_.+\", customer!=\"\"}, customer)",
+          "query": "label_values({__name__=~\"ballet_.+\", organization!=\"\"}, organization)",
           "refId": "var"
         }
       },
@@ -56,7 +56,7 @@
         "refresh": 2,
         "sort": 1,
         "query": {
-          "query": "label_values({__name__=~\"ballet_.+\", customer!=\"\"}, project)",
+          "query": "label_values({__name__=~\"ballet_.+\", organization!=\"\"}, project)",
           "refId": "var"
         }
       }
@@ -78,7 +78,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(ballet_flows_finished_total{status=\"done\", customer=~\"$customer\", project=~\"$project\"}[$__range])) or vector(0)",
+          "expr": "sum(increase(ballet_flows_finished_total{status=\"done\", organization=~\"$organization\", project=~\"$project\"}[$__range])) or vector(0)",
           "legendFormat": "done"
         }
       ],
@@ -120,7 +120,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(ballet_flows_finished_total{status=\"failed\", customer=~\"$customer\", project=~\"$project\"}[$__range])) or vector(0)",
+          "expr": "sum(increase(ballet_flows_finished_total{status=\"failed\", organization=~\"$organization\", project=~\"$project\"}[$__range])) or vector(0)",
           "legendFormat": "failed"
         }
       ],
@@ -162,7 +162,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(sum(increase(ballet_questions_answered_total{by=\"planner\", customer=~\"$customer\", project=~\"$project\"}[$__range])) or vector(0)) / clamp_min(sum(increase(ballet_questions_answered_total{customer=~\"$customer\", project=~\"$project\"}[$__range])) or vector(0), 1)",
+          "expr": "(sum(increase(ballet_questions_answered_total{by=\"planner\", organization=~\"$organization\", project=~\"$project\"}[$__range])) or vector(0)) / clamp_min(sum(increase(ballet_questions_answered_total{organization=~\"$organization\", project=~\"$project\"}[$__range])) or vector(0), 1)",
           "legendFormat": "share"
         }
       ],
@@ -206,7 +206,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(ballet_questions_open{customer=~\"$customer\", project=~\"$project\"}) or vector(0)",
+          "expr": "sum(ballet_questions_open{organization=~\"$organization\", project=~\"$project\"}) or vector(0)",
           "legendFormat": "open"
         }
       ],
@@ -248,7 +248,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (project) (increase(ballet_flows_finished_total{status=\"done\", customer=~\"$customer\", project=~\"$project\"}[1d]))",
+          "expr": "sum by (project) (increase(ballet_flows_finished_total{status=\"done\", organization=~\"$organization\", project=~\"$project\"}[1d]))",
           "legendFormat": "{{project}}"
         }
       ],
@@ -280,7 +280,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (increase(ballet_flow_lead_time_seconds_bucket{status=\"done\", customer=~\"$customer\", project=~\"$project\"}[1d])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (increase(ballet_flow_lead_time_seconds_bucket{status=\"done\", organization=~\"$organization\", project=~\"$project\"}[1d])))",
           "legendFormat": "median"
         },
         {
@@ -289,7 +289,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.9, sum by (le) (increase(ballet_flow_lead_time_seconds_bucket{status=\"done\", customer=~\"$customer\", project=~\"$project\"}[1d])))",
+          "expr": "histogram_quantile(0.9, sum by (le) (increase(ballet_flow_lead_time_seconds_bucket{status=\"done\", organization=~\"$organization\", project=~\"$project\"}[1d])))",
           "legendFormat": "p90"
         }
       ],
@@ -323,7 +323,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (project) (increase(ballet_flow_iterations_sum{customer=~\"$customer\", project=~\"$project\"}[1d])) / sum by (project) (increase(ballet_flow_iterations_count{customer=~\"$customer\", project=~\"$project\"}[1d]))",
+          "expr": "sum by (project) (increase(ballet_flow_iterations_sum{organization=~\"$organization\", project=~\"$project\"}[1d])) / sum by (project) (increase(ballet_flow_iterations_count{organization=~\"$organization\", project=~\"$project\"}[1d]))",
           "legendFormat": "{{project}}"
         }
       ],
@@ -355,7 +355,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (stage, outcome) (increase(ballet_stages_finished_total{customer=~\"$customer\", project=~\"$project\"}[$__range]))",
+          "expr": "sum by (stage, outcome) (increase(ballet_stages_finished_total{organization=~\"$organization\", project=~\"$project\"}[$__range]))",
           "legendFormat": "{{stage}} {{outcome}}"
         }
       ],
@@ -397,7 +397,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (status, waiting) (ballet_flows_active{customer=~\"$customer\", project=~\"$project\"})",
+          "expr": "sum by (status, waiting) (ballet_flows_active{organization=~\"$organization\", project=~\"$project\"})",
           "legendFormat": "{{status}} {{waiting}}"
         }
       ],
@@ -429,7 +429,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (reason) (increase(ballet_flow_waits_total{customer=~\"$customer\", project=~\"$project\"}[1h]))",
+          "expr": "sum by (reason) (increase(ballet_flow_waits_total{organization=~\"$organization\", project=~\"$project\"}[1h]))",
           "legendFormat": "{{reason}}"
         }
       ],
@@ -461,7 +461,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(ballet_questions_raised_total{customer=~\"$customer\", project=~\"$project\"}[1d]))",
+          "expr": "sum(increase(ballet_questions_raised_total{organization=~\"$organization\", project=~\"$project\"}[1d]))",
           "legendFormat": "raised"
         },
         {
@@ -470,7 +470,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (by) (increase(ballet_questions_answered_total{customer=~\"$customer\", project=~\"$project\"}[1d]))",
+          "expr": "sum by (by) (increase(ballet_questions_answered_total{organization=~\"$organization\", project=~\"$project\"}[1d]))",
           "legendFormat": "answered by {{by}}"
         }
       ],
@@ -502,7 +502,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.5, sum by (le, by) (increase(ballet_question_answer_seconds_bucket{customer=~\"$customer\", project=~\"$project\"}[1d])))",
+          "expr": "histogram_quantile(0.5, sum by (le, by) (increase(ballet_question_answer_seconds_bucket{organization=~\"$organization\", project=~\"$project\"}[1d])))",
           "legendFormat": "{{by}}"
         }
       ],

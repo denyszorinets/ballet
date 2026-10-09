@@ -16,13 +16,13 @@
 	const project = $derived(page.params.project ?? '');
 
 	let session = $state<Session>();
-	let customer = $state<string>();
+	let organization = $state<string>();
 	let rows = $state<Row[]>([]);
 	let loaded = $state(false);
 	let error = $state<string>();
 	let actionError = $state<string>();
 
-	const canWrite = $derived(!!session?.permissions.can('skill.write', { customer, project }));
+	const canWrite = $derived(!!session?.permissions.can('skill.write', { organization, project }));
 
 	async function load(s: Session, key: string) {
 		const path = { params: { path: { project: key } } };
@@ -35,7 +35,7 @@
 			error = apiError(r.error);
 			return;
 		}
-		customer = p.data?.customer;
+		organization = p.data?.organization;
 		const byName: Record<string, Row> = {};
 		for (const x of r.data.items) byName[x.name] = { name: x.name, resolved: x };
 		for (const x of pins.data?.items ?? [])
@@ -89,8 +89,8 @@
 <p><a href={resolve('/projects/[project]', { project })}>← {project}</a></p>
 <h1>Project skills</h1>
 <p class="muted">
-	Published skills of the platform, the customer and the project; the most specific scope wins per
-	name. Pin a version or disable a skill for this project.
+	Published skills of the platform, the organization and the project; the most specific scope wins
+	per name. Pin a version or disable a skill for this project.
 </p>
 
 {#if error}

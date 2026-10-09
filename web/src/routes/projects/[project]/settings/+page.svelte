@@ -8,7 +8,7 @@
 	const project = $derived(page.params.project ?? '');
 
 	let session = $state<Session>();
-	let customer = $state<string>();
+	let organization = $state<string>();
 	let settings = $state<Schemas['ExecutionSettings']>();
 	let error = $state<string>();
 	let saveError = $state<string>();
@@ -31,9 +31,9 @@
 	let token = $state('');
 	let tokenMessage = $state<string>();
 
-	const canEdit = $derived(!!session?.permissions.can('project.update', { customer, project }));
+	const canEdit = $derived(!!session?.permissions.can('project.update', { organization, project }));
 	const canManageToken = $derived(
-		!!session?.permissions.can('credential.manage', { customer, project })
+		!!session?.permissions.can('credential.manage', { organization, project })
 	);
 
 	function fill(x: Schemas['ExecutionSettings']) {
@@ -66,7 +66,7 @@
 			error = apiError(x.error);
 			return;
 		}
-		customer = p.data?.customer;
+		organization = p.data?.organization;
 		fill(x.data);
 	}
 
@@ -235,7 +235,7 @@
 		{#if tokenMessage}<p role="status">{tokenMessage}</p>{/if}
 	{/if}
 
-	{#if customer}<BudgetEditor {customer} {project} />{/if}
+	{#if organization}<BudgetEditor {organization} {project} />{/if}
 {/if}
 
 <style>

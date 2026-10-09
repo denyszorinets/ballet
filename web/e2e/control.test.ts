@@ -12,9 +12,9 @@ async function open(
 	await fakeOIDC(page);
 	const core = await fakeCore(page, {
 		me,
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
 		projects: [
-			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web', description: '', version: 1 }
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web', description: '', version: 1 }
 		],
 		...state
 	});
@@ -27,7 +27,7 @@ async function open(
 test('admins pause, resume and kill a project', async ({ page }) => {
 	const core = await open(
 		page,
-		[{ role: 'customer-admin', scope: 'customer:acme' }],
+		[{ role: 'organization-admin', scope: 'organization:acme' }],
 		'/projects/WEB',
 		{
 			activeRuns: 2
@@ -53,7 +53,7 @@ test('admins pause, resume and kill a project', async ({ page }) => {
 });
 
 test('engineers see the state but no controls', async ({ page }) => {
-	await open(page, [{ role: 'engineer', scope: 'customer:acme' }], '/projects/WEB', {
+	await open(page, [{ role: 'engineer', scope: 'organization:acme' }], '/projects/WEB', {
 		pauses: [{ scope: 'platform', paused_by: 'user-alice', paused_at: new Date().toISOString() }]
 	});
 	const control = page.getByRole('region', { name: 'Autonomous work' });

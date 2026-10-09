@@ -10,7 +10,7 @@ Environment:
   BALLET_TOKEN        bearer token of a platform admin; default: none
                       when Core runs without authentication, else the
                       development realm's alice (scripts/dev-token.sh)
-  ANTHROPIC_API_KEY   key for the customer's agent sessions and planner
+  ANTHROPIC_API_KEY   key for the organization's agent sessions and planner
   GITHUB_TOKEN        token that can push branches and open pull requests
   BALLET_REPO         repository (default https://github.com/denyszorinets/ballet.git)
   ISSUES_REPO         owner/name whose issues --import-issues reads
@@ -38,7 +38,7 @@ import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 URL = os.environ.get("BALLET_URL", "http://localhost:8080").rstrip("/")
-CUSTOMER, PROJECT = "ballet", "BAL"
+ORGANIZATION, PROJECT = "ballet", "BAL"
 REPO = os.environ.get("BALLET_REPO", "https://github.com/denyszorinets/ballet.git")
 
 
@@ -88,17 +88,17 @@ def step(msg):
 
 
 def setup_tenancy():
-    step(f"customer {CUSTOMER} and project {PROJECT}")
-    if api("GET", f"/customers/{CUSTOMER}")[0] == 404:
-        must("POST", "/customers", {"key": CUSTOMER, "name": "Ballet"})
+    step(f"organization {ORGANIZATION} and project {PROJECT}")
+    if api("GET", f"/organizations/{ORGANIZATION}")[0] == 404:
+        must("POST", "/organizations", {"key": ORGANIZATION, "name": "Ballet"})
     if api("GET", f"/projects/{PROJECT}")[0] == 404:
-        must("POST", f"/customers/{CUSTOMER}/projects",
+        must("POST", f"/organizations/{ORGANIZATION}/projects",
              {"key": PROJECT, "name": "Ballet", "description": "Ballet developing itself."})
 
 
 def setup_credentials():
     step("credentials (Anthropic key, git token)")
-    must("PUT", f"/customers/{CUSTOMER}/credentials/anthropic", {"api_key": need("ANTHROPIC_API_KEY")})
+    must("PUT", f"/organizations/{ORGANIZATION}/credentials/anthropic", {"api_key": need("ANTHROPIC_API_KEY")})
     must("PUT", f"/projects/{PROJECT}/credentials/git", {"api_key": need("GITHUB_TOKEN")})
 
 

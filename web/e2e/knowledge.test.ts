@@ -4,7 +4,7 @@ import { fakeOIDC } from './fixtures/oidc';
 
 const adr: FakeEntry = {
 	id: 'k1',
-	customer: 'acme',
+	organization: 'acme',
 	kind: 'decision',
 	title: 'Use SQLite',
 	body: '# Context\n\nWe want **simple** storage.',
@@ -14,7 +14,7 @@ const adr: FakeEntry = {
 };
 const note: FakeEntry = {
 	id: 'k2',
-	customer: 'acme',
+	organization: 'acme',
 	kind: 'note',
 	title: 'Deploy checklist',
 	body: 'Run migrations first.',
@@ -26,10 +26,10 @@ const note: FakeEntry = {
 async function open(page: Page, role: string, path: string) {
 	await fakeOIDC(page);
 	const core = await fakeCore(page, {
-		me: [{ role, scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		me: [{ role, scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
 		projects: [
-			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web shop', description: '', version: 1 }
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web shop', description: '', version: 1 }
 		],
 		items: [
 			{
@@ -54,7 +54,7 @@ async function open(page: Page, role: string, path: string) {
 }
 
 test('the knowledge page lists, filters and searches entries', async ({ page }) => {
-	await open(page, 'viewer', '/customers/acme/knowledge');
+	await open(page, 'viewer', '/organizations/acme/knowledge');
 
 	const entries = page.getByRole('list', { name: 'Entries' });
 	await expect(entries.getByRole('listitem')).toHaveCount(2);
@@ -78,7 +78,7 @@ test('the knowledge page lists, filters and searches entries', async ({ page }) 
 });
 
 test('an entry renders sanitized Markdown, links and versions', async ({ page }) => {
-	const core = await open(page, 'engineer', '/customers/acme/knowledge/k1');
+	const core = await open(page, 'engineer', '/organizations/acme/knowledge/k1');
 
 	const body = page.getByTestId('body');
 	await expect(body.getByRole('heading', { name: 'Context' })).toBeVisible();
@@ -108,7 +108,7 @@ test('an entry renders sanitized Markdown, links and versions', async ({ page })
 });
 
 test('a viewer cannot edit an entry', async ({ page }) => {
-	await open(page, 'viewer', '/customers/acme/knowledge/k1');
+	await open(page, 'viewer', '/organizations/acme/knowledge/k1');
 	await expect(page.getByRole('heading', { name: 'Use SQLite' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0);
 });

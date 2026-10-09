@@ -4,11 +4,11 @@
 
 	let {
 		project,
-		customer
+		organization
 	}: {
 		/** The project; absent: the whole platform. */
 		project?: string;
-		customer?: string;
+		organization?: string;
 	} = $props();
 
 	let session = $state<Session>();
@@ -21,7 +21,7 @@
 	let busy = $state(false);
 
 	const canManage = $derived(
-		!!session?.permissions.can('run.manage', project ? { customer, project } : {})
+		!!session?.permissions.can('run.manage', project ? { organization, project } : {})
 	);
 	const scopeName = $derived(project ? `project ${project}` : 'the platform');
 

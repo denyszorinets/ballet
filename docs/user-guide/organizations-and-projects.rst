@@ -1,29 +1,28 @@
-Customers and projects
-======================
+Organizations and projects
+==========================
 
-Ballet is built to run an AI development shop: one platform working
-for several customers, each with several projects
-(:doc:`/concepts/domain-model`).
+One Ballet platform hosts many organizations, each with several
+projects (:doc:`/concepts/domain-model`).
 
-Customers
----------
+Organizations
+-------------
 
-A **customer** is the isolation boundary. Its projects share one
+An **organization** is the isolation boundary. Its projects share one
 knowledge base, LLM credentials and budgets; nothing — code, tickets,
-knowledge, keys — crosses to another customer. Create customers on the
-**Customers** page (platform admins). A customer's key, such as
+knowledge, keys — crosses to another organization. Create organizations on the
+**Organizations** page (platform admins). An organization's key, such as
 ``acme``, never changes; its name can.
 
-The customer page holds:
+The organization page holds:
 
 **Projects**
-   The customer's projects; create new ones under *New project*.
+   The organization's projects; create new ones under *New project*.
 **Knowledge**
-   The customer's knowledge base: documents, decisions, notes and debt
+   The organization's knowledge base: documents, decisions, notes and debt
    records written by humans, the planner and agents
    (:doc:`/concepts/knowledge`).
 **Budget**
-   Tokens per ticket and per day across the customer's projects.
+   Tokens per ticket and per day across the organization's projects.
 **LLM credentials**
    The model keys sessions and the planner use, stored encrypted.
 
@@ -52,6 +51,6 @@ Project settings
 - the **answer window**: how long a session waits for answers before it
   parks (:doc:`sessions-and-questions`);
 - the **git token**, the project's own **LLM credentials** (overriding
-  the customer's) and **budget**.
+  the organization's) and **budget**.
 
 All settings and their API are in :ref:`reference-rest-execution`.

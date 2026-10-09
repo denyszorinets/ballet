@@ -13,25 +13,25 @@ type Action = rbac.Action
 
 // Actions used by use cases.
 const (
-	ActCustomerCreate    = rbac.ActCustomerCreate
-	ActCustomerRead      = rbac.ActCustomerRead
-	ActCustomerUpdate    = rbac.ActCustomerUpdate
-	ActProjectCreate     = rbac.ActProjectCreate
-	ActProjectRead       = rbac.ActProjectRead
-	ActProjectUpdate     = rbac.ActProjectUpdate
-	ActRoleBindingManage = rbac.ActRoleBindingManage
-	ActRoleBindingRead   = rbac.ActRoleBindingRead
-	ActTrackerRead       = rbac.ActTrackerRead
-	ActTrackerWrite      = rbac.ActTrackerWrite
-	ActCredentialManage  = rbac.ActCredentialManage
-	ActKnowledgeRead     = rbac.ActKnowledgeRead
-	ActKnowledgeWrite    = rbac.ActKnowledgeWrite
-	ActSkillRead         = rbac.ActSkillRead
-	ActSkillWrite        = rbac.ActSkillWrite
-	ActRunManage         = rbac.ActRunManage
+	ActOrganizationCreate = rbac.ActOrganizationCreate
+	ActOrganizationRead   = rbac.ActOrganizationRead
+	ActOrganizationUpdate = rbac.ActOrganizationUpdate
+	ActProjectCreate      = rbac.ActProjectCreate
+	ActProjectRead        = rbac.ActProjectRead
+	ActProjectUpdate      = rbac.ActProjectUpdate
+	ActRoleBindingManage  = rbac.ActRoleBindingManage
+	ActRoleBindingRead    = rbac.ActRoleBindingRead
+	ActTrackerRead        = rbac.ActTrackerRead
+	ActTrackerWrite       = rbac.ActTrackerWrite
+	ActCredentialManage   = rbac.ActCredentialManage
+	ActKnowledgeRead      = rbac.ActKnowledgeRead
+	ActKnowledgeWrite     = rbac.ActKnowledgeWrite
+	ActSkillRead          = rbac.ActSkillRead
+	ActSkillWrite         = rbac.ActSkillWrite
+	ActRunManage          = rbac.ActRunManage
 )
 
-// Scope is where an action applies: customer and project keys; empty
+// Scope is where an action applies: organization and project keys; empty
 // fields mea platform level.
 type Scope = rbac.Target
 

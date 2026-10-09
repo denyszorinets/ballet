@@ -12,14 +12,14 @@ A grant matches a **claim** of the user's sign-in token — for example
 ``pm@acme.example`` — and gives a **role** in a **scope**:
 
 ``platform-admin`` (platform)
-   Everything, including creating customers.
-``customer-admin`` (customer)
-   Manages the customer, its projects, credentials, skills, access and
+   Everything, including creating organizations.
+``organization-admin`` (organization)
+   Manages the organization, its projects, credentials, skills, access and
    runs.
-``engineer`` (customer or project)
+``engineer`` (organization or project)
    Reads, and plans and edits tickets.
-``approver``, ``viewer`` (customer or project)
+``approver``, ``viewer`` (organization or project)
    Read.
 
-A customer grant covers all its projects; a project grant only that
+An organization grant covers all its projects; a project grant only that
 project. The full table is in :doc:`/architecture/security`.

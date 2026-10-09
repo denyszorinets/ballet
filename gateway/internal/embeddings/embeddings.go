@@ -1,6 +1,6 @@
 // Package embeddings serves the gateway's OpenAI-compatible embeddings
 // endpoint: the built-in hash model locally, other models through the
-// customer's "openai" credential.
+// organization's "openai" credential.
 package embeddings
 
 import (
@@ -22,7 +22,7 @@ import (
 
 // CredentialResolver resolves provider credentials (Core).
 type CredentialResolver interface {
-	ResolveCredential(ctx context.Context, customer, project, provider string) (core.Credential, error)
+	ResolveCredential(ctx context.Context, organization, project, provider string) (core.Credential, error)
 }
 
 // Handler serves POST /v1/embeddings.
@@ -44,7 +44,7 @@ type request struct {
 
 // scope is who a request is made for.
 type scope struct {
-	run, customer, project, ticket string
+	run, organization, project, ticket string
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +84,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.Sink != nil {
 		h.Sink(usage.Record{
-			OccurredAt: h.Now(), Run: sc.run, Customer: sc.customer, Project: sc.project, Ticket: sc.ticket,
+			OccurredAt: h.Now(), Run: sc.run, Organization: sc.organization, Project: sc.project, Ticket: sc.ticket,
 			Model: resp.Model, Status: http.StatusOK, InputTokens: resp.Usage.PromptTokens,
 		})
 	}
@@ -93,7 +93,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // authenticate accepts run tokens (llm.invoke; scope from claims) and
-// service tokens (llm.embed; scope from X-Ballet-Customer/Project).
+// service tokens (llm.embed; scope from X-Ballet-Organization/Project).
 func (h *Handler) authenticate(r *http.Request) (scope, int, string) {
 	raw, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	if !ok {
@@ -110,16 +110,16 @@ func (h *Handler) authenticate(r *http.Request) (scope, int, string) {
 		if !c.Can(runtoken.CapLLMEmbed) {
 			return scope{}, http.StatusForbidden, "token lacks llm.embed"
 		}
-		cust := r.Header.Get(embed.HeaderCustomer)
-		if cust == "" {
-			return scope{}, http.StatusBadRequest, embed.HeaderCustomer + " is required for service tokens"
+		org := r.Header.Get(embed.HeaderOrganization)
+		if org == "" {
+			return scope{}, http.StatusBadRequest, embed.HeaderOrganization + " is required for service tokens"
 		}
-		return scope{run: c.Subject, customer: cust, project: r.Header.Get(embed.HeaderProject)}, 0, ""
+		return scope{run: c.Subject, organization: org, project: r.Header.Get(embed.HeaderProject)}, 0, ""
 	}
 	if !c.Can(runtoken.CapLLMInvoke) {
 		return scope{}, http.StatusForbidden, "token lacks llm.invoke"
 	}
-	return scope{run: c.Subject, customer: c.Customer, project: c.Project, ticket: c.Ticket}, 0, ""
+	return scope{run: c.Subject, organization: c.Organization, project: c.Project, ticket: c.Ticket}, 0, ""
 }
 
 func parseInput(raw json.RawMessage) ([]string, error) {
@@ -149,9 +149,9 @@ func hashResponse(ctx context.Context, inputs []string) embed.Response {
 	return resp
 }
 
-// forward calls the customer's OpenAI-compatible provider.
+// forward calls the organization's OpenAI-compatible provider.
 func (h *Handler) forward(ctx context.Context, sc scope, model string, inputs []string) (embed.Response, int, error) {
-	cred, err := h.Core.ResolveCredential(ctx, sc.customer, sc.project, "openai")
+	cred, err := h.Core.ResolveCredential(ctx, sc.organization, sc.project, "openai")
 	if errors.Is(err, core.ErrNoCredential) {
 		return embed.Response{}, http.StatusForbidden, errors.New("no openai credential configured for embeddings")
 	}

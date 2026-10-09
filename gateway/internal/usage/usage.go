@@ -19,7 +19,7 @@ import (
 type Record struct {
 	OccurredAt   time.Time `json:"occurred_at"`
 	Run          string    `json:"run"` // run token subject
-	Customer     string    `json:"customer"`
+	Organization string    `json:"organization"`
 	Project      string    `json:"project"`
 	Ticket       string    `json:"ticket"`
 	Model        string    `json:"model"`
@@ -38,7 +38,7 @@ type Sink func(Record)
 func Observe(sink Sink, now func() time.Time) func(runtoken.Claims, *http.Response) error {
 	return func(c runtoken.Claims, resp *http.Response) error {
 		rec := Record{
-			OccurredAt: now(), Run: c.Subject, Customer: c.Customer, Project: c.Project, Ticket: c.Ticket,
+			OccurredAt: now(), Run: c.Subject, Organization: c.Organization, Project: c.Project, Ticket: c.Ticket,
 			Status: resp.StatusCode,
 		}
 		stream := strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream")

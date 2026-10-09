@@ -70,7 +70,7 @@ type Runs struct {
 	Model         string            // agent model; "": the runtime's default
 	// Deps and Knowledge feed the onboarding bundle; both optional.
 	Deps       DependencyStore
-	Knowledge  func(ctx context.Context, customer, project, ticket, query string, limit int) ([]onboarding.Knowledge, error)
+	Knowledge  func(ctx context.Context, organization, project, ticket, query string, limit int) ([]onboarding.Knowledge, error)
 	Items      ItemStore
 	Tenancy    TenancyStore
 	Authz      Authorizer
@@ -173,7 +173,7 @@ func (rs *Runs) CreateForStage(ctx context.Context, it tracker.Item, stage, adap
 	if err != nil {
 		return RunView{}, err
 	}
-	c, err := rs.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := rs.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return RunView{}, err
 	}
@@ -239,7 +239,7 @@ func (rs *Runs) Bundle(ctx context.Context, it tracker.Item, p tenancy.Project, 
 		}
 	}
 	if rs.Knowledge != nil {
-		c, err := rs.Tenancy.CustomerByID(ctx, p.CustomerID)
+		c, err := rs.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 		if err != nil {
 			return onboarding.Bundle{}, err
 		}
@@ -282,7 +282,7 @@ func (rs *Runs) create(ctx context.Context, ticketKey, stage string,
 	if err != nil {
 		return RunView{}, err
 	}
-	if err := rs.Authz.Authorize(ctx, id, ActRunManage, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := rs.Authz.Authorize(ctx, id, ActRunManage, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return RunView{}, err
 	}
 	if it.Kind != tracker.KindTicket {
@@ -291,7 +291,7 @@ func (rs *Runs) create(ctx context.Context, ticketKey, stage string,
 	return rs.insert(ctx, it, p, c, stage, build, actorIn(ctx, id), id.Subject)
 }
 
-func (rs *Runs) insert(ctx context.Context, it tracker.Item, p tenancy.Project, c tenancy.Customer, stage string,
+func (rs *Runs) insert(ctx context.Context, it tracker.Item, p tenancy.Project, c tenancy.Organization, stage string,
 	build func(tracker.Item, tenancy.Project) (run.Spec, string, error), actor event.Actor, createdBy string) (RunView, error) {
 	spec, adapter, err := build(it, p)
 	if err != nil {
@@ -374,7 +374,7 @@ func (rs *Runs) ListForTicket(ctx context.Context, ticketKey string) ([]RunView,
 	if err != nil {
 		return nil, err
 	}
-	if err := rs.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := rs.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return nil, err
 	}
 	list, err := rs.Store.ListRuns(ctx, RunFilter{TicketID: it.ID})
@@ -463,30 +463,30 @@ func (rs *Runs) view(ctx context.Context, runID string, a Action) (RunView, erro
 	if err != nil {
 		return RunView{}, err
 	}
-	c, err := rs.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := rs.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return RunView{}, err
 	}
-	if err := rs.Authz.Authorize(ctx, id, a, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := rs.Authz.Authorize(ctx, id, a, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return RunView{}, err
 	}
 	return RunView{Run: r, TicketKey: it.Key, ProjectKey: p.Key}, nil
 }
 
-func (rs *Runs) ticket(ctx context.Context, key string) (tracker.Item, tenancy.Project, tenancy.Customer, error) {
+func (rs *Runs) ticket(ctx context.Context, key string) (tracker.Item, tenancy.Project, tenancy.Organization, error) {
 	it, err := rs.Items.ItemByKey(ctx, key)
 	if err != nil {
-		return tracker.Item{}, tenancy.Project{}, tenancy.Customer{}, err
+		return tracker.Item{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	p, err := rs.Tenancy.ProjectByID(ctx, it.ProjectID)
 	if err != nil {
-		return tracker.Item{}, tenancy.Project{}, tenancy.Customer{}, err
+		return tracker.Item{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := rs.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := rs.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	return it, p, c, err
 }
 
-func runEvent(r run.Run, customerID, typ string, actor event.Actor, payload map[string]any) event.Event {
+func runEvent(r run.Run, organizationID, typ string, actor event.Actor, payload map[string]any) event.Event {
 	at := r.CreatedAt
 	switch {
 	case !r.FinishedAt.IsZero():
@@ -494,7 +494,7 @@ func runEvent(r run.Run, customerID, typ string, actor event.Actor, payload map[
 	case !r.StartedAt.IsZero():
 		at = r.StartedAt
 	}
-	return event.Event{Customer: customerID, Project: r.ProjectID, EntityType: "run", EntityID: r.ID, Type: typ,
+	return event.Event{Organization: organizationID, Project: r.ProjectID, EntityType: "run", EntityID: r.ID, Type: typ,
 		Actor: actor, OccurredAt: at, Payload: mustJSON(payload)}
 }
 
@@ -970,7 +970,7 @@ func (d *Dispatcher) event(ctx context.Context, r run.Run, typ string, payload m
 	if err != nil {
 		return event.Event{}, err
 	}
-	return runEvent(r, p.CustomerID, typ, event.Actor{Kind: event.ActorService, Subject: "agent:" + r.Agent}, payload), nil
+	return runEvent(r, p.OrganizationID, typ, event.Actor{Kind: event.ActorService, Subject: "agent:" + r.Agent}, payload), nil
 }
 
 func (d *Dispatcher) logger() *slog.Logger {

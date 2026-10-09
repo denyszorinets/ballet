@@ -14,10 +14,10 @@ func (s *Store) InsertUsage(ctx context.Context, records []app.UsageRecord) erro
 	stmts := make([]sqlstore.Stmt, 0, len(records))
 	for _, r := range records {
 		stmts = append(stmts, sqlstore.Exec(`INSERT INTO usage_records
-			(occurred_at, customer_id, project_id, ticket_key, run, model, status,
+			(occurred_at, organization_id, project_id, ticket_key, run, model, status,
 			 input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			formatTime(r.OccurredAt), r.CustomerID, r.ProjectID, r.Ticket, r.Run, r.Model, r.Status,
+			formatTime(r.OccurredAt), r.OrganizationID, r.ProjectID, r.Ticket, r.Run, r.Model, r.Status,
 			r.InputTokens, r.OutputTokens, r.CacheRead, r.CacheWrite))
 	}
 	return mapWriteErr("insert usage", s.db.Batch(ctx, stmts...))

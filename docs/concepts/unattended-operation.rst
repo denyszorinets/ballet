@@ -24,9 +24,9 @@ Keep going
 Stay within bounds
 ------------------
 
-- **Budgets** in tokens per ticket, per project per day and per customer
+- **Budgets** in tokens per ticket, per project per day and per organization
   per day (:ref:`concepts-unattended-budgets`).
-- **Concurrency limits** globally, per customer and per project.
+- **Concurrency limits** globally, per organization and per project.
 - **Iteration limits** on pipeline loops.
 - **Pause and kill switch** per project and for the whole platform
   (:ref:`concepts-unattended-pause`).
@@ -38,12 +38,12 @@ Budgets
 
 Budgets bound the tokens unattended work uses, as the LLM gateway reports
 them. Counted are input, output and cache-write tokens; cache reads are
-not (they cost a fraction). Set them on the customer page and in the
+not (they cost a fraction). Set them on the organization page and in the
 project settings (0: no limit):
 
 - **per ticket**, over the ticket's lifetime — the project's limit, else
-  the customer's;
-- **per day** (UTC) for a project, and for a customer across its
+  the organization's;
+- **per day** (UTC) for a project, and for an organization across its
   projects.
 
 When work runs out of budget:
@@ -83,7 +83,7 @@ to *Paused*), for a project (project page) or for everything
    Ends the pause: waiting flows continue, held runs start.
 
 Pausing and resuming a project or the platform needs ``run.manage``
-on that scope (customer admins for their projects, platform admins
+on that scope (organization admins for their projects, platform admins
 for everything). Every pause, kill and resume is recorded as an event
 (``control.paused``, ``control.killed``, ``control.resumed``).
 

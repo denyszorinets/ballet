@@ -47,7 +47,7 @@ func TestMeter_RecordsUsageOfJSONAndStreamingResponses(t *testing.T) {
 	t.Cleanup(srv.Close)
 	tok, err := runtoken.NewIssuer(ring, time.Now).Issue(runtoken.Claims{
 		Kind: runtoken.KindRun, Subject: "run:7", Audience: []string{"gateway"},
-		Customer: "acme", Project: "WEB", Ticket: "WEB-3", Capabilities: []string{runtoken.CapLLMInvoke},
+		Organization: "acme", Project: "WEB", Ticket: "WEB-3", Capabilities: []string{runtoken.CapLLMInvoke},
 	}, time.Hour)
 	require.NoError(t, err)
 

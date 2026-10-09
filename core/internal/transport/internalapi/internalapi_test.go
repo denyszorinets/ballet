@@ -34,7 +34,7 @@ func TestInternalAPI_AcceptsOnlyServiceTokensWithCapability(t *testing.T) {
 	agentTok := issue(runtoken.Claims{Kind: runtoken.KindService, Subject: "service:agent", Audience: []string{"core"},
 		Capabilities: []string{runtoken.CapAgentConnect}})
 	run := issue(runtoken.Claims{Kind: runtoken.KindRun, Subject: "run:1", Audience: []string{"core"},
-		Customer: "c", Project: "p", Ticket: "t", Capabilities: []string{runtoken.CapCredentialsRead}})
+		Organization: "c", Project: "p", Ticket: "t", Capabilities: []string{runtoken.CapCredentialsRead}})
 
 	call := func(path, tok string) int {
 		req := httptest.NewRequest(http.MethodGet, path, nil)

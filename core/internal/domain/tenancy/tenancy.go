@@ -1,6 +1,6 @@
-// Package tenancy defines customers and projects (ADR-0004). A Ballet
-// installation is one platform; the customer is the isolation
-// boundary; projects belong to exactly one customer.
+// Package tenancy defines organizations and projects (ADR-0004). A Ballet
+// installation is one platform; the organization is the isolation
+// boundary; projects belong to exactly one organization.
 package tenancy
 
 import (
@@ -12,8 +12,8 @@ import (
 	"unicode/utf8"
 )
 
-// Customer is a client of the platform and the isolation boundary.
-type Customer struct {
+// Organization is a client of the platform and the isolation boundary.
+type Organization struct {
 	ID        string
 	Key       string // immutable, e.g. "acme"; used in URLs and role binding scopes
 	Name      string
@@ -22,28 +22,28 @@ type Customer struct {
 	Version   int64
 }
 
-// Project is a product built for a customer.
+// Project is a product built for an organization.
 type Project struct {
-	ID          string
-	CustomerID  string
-	Key         string // immutable, e.g. "ACME"; prefix of ticket keys (ACME-42)
-	Name        string
-	Description string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	Version     int64
+	ID             string
+	OrganizationID string
+	Key            string // immutable, e.g. "ACME"; prefix of ticket keys (ACME-42)
+	Name           string
+	Description    string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	Version        int64
 }
 
 var (
-	customerKeyRe = regexp.MustCompile(`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
-	projectKeyRe  = regexp.MustCompile(`^[A-Z][A-Z0-9]+$`)
+	organizationKeyRe = regexp.MustCompile(`^[a-z][a-z0-9]*(-[a-z0-9]+)*$`)
+	projectKeyRe      = regexp.MustCompile(`^[A-Z][A-Z0-9]+$`)
 )
 
-// ValidateCustomerKey checks a customer key: 2–32 characters, lowercase
+// ValidateOrganizationKey checks an organization key: 2–32 characters, lowercase
 // letters, digits and single hyphens, starting with a letter.
-func ValidateCustomerKey(key string) error {
-	if len(key) < 2 || len(key) > 32 || !customerKeyRe.MatchString(key) {
-		return fmt.Errorf("customer key %q must be 2-32 lowercase letters, digits or single hyphens, starting with a letter", key)
+func ValidateOrganizationKey(key string) error {
+	if len(key) < 2 || len(key) > 32 || !organizationKeyRe.MatchString(key) {
+		return fmt.Errorf("organization key %q must be 2-32 lowercase letters, digits or single hyphens, starting with a letter", key)
 	}
 	return nil
 }

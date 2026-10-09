@@ -38,7 +38,7 @@ func TestSearch_IndexesItemsAndSkillsAndFiltersByPermission(t *testing.T) {
 	mk("GLX", "Globex invoice export")
 	_, err := sk.CreateSkill(alice, "platform", "csv-exports", content("How to build CSV exports of invoices", "Use RFC 4180."))
 	require.NoError(t, err)
-	_, err = sk.CreateSkill(alice, "customer:globex", "globex-invoices", content("Globex invoice rules", "invoice csv"))
+	_, err = sk.CreateSkill(alice, "organization:globex", "globex-invoices", content("Globex invoice rules", "invoice csv"))
 	require.NoError(t, err)
 
 	ix := &app.SearchIndexer{Store: env.store, Log: env.store, Items: env.store, Skills: env.store, Tenancy: env.store, Embedder: embed.Hash{}}

@@ -17,7 +17,7 @@ func TestResolve(t *testing.T) {
 		sk(skill.ScopePlatform, "code-review", 3),
 		sk(skill.ScopeProject, "code-review", 1), // project override
 		sk(skill.ScopePlatform, "gitflow", 5),
-		sk(skill.ScopeCustomer, "gitflow", 2), // customer override
+		sk(skill.ScopeOrganization, "gitflow", 2), // organization override
 		sk(skill.ScopePlatform, "docs", 4),
 		sk(skill.ScopePlatform, "draft-only", 0), // never published
 		sk(skill.ScopePlatform, "legacy", 2),
@@ -45,7 +45,7 @@ func TestResolve(t *testing.T) {
 	assert.Equal(t, int64(1), byName["code-review"].Version, "latest of the winning skill")
 	assert.Equal(t, int64(2), byName["docs"].Version)
 	assert.True(t, byName["docs"].Pinned)
-	assert.Equal(t, skill.ScopeCustomer, byName["gitflow"].Skill.Scope.Kind)
+	assert.Equal(t, skill.ScopeOrganization, byName["gitflow"].Skill.Scope.Kind)
 	assert.NotEmpty(t, byName["gitflow"].Problem, "pin beyond the latest version")
 	assert.Zero(t, byName["gitflow"].Version)
 	assert.NotEmpty(t, byName["ghost"].Problem, "pin to an unknown skill")

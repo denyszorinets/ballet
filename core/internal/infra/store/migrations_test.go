@@ -74,3 +74,47 @@ func TestMigrations_PlatformScopeRewritesInstallationWideData(t *testing.T) {
 	assert.Equal(t, "platform platform", scalar(t, db, `SELECT entity_type || ' ' || entity_id FROM events WHERE id = 'e1'`))
 	assert.Equal(t, "0", scalar(t, db, `SELECT count(*) FROM pragma_foreign_key_check`))
 }
+
+func TestMigrations_OrganizationsRenameCustomersAndKeepData(t *testing.T) {
+	path := t.TempDir() + "/core.db"
+	db := migratedTo(t, path, "0030")
+	const now = "2026-10-01T00:00:00Z"
+	exec(t, db, `INSERT INTO customers (id, key, name, created_at, updated_at, version) VALUES ('c1', 'acme', 'Acme', ?, ?, 1)`, now, now)
+	exec(t, db, `INSERT INTO projects (id, customer_id, key, name, created_at, updated_at, version) VALUES ('p1', 'c1', 'WEB', 'Web', ?, ?, 1)`, now, now)
+	exec(t, db, `INSERT INTO credentials (id, customer_id, provider, ciphertext, fingerprint, created_at, updated_at)
+		VALUES ('k1', 'c1', 'anthropic', 'sealed', 'fp', ?, ?)`, now, now)
+	exec(t, db, `INSERT INTO usage_records (occurred_at, customer_id, project_id, status, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens)
+		VALUES (?, 'c1', 'p1', 200, 1, 2, 3, 4)`, now)
+	exec(t, db, `INSERT INTO events (id, occurred_at, customer_id, entity_type, entity_id, type, actor_kind, actor_sub)
+		VALUES ('e1', ?, 'c1', 'customer', 'c1', 'customer.created', 'human', 'alice')`, now)
+	exec(t, db, `INSERT INTO budgets (scope, daily_tokens, updated_by, updated_at, version) VALUES ('customer:c1', 100, 'alice', ?, 1)`, now)
+	exec(t, db, `INSERT INTO role_bindings (id, claim, value, role, scope_kind, customer_key, created_at)
+		VALUES ('b1', 'groups', 'acme-admins', 'customer-admin', 'customer', 'acme', ?)`, now)
+	exec(t, db, `INSERT INTO skills (id, scope_kind, customer_key, customer_id, name, description, body, latest_version, created_at, updated_at, version)
+		VALUES ('s1', 'customer', 'acme', 'c1', 'style', 'd', 'b', 1, ?, ?, 1)`, now, now)
+	exec(t, db, `INSERT INTO skill_versions (skill_id, number, description, body, files, published_by, published_at)
+		VALUES ('s1', 1, 'd', 'b', '{}', 'alice', ?)`, now)
+	exec(t, db, `INSERT INTO search_docs (id, kind, entity_id, ref, customer_key, scope, title, body, updated_at)
+		VALUES ('skill:s1', 'skill', 's1', 'style', 'acme', 'customer:acme', 'style', 'b', ?)`, now)
+	require.NoError(t, db.Close())
+
+	s, err := Open(t.Context(), path)
+	require.NoError(t, err)
+	defer s.Close()
+	db = s.DB()
+
+	assert.Equal(t, "acme", scalar(t, db, `SELECT key FROM organizations WHERE id = 'c1'`))
+	assert.Equal(t, "c1", scalar(t, db, `SELECT organization_id FROM projects WHERE id = 'p1'`))
+	assert.Equal(t, "c1", scalar(t, db, `SELECT organization_id FROM credentials WHERE id = 'k1'`))
+	assert.Equal(t, "c1", scalar(t, db, `SELECT organization_id FROM usage_records`))
+	assert.Equal(t, "c1 organization organization.created",
+		scalar(t, db, `SELECT organization_id || ' ' || entity_type || ' ' || type FROM events WHERE id = 'e1'`))
+	assert.Equal(t, "organization:c1", scalar(t, db, `SELECT scope FROM budgets`))
+	assert.Equal(t, "organization-admin organization acme",
+		scalar(t, db, `SELECT role || ' ' || scope_kind || ' ' || organization_key FROM role_bindings WHERE id = 'b1'`))
+	assert.Equal(t, "organization acme c1",
+		scalar(t, db, `SELECT scope_kind || ' ' || organization_key || ' ' || organization_id FROM skills WHERE id = 's1'`))
+	assert.Equal(t, "1", scalar(t, db, `SELECT count(*) FROM skill_versions WHERE skill_id = 's1'`))
+	assert.Equal(t, "acme organization:acme", scalar(t, db, `SELECT organization_key || ' ' || scope FROM search_docs`))
+	assert.Equal(t, "0", scalar(t, db, `SELECT count(*) FROM pragma_foreign_key_check`))
+}

@@ -14,25 +14,25 @@ import (
 
 // SearchDoc is a searchable view of a Core entity.
 type SearchDoc struct {
-	ID        string // "<kind>:<entity id>"
-	Kind      string // "item" or "skill"
-	EntityID  string
-	Ref       string // item key or skill name
-	Customer  string // customer key; "" for platform skills
-	Project   string // project key; "" when not project-specific
-	Scope     string // skills: their scope
-	Title     string
-	Body      string
-	UpdatedAt time.Time
+	ID           string // "<kind>:<entity id>"
+	Kind         string // "item" or "skill"
+	EntityID     string
+	Ref          string // item key or skill name
+	Organization string // organization key; "" for platform skills
+	Project      string // project key; "" when not project-specific
+	Scope        string // skills: their scope
+	Title        string
+	Body         string
+	UpdatedAt    time.Time
 }
 
 // DocQuery is a hybrid query over search documents.
 type DocQuery struct {
-	Text, Kind        string
-	Project, Customer string // restrict to a project (and its skill chain)
-	Vector            []float32
-	Model             string
-	MaxDistance       float64
+	Text, Kind            string
+	Project, Organization string // restrict to a project (and its skill chain)
+	Vector                []float32
+	Model                 string
+	MaxDistance           float64
 }
 
 // DocHit is a candidate with its fused score.
@@ -142,7 +142,7 @@ func (ix *SearchIndexer) indexEntity(ctx context.Context, entityType, id string)
 		if err != nil {
 			return nil
 		}
-		c, err := ix.Tenancy.CustomerByID(ctx, p.CustomerID)
+		c, err := ix.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 		if err != nil {
 			return nil
 		}
@@ -151,7 +151,7 @@ func (ix *SearchIndexer) indexEntity(ctx context.Context, entityType, id string)
 			body += "\n" + strings.Join(it.AcceptanceCriteria, "\n")
 		}
 		return ix.Store.UpsertSearchDoc(ctx, SearchDoc{
-			ID: "item:" + it.ID, Kind: "item", EntityID: it.ID, Ref: it.Key, Customer: c.Key, Project: p.Key,
+			ID: "item:" + it.ID, Kind: "item", EntityID: it.ID, Ref: it.Key, Organization: c.Key, Project: p.Key,
 			Title: it.Title, Body: body, UpdatedAt: it.UpdatedAt,
 		})
 	case "skill":
@@ -160,7 +160,7 @@ func (ix *SearchIndexer) indexEntity(ctx context.Context, entityType, id string)
 			return nil
 		}
 		return ix.Store.UpsertSearchDoc(ctx, SearchDoc{
-			ID: "skill:" + s.ID, Kind: "skill", EntityID: s.ID, Ref: s.Name, Customer: s.Scope.Customer,
+			ID: "skill:" + s.ID, Kind: "skill", EntityID: s.ID, Ref: s.Name, Organization: s.Scope.Organization,
 			Project: s.Scope.Project, Scope: s.Scope.String(),
 			Title: s.Name + ": " + s.Draft.Description, Body: s.Draft.Body, UpdatedAt: s.UpdatedAt,
 		})
@@ -196,11 +196,11 @@ func (s *Search) Query(ctx context.Context, text, kind, projectKey string, limit
 		if err != nil {
 			return nil, err
 		}
-		c, err := s.Tenancy.CustomerByID(ctx, p.CustomerID)
+		c, err := s.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 		if err != nil {
 			return nil, err
 		}
-		q.Project, q.Customer = p.Key, c.Key
+		q.Project, q.Organization = p.Key, c.Key
 	}
 	if s.Embedder != nil {
 		if vs, err := s.Embedder.Embed(ctx, []string{text}); err == nil {
@@ -217,12 +217,12 @@ func (s *Search) Query(ctx context.Context, text, kind, projectKey string, limit
 	allowed := map[string]bool{}
 	out := []SearchResult{}
 	for _, h := range hits {
-		action, target := ActTrackerRead, Scope{Customer: h.Customer, Project: h.Project}
+		action, target := ActTrackerRead, Scope{Organization: h.Organization, Project: h.Project}
 		if h.Kind == "skill" {
 			sc, _ := skill.ParseScope(h.Scope)
-			action, target = ActSkillRead, Scope{Customer: h.Customer, Project: sc.Project}
+			action, target = ActSkillRead, Scope{Organization: h.Organization, Project: sc.Project}
 		}
-		key := string(action) + "|" + target.Customer + "|" + target.Project
+		key := string(action) + "|" + target.Organization + "|" + target.Project
 		ok, seen := allowed[key]
 		if !seen {
 			ok = s.Authz.Authorize(ctx, id, action, target) == nil

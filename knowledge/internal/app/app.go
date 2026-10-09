@@ -1,5 +1,5 @@
 // Package app holds Knowledge's use cases. Authorization comes entirely
-// from the caller's token (ADR-0022): its customer must match the
+// from the caller's token (ADR-0022): its organization must match the
 // knowledge space, and it must carry the required capability.
 package app
 
@@ -30,13 +30,13 @@ type Filter struct {
 	Limit   int
 }
 
-// Store persists entries of customer spaces.
+// Store persists entries of organization spaces.
 type Store interface {
 	Create(ctx context.Context, e domain.Entry) error
 	Update(ctx context.Context, e domain.Entry, expected int64) error
-	Get(ctx context.Context, customer, id string) (domain.Entry, error)
-	List(ctx context.Context, customer string, f Filter) ([]domain.Entry, error)
-	Versions(ctx context.Context, customer, id string) ([]domain.Version, error)
+	Get(ctx context.Context, organization, id string) (domain.Entry, error)
+	List(ctx context.Context, organization string, f Filter) ([]domain.Entry, error)
+	Versions(ctx context.Context, organization, id string) ([]domain.Version, error)
 }
 
 // ChangeListener is notified of changed entries (search indexing); optional.
@@ -56,15 +56,15 @@ type Service struct {
 	NewID       func() string
 }
 
-// authorize checks the token in ctx against customer and capability and
+// authorize checks the token in ctx against organization and capability and
 // returns the author to record (the human behind Core, or the workload).
-func authorize(ctx context.Context, customer, capability string) (string, error) {
+func authorize(ctx context.Context, organization, capability string) (string, error) {
 	c, ok := runtoken.ClaimsFromContext(ctx)
 	if !ok {
 		return "", ErrUnauthenticated
 	}
-	if c.Customer == "" || c.Customer != customer {
-		return "", fmt.Errorf("%w: token is not scoped to customer %s", ErrForbidden, customer)
+	if c.Organization == "" || c.Organization != organization {
+		return "", fmt.Errorf("%w: token is not scoped to organization %s", ErrForbidden, organization)
 	}
 	if !c.Can(capability) {
 		return "", fmt.Errorf("%w: missing %s", ErrForbidden, capability)
@@ -84,15 +84,15 @@ type CreateInput struct {
 	Items    []string
 }
 
-// Create adds an entry to customer's space.
-func (s *Service) Create(ctx context.Context, customer string, in CreateInput) (domain.Entry, error) {
-	author, err := authorize(ctx, customer, runtoken.CapKnowledgeWrite)
+// Create adds an entry to organization's space.
+func (s *Service) Create(ctx context.Context, organization string, in CreateInput) (domain.Entry, error) {
+	author, err := authorize(ctx, organization, runtoken.CapKnowledgeWrite)
 	if err != nil {
 		return domain.Entry{}, err
 	}
 	now := s.Now()
 	e := domain.Entry{
-		ID: s.NewID(), Customer: customer, Kind: in.Kind, Title: in.Title, Body: in.Body,
+		ID: s.NewID(), Organization: organization, Kind: in.Kind, Title: in.Title, Body: in.Body,
 		Projects: in.Projects, Items: in.Items, Version: 1, CreatedBy: author, UpdatedBy: author,
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -117,12 +117,12 @@ type UpdateInput struct {
 }
 
 // Update edits an entry, creating a new version.
-func (s *Service) Update(ctx context.Context, customer, id string, in UpdateInput) (domain.Entry, error) {
-	author, err := authorize(ctx, customer, runtoken.CapKnowledgeWrite)
+func (s *Service) Update(ctx context.Context, organization, id string, in UpdateInput) (domain.Entry, error) {
+	author, err := authorize(ctx, organization, runtoken.CapKnowledgeWrite)
 	if err != nil {
 		return domain.Entry{}, err
 	}
-	e, err := s.Store.Get(ctx, customer, id)
+	e, err := s.Store.Get(ctx, organization, id)
 	if err != nil {
 		return domain.Entry{}, err
 	}
@@ -153,27 +153,27 @@ func (s *Service) Update(ctx context.Context, customer, id string, in UpdateInpu
 }
 
 // Get returns an entry.
-func (s *Service) Get(ctx context.Context, customer, id string) (domain.Entry, error) {
-	if _, err := authorize(ctx, customer, runtoken.CapKnowledgeRead); err != nil {
+func (s *Service) Get(ctx context.Context, organization, id string) (domain.Entry, error) {
+	if _, err := authorize(ctx, organization, runtoken.CapKnowledgeRead); err != nil {
 		return domain.Entry{}, err
 	}
-	return s.Store.Get(ctx, customer, id)
+	return s.Store.Get(ctx, organization, id)
 }
 
-// List returns entries of customer's space.
-func (s *Service) List(ctx context.Context, customer string, f Filter) ([]domain.Entry, error) {
-	if _, err := authorize(ctx, customer, runtoken.CapKnowledgeRead); err != nil {
+// List returns entries of organization's space.
+func (s *Service) List(ctx context.Context, organization string, f Filter) ([]domain.Entry, error) {
+	if _, err := authorize(ctx, organization, runtoken.CapKnowledgeRead); err != nil {
 		return nil, err
 	}
-	return s.Store.List(ctx, customer, f)
+	return s.Store.List(ctx, organization, f)
 }
 
 // Versions returns an entry's versions, newest first.
-func (s *Service) Versions(ctx context.Context, customer, id string) ([]domain.Version, error) {
-	if _, err := authorize(ctx, customer, runtoken.CapKnowledgeRead); err != nil {
+func (s *Service) Versions(ctx context.Context, organization, id string) ([]domain.Version, error) {
+	if _, err := authorize(ctx, organization, runtoken.CapKnowledgeRead); err != nil {
 		return nil, err
 	}
-	return s.Store.Versions(ctx, customer, id)
+	return s.Store.Versions(ctx, organization, id)
 }
 
 func (s *Service) changed(e domain.Entry) {

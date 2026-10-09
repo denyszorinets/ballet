@@ -1,4 +1,4 @@
-// Knowledge is the Ballet knowledge service: customer-scoped knowledge, search and MCP.
+// Knowledge is the Ballet knowledge service: organization-scoped knowledge, search and MCP.
 package main
 
 import (
@@ -43,7 +43,7 @@ type serviceConfig struct {
 // embeddingsConfig selects how entries are embedded for semantic search.
 type embeddingsConfig struct {
 	// Mode is "local" (hash embedder in-process) or "gateway" (LLM gateway
-	// with the knowledge service token, attributed to each customer).
+	// with the knowledge service token, attributed to each organization).
 	Mode       string `toml:"mode"`
 	Model      string `toml:"model"`
 	GatewayURL string `toml:"gateway_url"`

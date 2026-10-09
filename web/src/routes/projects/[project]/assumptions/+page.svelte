@@ -10,7 +10,7 @@
 	const project = $derived(page.params.project ?? '');
 
 	let session = $state<Session>();
-	let customer = $state<string>();
+	let organization = $state<string>();
 	let items = $state<Assumption[]>([]);
 	let review = $state<Review>('open');
 	let loaded = $state(false);
@@ -20,7 +20,9 @@
 	let comment = $state('');
 	let actionError = $state<string>();
 
-	const canReview = $derived(!!session?.permissions.can('tracker.write', { customer, project }));
+	const canReview = $derived(
+		!!session?.permissions.can('tracker.write', { organization, project })
+	);
 
 	async function load(s: Session, key: string, r: Review) {
 		const [p, list] = await Promise.all([
@@ -33,7 +35,7 @@
 			error = apiError(list.error);
 			return;
 		}
-		customer = p.data?.customer;
+		organization = p.data?.organization;
 		items = list.data.items;
 		loaded = true;
 	}

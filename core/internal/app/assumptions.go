@@ -64,11 +64,11 @@ func (as *Assumptions) List(ctx context.Context, projectKey, review string) ([]A
 	if err != nil {
 		return nil, err
 	}
-	c, err := as.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := as.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return nil, err
 	}
-	if err := as.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := as.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return nil, err
 	}
 	list, err := as.Store.Assumptions(ctx, p.ID, review)
@@ -112,11 +112,11 @@ func (as *Assumptions) Review(ctx context.Context, reportID string, confirm bool
 	if err != nil {
 		return AssumptionView{}, err
 	}
-	c, err := as.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := as.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return AssumptionView{}, err
 	}
-	if err := as.Authz.Authorize(ctx, id, ActTrackerWrite, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := as.Authz.Authorize(ctx, id, ActTrackerWrite, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return AssumptionView{}, err
 	}
 	comment = strings.TrimSpace(comment)
@@ -134,7 +134,7 @@ func (as *Assumptions) Review(ctx context.Context, reportID string, confirm bool
 			return AssumptionView{}, err
 		}
 	}
-	e := event.Event{Customer: c.ID, Project: p.ID, EntityType: "item", EntityID: it.ID, Type: "item.assumption_reviewed",
+	e := event.Event{Organization: c.ID, Project: p.ID, EntityType: "item", EntityID: it.ID, Type: "item.assumption_reviewed",
 		Actor: actorIn(ctx, id), OccurredAt: now,
 		Payload: mustJSON(map[string]any{"report": r.ID, "review": r.Review, "follow_up": r.FollowUp})}
 	if err := as.Store.ReviewAssumption(ctx, r, e); err != nil {
@@ -145,12 +145,12 @@ func (as *Assumptions) Review(ctx context.Context, reportID string, confirm bool
 
 // followUp creates the work a rejection causes and returns its reference:
 // "question:<id>" or "changeset:<id>".
-func (as *Assumptions) followUp(ctx context.Context, r report.Report, it tracker.Item, customerID, projectKey, by string) (string, error) {
+func (as *Assumptions) followUp(ctx context.Context, r report.Report, it tracker.Item, organizationID, projectKey, by string) (string, error) {
 	if !tracker.Resolved(it.State) {
 		q := report.Question{ID: as.NewID(), ProjectID: r.ProjectID, TicketID: r.TicketID, RunID: r.RunID,
 			Text: "Assumption rejected: " + r.Text, Context: r.Detail, Status: report.QuestionOpen, Route: report.RouteHuman,
 			CreatedAt: as.Now()}
-		e := event.Event{Customer: customerID, Project: r.ProjectID, EntityType: "item", EntityID: it.ID, Type: "item.question_raised",
+		e := event.Event{Organization: organizationID, Project: r.ProjectID, EntityType: "item", EntityID: it.ID, Type: "item.question_raised",
 			Actor: event.Actor{Kind: event.ActorHuman, Subject: by}, OccurredAt: as.Now(),
 			Payload: mustJSON(map[string]any{"question": q.ID, "blocking": false, "assumption": r.ID})}
 		if err := as.Reports.CreateQuestion(ctx, q, e); err != nil {

@@ -37,18 +37,19 @@ The :repo:`.github/workflows/pages.yml` workflow runs ``make site`` and
 The repository's Pages source is **GitHub Actions** (*Settings → Pages*);
 the ``github-pages`` environment deploys only from ``develop``.
 
-README media
-------------
+Screenshots and animations
+--------------------------
 
-The README's GIFs and screenshots (``docs/_static/readme``) are recorded
-from a real Ballet, not drawn:
+The README's GIFs and screenshots (``docs/_static/readme``) and the
+documentation's screenshots (``docs/_static/screenshots``, also used by
+the landing page) are recorded from a real Ballet, not drawn:
 
 .. code-block:: bash
 
-   make readme-media
+   make media
 
-:repo:`scripts/readme-media/record.sh` starts a throwaway Ballet with the
-fake model, :repo:`scripts/readme-media/record.mjs` sets up a demo project
+:repo:`scripts/media/record.sh` starts a throwaway Ballet with the
+fake model, :repo:`scripts/media/record.mjs` sets up a demo project
 over the REST API and drives the web UI with Playwright (Chrome), and
-:repo:`scripts/readme-media/gif.py` turns the frames into GIFs with Pillow
-(through ``uv``). Re-record after UI changes so the README stays true.
+:repo:`scripts/media/gif.py` turns the frames into GIFs with Pillow
+(through ``uv``). Re-record after UI changes so the pictures stay true.

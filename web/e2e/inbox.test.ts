@@ -14,7 +14,7 @@ const question = (id: string, ticket: string, text: string, extra: object = {}) 
 	status: 'open',
 	route: 'human',
 	created_at: ago(90),
-	customer: 'acme',
+	organization: 'acme',
 	project: 'WEB',
 	ticket_title: `Title of ${ticket}`,
 	ticket_state: 'waiting_for_answer',
@@ -26,10 +26,10 @@ const question = (id: string, ticket: string, text: string, extra: object = {}) 
 async function open(page: Page, role: string): Promise<FakeCore> {
 	await fakeOIDC(page);
 	const core = await fakeCore(page, {
-		me: [{ role, scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		me: [{ role, scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
 		projects: [
-			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web', description: '', version: 1 }
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web', description: '', version: 1 }
 		],
 		inbox: [
 			question('q1', 'WEB-2', 'Which identity provider do we use?', {
@@ -127,7 +127,7 @@ test('viewers read questions but cannot answer', async ({ page }) => {
 
 test('an empty inbox says so', async ({ page }) => {
 	await fakeOIDC(page);
-	await fakeCore(page, { me: [{ role: 'engineer', scope: 'customer:acme' }] });
+	await fakeCore(page, { me: [{ role: 'engineer', scope: 'organization:acme' }] });
 	await fakeRealtime(page, async () => ({}));
 	await page.goto('/inbox');
 	await page.getByRole('button', { name: 'Sign in' }).click();

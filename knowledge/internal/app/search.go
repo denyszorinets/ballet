@@ -12,39 +12,39 @@ import (
 	"github.com/denyszorinets/ballet/knowledge/internal/domain"
 )
 
-// Embedders returns the embedder to use for a customer's content (its
+// Embedders returns the embedder to use for an organization's content (its
 // credentials and metering apply).
 type Embedders interface {
-	For(customer string) embed.Embedder
+	For(organization string) embed.Embedder
 }
 
-// LocalEmbedders uses the same embedder for every customer.
+// LocalEmbedders uses the same embedder for every organization.
 type LocalEmbedders struct{ Embedder embed.Embedder }
 
 // For returns the shared embedder.
 func (l LocalEmbedders) For(string) embed.Embedder { return l.Embedder }
 
-// GatewayEmbedders embeds through the LLM gateway on behalf of each customer.
+// GatewayEmbedders embeds through the LLM gateway on behalf of each organization.
 type GatewayEmbedders struct {
 	URL   string
 	Token func(context.Context) (string, error)
 	Model string
 }
 
-// For returns a gateway client attributed to customer.
-func (g GatewayEmbedders) For(customer string) embed.Embedder {
-	return &embed.Gateway{URL: g.URL, Token: g.Token, ModelID: g.Model, Customer: customer}
+// For returns a gateway client attributed to organization.
+func (g GatewayEmbedders) For(organization string) embed.Embedder {
+	return &embed.Gateway{URL: g.URL, Token: g.Token, ModelID: g.Model, Organization: organization}
 }
 
 // SearchStore runs hybrid queries.
 type SearchStore interface {
-	Search(ctx context.Context, customer string, q SearchQuery) ([]SearchHit, error)
+	Search(ctx context.Context, organization string, q SearchQuery) ([]SearchHit, error)
 }
 
-// Search finds entries of customer's space matching text: full-text and,
+// Search finds entries of organization's space matching text: full-text and,
 // when an embedder is configured, semantic similarity, fused by rank.
-func (s *Service) Search(ctx context.Context, customer string, q SearchQuery) ([]SearchHit, error) {
-	if _, err := authorize(ctx, customer, runtoken.CapKnowledgeRead); err != nil {
+func (s *Service) Search(ctx context.Context, organization string, q SearchQuery) ([]SearchHit, error) {
+	if _, err := authorize(ctx, organization, runtoken.CapKnowledgeRead); err != nil {
 		return nil, err
 	}
 	q.Vector, q.Model, q.MaxDistance = nil, "", s.MaxDistance
@@ -52,7 +52,7 @@ func (s *Service) Search(ctx context.Context, customer string, q SearchQuery) ([
 		q.MaxDistance = DefaultMaxDistance
 	}
 	if s.Embedders != nil {
-		emb := s.Embedders.For(customer)
+		emb := s.Embedders.For(organization)
 		vs, err := emb.Embed(ctx, []string{q.Text})
 		if err != nil {
 			slog.WarnContext(ctx, "embedding the query failed; full-text search only", "error", err)
@@ -60,7 +60,7 @@ func (s *Service) Search(ctx context.Context, customer string, q SearchQuery) ([
 			q.Vector, q.Model = vs[0], emb.Model()
 		}
 	}
-	return s.Searcher.Search(ctx, customer, q)
+	return s.Searcher.Search(ctx, organization, q)
 }
 
 // ContentHash identifies the embedded content of an entry.
@@ -133,17 +133,17 @@ func (ix *Indexer) IndexOnce(ctx context.Context) (int, error) {
 	if err != nil || len(stale) == 0 {
 		return 0, err
 	}
-	byCustomer := map[string][]domain.Entry{}
+	byOrganization := map[string][]domain.Entry{}
 	for _, e := range stale {
-		byCustomer[e.Customer] = append(byCustomer[e.Customer], e)
+		byOrganization[e.Organization] = append(byOrganization[e.Organization], e)
 	}
 	done := 0
-	for customer, entries := range byCustomer {
+	for organization, entries := range byOrganization {
 		texts := make([]string, len(entries))
 		for i, e := range entries {
 			texts[i] = e.Title + "\n" + e.Body
 		}
-		vs, err := ix.Embedders.For(customer).Embed(ctx, texts)
+		vs, err := ix.Embedders.For(organization).Embed(ctx, texts)
 		if err != nil {
 			return done, err
 		}

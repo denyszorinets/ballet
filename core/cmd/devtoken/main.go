@@ -3,7 +3,7 @@
 // Development only: it needs read access to Core's key file.
 //
 //	go run ./core/cmd/devtoken -keys data/token-keys.json \
-//	  -customer acme -project WEB -ticket WEB-1 -aud gateway -caps llm.invoke
+//	  -organization acme -project WEB -ticket WEB-1 -aud gateway -caps llm.invoke
 package main
 
 import (
@@ -21,7 +21,7 @@ func main() {
 	kind := flag.String("kind", "run", "token kind: run, agent, planner or service")
 	sub := flag.String("sub", "run:dev", "subject")
 	aud := flag.String("aud", "gateway", "comma-separated audience")
-	customer := flag.String("customer", "", "customer key")
+	organization := flag.String("organization", "", "organization key")
 	project := flag.String("project", "", "project key")
 	ticket := flag.String("ticket", "", "ticket key (run tokens)")
 	caps := flag.String("caps", "", "comma-separated capabilities")
@@ -39,7 +39,7 @@ func main() {
 	}
 	tok, err := runtoken.NewIssuer(ring, time.Now).Issue(runtoken.Claims{
 		Kind: runtoken.Kind(*kind), Subject: *sub, Audience: strings.Split(*aud, ","),
-		Customer: *customer, Project: *project, Ticket: *ticket, Capabilities: capabilities,
+		Organization: *organization, Project: *project, Ticket: *ticket, Capabilities: capabilities,
 	}, *ttl)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "devtoken:", err)

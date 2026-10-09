@@ -8,7 +8,7 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/domain/tenancy"
 )
 
-func TestValidateCustomerKey(t *testing.T) {
+func TestValidateOrganizationKey(t *testing.T) {
 	tests := []struct {
 		key string
 		ok  bool
@@ -26,7 +26,7 @@ func TestValidateCustomerKey(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
-			err := tenancy.ValidateCustomerKey(tt.key)
+			err := tenancy.ValidateOrganizationKey(tt.key)
 			if tt.ok {
 				assert.NoError(t, err)
 			} else {

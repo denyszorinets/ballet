@@ -1,6 +1,6 @@
 // Package mcpapi exposes the knowledge space to agents over MCP
 // (streamable HTTP at /mcp, ADR-0005). Agents authenticate with their run
-// token (audience "knowledge"); every tool works in the token's customer
+// token (audience "knowledge"); every tool works in the token's organization
 // space with the token's capabilities.
 package mcpapi
 
@@ -41,12 +41,12 @@ func Register(mux *http.ServeMux, v *runtoken.Verifier, s *app.Service, version 
 // NewServer builds the MCP server with Ballet's knowledge tools.
 func NewServer(s *app.Service, version string) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "ballet-knowledge", Version: version}, &mcp.ServerOptions{
-		Instructions: "Ballet knowledge base of this customer: documentation, decisions, notes and technical debt. " +
+		Instructions: "Ballet knowledge base of this organization: documentation, decisions, notes and technical debt. " +
 			"Search it before starting work and record what you learn, decide or leave unfinished.",
 	})
 	t := tools{s: s}
 	mcp.AddTool(server, &mcp.Tool{Name: "knowledge_search",
-		Description: "Hybrid full-text and semantic search in the customer's knowledge base."}, t.search)
+		Description: "Hybrid full-text and semantic search in the organization's knowledge base."}, t.search)
 	mcp.AddTool(server, &mcp.Tool{Name: "knowledge_list",
 		Description: "List entries, optionally filtered by kind, project or linked tracker item (e.g. WEB-42)."}, t.list)
 	mcp.AddTool(server, &mcp.Tool{Name: "knowledge_get",
@@ -60,14 +60,14 @@ func NewServer(s *app.Service, version string) *mcp.Server {
 
 type tools struct{ s *app.Service }
 
-// scope returns a context carrying the caller's claims and its customer.
+// scope returns a context carrying the caller's claims and its organization.
 func scope(ctx context.Context, req *mcp.CallToolRequest) (context.Context, runtoken.Claims, error) {
 	var c runtoken.Claims
 	if req.Extra != nil && req.Extra.TokenInfo != nil {
 		c, _ = req.Extra.TokenInfo.Extra["claims"].(runtoken.Claims)
 	}
-	if c.Customer == "" {
-		return nil, c, errors.New("token is not scoped to a customer")
+	if c.Organization == "" {
+		return nil, c, errors.New("token is not scoped to an organization")
 	}
 	return runtoken.ContextWithClaims(ctx, c), c, nil
 }
@@ -134,7 +134,7 @@ func (t tools) search(ctx context.Context, req *mcp.CallToolRequest, in SearchIn
 	if limit <= 0 {
 		limit = 10
 	}
-	hits, err := t.s.Search(ctx, c.Customer, app.SearchQuery{Text: in.Query, Kind: domain.Kind(in.Kind), Project: in.Project, Limit: limit})
+	hits, err := t.s.Search(ctx, c.Organization, app.SearchQuery{Text: in.Query, Kind: domain.Kind(in.Kind), Project: in.Project, Limit: limit})
 	if err != nil {
 		return nil, Entries{}, err
 	}
@@ -162,7 +162,7 @@ func (t tools) list(ctx context.Context, req *mcp.CallToolRequest, in ListInput)
 	if limit <= 0 {
 		limit = 50
 	}
-	list, err := t.s.List(ctx, c.Customer, app.Filter{Kind: domain.Kind(in.Kind), Project: in.Project, Item: in.Item, Limit: limit})
+	list, err := t.s.List(ctx, c.Organization, app.Filter{Kind: domain.Kind(in.Kind), Project: in.Project, Item: in.Item, Limit: limit})
 	if err != nil {
 		return nil, Entries{}, err
 	}
@@ -183,7 +183,7 @@ func (t tools) get(ctx context.Context, req *mcp.CallToolRequest, in GetInput) (
 	if err != nil {
 		return nil, Entry{}, err
 	}
-	e, err := t.s.Get(ctx, c.Customer, in.ID)
+	e, err := t.s.Get(ctx, c.Organization, in.ID)
 	if err != nil {
 		return nil, Entry{}, err
 	}
@@ -208,7 +208,7 @@ func (t tools) create(ctx context.Context, req *mcp.CallToolRequest, in CreateIn
 	if len(projects) == 0 && c.Project != "" {
 		projects = []string{c.Project}
 	}
-	e, err := t.s.Create(ctx, c.Customer, app.CreateInput{
+	e, err := t.s.Create(ctx, c.Organization, app.CreateInput{
 		Kind: domain.Kind(in.Kind), Title: in.Title, Body: in.Body, Projects: projects, Items: in.Items,
 	})
 	if err != nil {
@@ -238,7 +238,7 @@ func (t tools) update(ctx context.Context, req *mcp.CallToolRequest, in UpdateIn
 		k := domain.Kind(*in.Kind)
 		u.Kind = &k
 	}
-	e, err := t.s.Update(ctx, c.Customer, in.ID, u)
+	e, err := t.s.Update(ctx, c.Organization, in.ID, u)
 	if err != nil {
 		return nil, Entry{}, err
 	}

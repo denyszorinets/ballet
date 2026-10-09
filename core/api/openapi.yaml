@@ -56,43 +56,43 @@ paths:
         "204": { description: Deleted }
         default: { $ref: "#/components/responses/Error" }
 
-  /api/v1/customers:
+  /api/v1/organizations:
     get:
-      operationId: listCustomers
+      operationId: listOrganizations
       tags: [tenancy]
       responses:
-        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CustomerList" } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/OrganizationList" } } } }
         default: { $ref: "#/components/responses/Error" }
     post:
-      operationId: createCustomer
+      operationId: createOrganization
       tags: [tenancy]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/CreateCustomer" } } }
+        content: { application/json: { schema: { $ref: "#/components/schemas/CreateOrganization" } } }
       responses:
-        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Customer" } } } }
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Organization" } } } }
         default: { $ref: "#/components/responses/Error" }
 
-  /api/v1/customers/{customer}:
-    parameters: [{ $ref: "#/components/parameters/Customer" }]
+  /api/v1/organizations/{organization}:
+    parameters: [{ $ref: "#/components/parameters/Organization" }]
     get:
-      operationId: getCustomer
+      operationId: getOrganization
       tags: [tenancy]
       responses:
-        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Customer" } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Organization" } } } }
         default: { $ref: "#/components/responses/Error" }
     patch:
-      operationId: updateCustomer
+      operationId: updateOrganization
       tags: [tenancy]
       requestBody:
         required: true
-        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateCustomer" } } }
+        content: { application/json: { schema: { $ref: "#/components/schemas/UpdateOrganization" } } }
       responses:
-        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Customer" } } } }
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Organization" } } } }
         default: { $ref: "#/components/responses/Error" }
 
-  /api/v1/customers/{customer}/projects:
-    parameters: [{ $ref: "#/components/parameters/Customer" }]
+  /api/v1/organizations/{organization}/projects:
+    parameters: [{ $ref: "#/components/parameters/Organization" }]
     get:
       operationId: listProjects
       tags: [tenancy]
@@ -415,19 +415,19 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KillResult" } } } }
         default: { $ref: "#/components/responses/Error" }
 
-  /api/v1/customers/{customer}/budget:
-    parameters: [{ $ref: "#/components/parameters/Customer" }]
+  /api/v1/organizations/{organization}/budget:
+    parameters: [{ $ref: "#/components/parameters/Organization" }]
     get:
-      operationId: getCustomerBudget
+      operationId: getOrganizationBudget
       tags: [usage]
-      summary: The customer's token budgets and today's use (customer.read)
+      summary: The organization's token budgets and today's use (organization.read)
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Budget" } } } }
         default: { $ref: "#/components/responses/Error" }
     put:
-      operationId: setCustomerBudget
+      operationId: setOrganizationBudget
       tags: [usage]
-      summary: Set the customer's token budgets (customer.update)
+      summary: Set the organization's token budgets (organization.update)
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/SetBudget" } } }
@@ -768,20 +768,20 @@ paths:
         "204": { description: Removed }
         default: { $ref: "#/components/responses/Error" }
 
-  /api/v1/customers/{customer}/credentials:
-    parameters: [{ $ref: "#/components/parameters/Customer" }]
+  /api/v1/organizations/{organization}/credentials:
+    parameters: [{ $ref: "#/components/parameters/Organization" }]
     get:
       operationId: listCredentials
       tags: [credentials]
-      summary: Customer defaults and project overrides, without secrets
+      summary: Organization defaults and project overrides, without secrets
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CredentialList" } } } }
         default: { $ref: "#/components/responses/Error" }
 
-  /api/v1/customers/{customer}/credentials/{provider}:
-    parameters: [{ $ref: "#/components/parameters/Customer" }, { $ref: "#/components/parameters/Provider" }]
+  /api/v1/organizations/{organization}/credentials/{provider}:
+    parameters: [{ $ref: "#/components/parameters/Organization" }, { $ref: "#/components/parameters/Provider" }]
     put:
-      operationId: setCustomerCredential
+      operationId: setOrganizationCredential
       tags: [credentials]
       requestBody:
         required: true
@@ -790,7 +790,7 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Credential" } } } }
         default: { $ref: "#/components/responses/Error" }
     delete:
-      operationId: deleteCustomerCredential
+      operationId: deleteOrganizationCredential
       tags: [credentials]
       responses:
         "204": { description: Deleted }
@@ -831,12 +831,12 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/UsageReport" } } } }
         default: { $ref: "#/components/responses/Error" }
 
-  /api/v1/customers/{customer}/knowledge/entries:
-    parameters: [{ $ref: "#/components/parameters/Customer" }]
+  /api/v1/organizations/{organization}/knowledge/entries:
+    parameters: [{ $ref: "#/components/parameters/Organization" }]
     get:
       operationId: listKnowledgeEntries
       tags: [knowledge]
-      summary: Entries of the customer's knowledge space (served by Knowledge through Core)
+      summary: Entries of the organization's knowledge space (served by Knowledge through Core)
       parameters:
         - { name: kind, in: query, schema: { $ref: "#/components/schemas/KnowledgeKind" } }
         - { name: project, in: query, schema: { type: string }, description: Project key }
@@ -854,12 +854,12 @@ paths:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeEntry" } } } }
         default: { $ref: "#/components/responses/Error" }
 
-  /api/v1/customers/{customer}/knowledge/search:
-    parameters: [{ $ref: "#/components/parameters/Customer" }]
+  /api/v1/organizations/{organization}/knowledge/search:
+    parameters: [{ $ref: "#/components/parameters/Organization" }]
     get:
       operationId: searchKnowledge
       tags: [knowledge]
-      summary: Hybrid full-text and semantic search in the customer's knowledge space
+      summary: Hybrid full-text and semantic search in the organization's knowledge space
       parameters:
         - { name: q, in: query, required: true, schema: { type: string } }
         - { name: kind, in: query, schema: { $ref: "#/components/schemas/KnowledgeKind" } }
@@ -869,8 +869,8 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeSearchResult" } } } }
         default: { $ref: "#/components/responses/Error" }
 
-  /api/v1/customers/{customer}/knowledge/entries/{entry}:
-    parameters: [{ $ref: "#/components/parameters/Customer" }, { $ref: "#/components/parameters/Entry" }]
+  /api/v1/organizations/{organization}/knowledge/entries/{entry}:
+    parameters: [{ $ref: "#/components/parameters/Organization" }, { $ref: "#/components/parameters/Entry" }]
     get:
       operationId: getKnowledgeEntry
       tags: [knowledge]
@@ -887,8 +887,8 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeEntry" } } } }
         default: { $ref: "#/components/responses/Error" }
 
-  /api/v1/customers/{customer}/knowledge/entries/{entry}/versions:
-    parameters: [{ $ref: "#/components/parameters/Customer" }, { $ref: "#/components/parameters/Entry" }]
+  /api/v1/organizations/{organization}/knowledge/entries/{entry}/versions:
+    parameters: [{ $ref: "#/components/parameters/Organization" }, { $ref: "#/components/parameters/Entry" }]
     get:
       operationId: listKnowledgeVersions
       tags: [knowledge]
@@ -902,7 +902,7 @@ paths:
       tags: [skills]
       summary: Skills defined at exactly one scope
       parameters:
-        - { name: scope, in: query, required: true, schema: { type: string }, description: "platform, customer:<key> or project:<key>" }
+        - { name: scope, in: query, required: true, schema: { type: string }, description: "platform, organization:<key> or project:<key>" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SkillList" } } } }
         default: { $ref: "#/components/responses/Error" }
@@ -972,7 +972,7 @@ paths:
     get:
       operationId: resolveProjectSkills
       tags: [skills]
-      summary: The project's effective skills (platform → customer → project, pins applied)
+      summary: The project's effective skills (platform → organization → project, pins applied)
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ResolvedSkillList" } } } }
         default: { $ref: "#/components/responses/Error" }
@@ -1026,7 +1026,7 @@ components:
     bearer: { type: http, scheme: bearer, bearerFormat: JWT }
 
   parameters:
-    Customer: { name: customer, in: path, required: true, schema: { type: string }, description: Customer key }
+    Organization: { name: organization, in: path, required: true, schema: { type: string }, description: Organization key }
     Project: { name: project, in: path, required: true, schema: { type: string }, description: Project key }
     Skill: { name: skill, in: path, required: true, schema: { type: string }, description: Skill ID }
     Run: { name: run, in: path, required: true, schema: { type: string }, description: Run ID }
@@ -1084,8 +1084,8 @@ components:
         id: { type: string }
         claim: { type: string }
         value: { type: string }
-        role: { type: string, enum: [platform-admin, customer-admin, engineer, approver, viewer] }
-        scope: { type: string, description: "platform, customer:<key> or project:<key>" }
+        role: { type: string, enum: [platform-admin, organization-admin, engineer, approver, viewer] }
+        scope: { type: string, description: "platform, organization:<key> or project:<key>" }
         bootstrap: { type: boolean }
         created_at: { type: string, format: date-time }
     RoleBindingList:
@@ -1103,7 +1103,7 @@ components:
         role: { type: string }
         scope: { type: string }
 
-    Customer:
+    Organization:
       type: object
       additionalProperties: false
       required: [id, key, name, created_at, updated_at, version]
@@ -1114,19 +1114,19 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         version: { type: integer, format: int64 }
-    CustomerList:
+    OrganizationList:
       type: object
       additionalProperties: false
       required: [items]
-      properties: { items: { type: array, items: { $ref: "#/components/schemas/Customer" } } }
-    CreateCustomer:
+      properties: { items: { type: array, items: { $ref: "#/components/schemas/Organization" } } }
+    CreateOrganization:
       type: object
       additionalProperties: false
       required: [key, name]
       properties:
         key: { type: string }
         name: { type: string }
-    UpdateCustomer:
+    UpdateOrganization:
       type: object
       additionalProperties: false
       required: [name, version]
@@ -1137,11 +1137,11 @@ components:
     Project:
       type: object
       additionalProperties: false
-      required: [id, key, customer, name, description, created_at, updated_at, version]
+      required: [id, key, organization, name, description, created_at, updated_at, version]
       properties:
         id: { type: string }
         key: { type: string }
-        customer: { type: string, description: Customer key }
+        organization: { type: string, description: Organization key }
         name: { type: string }
         description: { type: string }
         created_at: { type: string, format: date-time }
@@ -1392,7 +1392,7 @@ components:
     InboxEntry:
       type: object
       additionalProperties: false
-      required: [id, ticket, text, blocking, status, created_at, customer, project, ticket_title, ticket_state, blocked_behind]
+      required: [id, ticket, text, blocking, status, created_at, organization, project, ticket_title, ticket_state, blocked_behind]
       properties:
         id: { type: string }
         ticket: { type: string }
@@ -1406,7 +1406,7 @@ components:
         answered_by: { type: string }
         created_at: { type: string, format: date-time }
         answered_at: { type: string, format: date-time }
-        customer: { type: string }
+        organization: { type: string }
         project: { type: string }
         ticket_title: { type: string }
         ticket_state: { $ref: "#/components/schemas/ItemState" }
@@ -1883,7 +1883,7 @@ components:
       required: [provider, base_url, fingerprint, updated_at]
       properties:
         provider: { type: string, enum: [anthropic, openai, git] }
-        project: { type: string, description: Project key of an override; absent for the customer default }
+        project: { type: string, description: Project key of an override; absent for the organization default }
         base_url: { type: string }
         fingerprint: { type: string, description: Identifies the key without revealing it }
         updated_at: { type: string, format: date-time }
@@ -2099,7 +2099,7 @@ components:
         ref: { type: string, description: Item key or skill name }
         title: { type: string }
         snippet: { type: string }
-        customer: { type: string }
+        organization: { type: string }
         project: { type: string }
         scope: { type: string, description: Skills only }
         score: { type: number }

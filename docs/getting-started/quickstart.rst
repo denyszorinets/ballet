@@ -58,23 +58,23 @@ on — a bare repository stands in for GitHub:
 
 Keep the printed URL.
 
-3. Create a customer and a project
-----------------------------------
+3. Create an organization and a project
+---------------------------------------
 
-Work in Ballet belongs to **projects**, grouped by **customer** — the
-boundary that keeps one client's code, knowledge and keys apart from
-another's (:doc:`/concepts/domain-model`).
+Work in Ballet belongs to **projects**, grouped by **organization** — the
+boundary that keeps one organization's code, knowledge and keys apart
+from another's (:doc:`/concepts/domain-model`).
 
-#. On **Customers**, create customer ``acme`` (*Acme Corporation*) and
+#. On **Organizations**, create organization ``acme`` (*Acme Corporation*) and
    open it.
 #. Under **LLM credentials**, save an *Anthropic* key: any text, e.g.
    ``sk-fake``, works with the fake model.
 #. Under **New project**, create project ``GREET`` (*Greeter*).
 
-.. figure:: /_static/screenshots/customer.png
-   :alt: The customer page with project GREET, the budget and a saved Anthropic key.
+.. figure:: /_static/screenshots/organization.png
+   :alt: The organization page with project GREET, the budget and a saved Anthropic key.
 
-   The customer page: projects, token budget and LLM credentials.
+   The organization page: projects, token budget and LLM credentials.
 
 4. Point the project at the repository
 --------------------------------------
@@ -166,7 +166,7 @@ Answer it and choose **Answer and resume**: within the project's answer
 window (15 minutes by default) the answer goes **into the same running
 session**, which continues with its whole context. Later answers resume
 the session from where it parked (:doc:`/concepts/questions`). Every
-answer is also saved as a *decision* in the customer's knowledge base,
+answer is also saved as a *decision* in the organization's knowledge base,
 so it is not asked again.
 
 The fake model asks the same question again in the next stage (it only

@@ -8,14 +8,14 @@
 	const project = $derived(page.params.project ?? '');
 
 	let session = $state<Session>();
-	let customer = $state<string>();
+	let organization = $state<string>();
 	let sessions = $state<Schemas['PlannerSession'][]>([]);
 	let loaded = $state(false);
 	let error = $state<string>();
 	let title = $state('');
 	let formError = $state<string>();
 
-	const canPlan = $derived(!!session?.permissions.can('tracker.write', { customer, project }));
+	const canPlan = $derived(!!session?.permissions.can('tracker.write', { organization, project }));
 
 	async function load(s: Session, key: string) {
 		const path = { params: { path: { project: key } } };
@@ -27,7 +27,7 @@
 			error = apiError(list.error);
 			return;
 		}
-		customer = p.data?.customer;
+		organization = p.data?.organization;
 		sessions = list.data.items;
 		loaded = true;
 	}

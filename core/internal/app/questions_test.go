@@ -73,7 +73,7 @@ func newQuestions(t *testing.T, script func(string, int) report.Outcome) questio
 		if err != nil {
 			return
 		}
-		_, _, _ = at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB", Ticket: it.Key},
+		_, _, _ = at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Organization: "acme", Project: "WEB", Ticket: it.Key},
 			"Which identity provider do we use?", "Keycloak or Okta.", true)
 	}
 	e.agent.mu.Unlock()
@@ -184,7 +184,7 @@ func TestQuestions_NonBlockingQuestionsDoNotStopTheStage(t *testing.T) {
 	e.agent.mu.Lock()
 	e.agent.ask = func(r run.Run, n int) {
 		if r.Stage == "implement" {
-			_, _, _ = at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB",
+			_, _, _ = at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Organization: "acme", Project: "WEB",
 				Ticket: tk.Key}, "Should the button be blue?", "", false)
 		}
 	}
@@ -228,7 +228,7 @@ func TestQuestions_IterationLimitAnswerResumesTheLoop(t *testing.T) {
 	e.agent.mu.Unlock()
 }
 
-func TestQuestions_InboxOrdersByImpactAndHidesOtherCustomers(t *testing.T) {
+func TestQuestions_InboxOrdersByImpactAndHidesOtherOrganizations(t *testing.T) {
 	tr, env := newTracker(t)
 	st := env.store
 	qs := &app.Questions{Store: st, Items: st, Tenancy: st, Authz: env.rbac, Inbox: st, Now: time.Now, NewID: store.NewID}
@@ -338,7 +338,7 @@ func TestQuestions_AnAnswerGivenOnlineLetsTheSessionFinishItsStage(t *testing.T)
 		if err != nil {
 			return
 		}
-		q, _, err := at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB",
+		q, _, err := at.RaiseQuestion(context.Background(), app.RunCaller{RunID: r.ID, Organization: "acme", Project: "WEB",
 			Ticket: it.Key}, "Which port?", "", true)
 		if err != nil {
 			return

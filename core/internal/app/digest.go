@@ -77,11 +77,11 @@ func (ds *Digests) Project(ctx context.Context, projectKey string, since, until 
 	if err != nil {
 		return Digest{}, err
 	}
-	c, err := ds.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := ds.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return Digest{}, err
 	}
-	if err := ds.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := ds.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return Digest{}, err
 	}
 	if until.IsZero() {

@@ -5,16 +5,16 @@ The knowledge base is Ballet's long-term memory. It is a separate service
 with its own database, used by agents through MCP and by humans through
 the UI (:doc:`/architecture/decisions/0005-knowledge-as-separate-service-with-mcp`).
 
-Scope: one space per customer
------------------------------
+Scope: one space per organization
+---------------------------------
 
-Each customer has one **knowledge space** shared by all of that
-customer's projects. Knowledge never crosses between customers: every
-request is bound to a single customer by the caller's identity, and the
+Each organization has one **knowledge space** shared by all of that
+organization's projects. Knowledge never crosses between organizations: every
+request is bound to a single organization by the caller's identity, and the
 service refuses anything else.
 
 Platform-wide engineering knowledge (standards, practices) is *not*
-stored in customer spaces; it is distributed as :doc:`skills`.
+stored in organization spaces; it is distributed as :doc:`skills`.
 
 What is stored
 --------------
@@ -52,7 +52,7 @@ Search
 ------
 
 Hybrid search: full-text and vector (semantic) search combined, over all
-entries in the customer's space
+entries in the organization's space
 (:doc:`/architecture/decisions/0021-hybrid-vector-search-over-all-content`).
 
 - The full-text index is maintained by database triggers on every write.
@@ -66,9 +66,9 @@ entries in the customer's space
 In the UI
 ---------
 
-The customer page links to the customer's knowledge space
-(``/customers/{customer}/knowledge``). Anyone with ``knowledge.read`` on
-the customer can list, filter (kind, project) and search entries and read
+The organization page links to the organization's knowledge space
+(``/organizations/{organization}/knowledge``). Anyone with ``knowledge.read`` on
+the organization can list, filter (kind, project) and search entries and read
 an entry with its version history; ``knowledge.write`` adds creating and
 editing entries in a Markdown editor with preview. Each tracker item page
 lists the entries linked to it and offers *Add knowledge*, which creates

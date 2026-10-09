@@ -14,11 +14,11 @@ Before you leave
 #. **Check the policies.** *Merge auto* merges once every gate passes;
    use *manual* — or *Review agent+human* — for tickets you want to see
    before they land.
-#. **Set budgets.** Tokens per ticket and per day, on the customer page
+#. **Set budgets.** Tokens per ticket and per day, on the organization page
    and in the project settings. Work over budget waits instead of
    spending; a used-up ticket budget asks you for more.
 #. **Know the brakes.** On the project page (or, for everything, on the
-   *Customers* page):
+   *Organizations* page):
 
    **Pause**
       Starts nothing new; running sessions finish their stage.

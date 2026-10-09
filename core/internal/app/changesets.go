@@ -86,11 +86,11 @@ func (cs *Changesets) Propose(ctx context.Context, in ProposeInput) (ChangesetVi
 
 // proposeAs proposes on behalf of a workload (an agent run proposing
 // work); the caller has checked that the actor may.
-func (cs *Changesets) proposeAs(ctx context.Context, p tenancy.Project, c tenancy.Customer, in ProposeInput, actor event.Actor) (ChangesetView, error) {
+func (cs *Changesets) proposeAs(ctx context.Context, p tenancy.Project, c tenancy.Organization, in ProposeInput, actor event.Actor) (ChangesetView, error) {
 	return cs.propose(ctx, p, c, in, actor)
 }
 
-func (cs *Changesets) propose(ctx context.Context, p tenancy.Project, c tenancy.Customer, in ProposeInput, actor event.Actor) (ChangesetView, error) {
+func (cs *Changesets) propose(ctx context.Context, p tenancy.Project, c tenancy.Organization, in ProposeInput, actor event.Actor) (ChangesetView, error) {
 	now := cs.Tracker.Now()
 	ch := changeset.Changeset{
 		ID: cs.Tracker.NewID(), ProjectID: p.ID, Title: in.Title, Summary: in.Summary, Ops: in.Ops,
@@ -206,21 +206,21 @@ func (cs *Changesets) Reject(ctx context.Context, changesetID string) (Changeset
 	return ChangesetView{Changeset: decided, ProjectKey: p.Key}, nil
 }
 
-func (cs *Changesets) load(ctx context.Context, changesetID string, a Action) (changeset.Changeset, tenancy.Project, tenancy.Customer, identity, error) {
+func (cs *Changesets) load(ctx context.Context, changesetID string, a Action) (changeset.Changeset, tenancy.Project, tenancy.Organization, identity, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return changeset.Changeset{}, tenancy.Project{}, tenancy.Customer{}, identity{}, err
+		return changeset.Changeset{}, tenancy.Project{}, tenancy.Organization{}, identity{}, err
 	}
 	ch, err := cs.Store.Changeset(ctx, changesetID)
 	if err != nil {
-		return changeset.Changeset{}, tenancy.Project{}, tenancy.Customer{}, identity{}, err
+		return changeset.Changeset{}, tenancy.Project{}, tenancy.Organization{}, identity{}, err
 	}
 	p, c, err := cs.Tracker.projectOf(ctx, ch.ProjectID)
 	if err != nil {
-		return changeset.Changeset{}, tenancy.Project{}, tenancy.Customer{}, identity{}, err
+		return changeset.Changeset{}, tenancy.Project{}, tenancy.Organization{}, identity{}, err
 	}
-	if err := cs.Tracker.Authz.Authorize(ctx, id, a, Scope{Customer: c.Key, Project: p.Key}); err != nil {
-		return changeset.Changeset{}, tenancy.Project{}, tenancy.Customer{}, identity{}, err
+	if err := cs.Tracker.Authz.Authorize(ctx, id, a, Scope{Organization: c.Key, Project: p.Key}); err != nil {
+		return changeset.Changeset{}, tenancy.Project{}, tenancy.Organization{}, identity{}, err
 	}
 	return ch, p, c, id, nil
 }
@@ -229,7 +229,7 @@ func (cs *Changesets) load(ctx context.Context, changesetID string, a Action) (c
 // validating each against the project's current items and dependency
 // graph, and predicts the results (created keys follow the project's item
 // sequence, which the store guards).
-func (cs *Changesets) build(ctx context.Context, ch changeset.Changeset, approved []int, p tenancy.Project, c tenancy.Customer, id identity) (ChangesetApplication, []changeset.Result, error) {
+func (cs *Changesets) build(ctx context.Context, ch changeset.Changeset, approved []int, p tenancy.Project, c tenancy.Organization, id identity) (ChangesetApplication, []changeset.Result, error) {
 	t := cs.Tracker
 	next, err := cs.Store.NextItemNumber(ctx, p.ID)
 	if err != nil {
@@ -396,7 +396,7 @@ func (cs *Changesets) build(ctx context.Context, ch changeset.Changeset, approve
 			results[i].DependencyID = d.ID
 			keys := map[string]string{from.ID: from.Key, to.ID: to.Key}
 			a.Dependencies = append(a.Dependencies, DependencyWrite{Dependency: d, Event: event.Event{
-				Customer: c.ID, Project: p.ID, EntityType: "dependency", EntityID: d.ID, Type: "dependency.added",
+				Organization: c.ID, Project: p.ID, EntityType: "dependency", EntityID: d.ID, Type: "dependency.added",
 				Actor: actor, OccurredAt: now,
 				Payload: mustJSON(map[string]any{"from": keys[d.FromID], "to": keys[d.ToID], "type": d.Type, "changeset": ch.ID}),
 			}})
@@ -409,7 +409,7 @@ func (cs *Changesets) build(ctx context.Context, ch changeset.Changeset, approve
 // application, as opposed to an invalid operation.
 type storeError struct{ error }
 
-func changesetEvent(ch changeset.Changeset, customerID, typ string, actor event.Actor, payload map[string]any) event.Event {
+func changesetEvent(ch changeset.Changeset, organizationID, typ string, actor event.Actor, payload map[string]any) event.Event {
 	if payload == nil {
 		payload = map[string]any{}
 	}
@@ -418,7 +418,7 @@ func changesetEvent(ch changeset.Changeset, customerID, typ string, actor event.
 		at = ch.DecidedAt
 	}
 	return event.Event{
-		Customer: customerID, Project: ch.ProjectID, EntityType: "changeset", EntityID: ch.ID, Type: typ,
+		Organization: organizationID, Project: ch.ProjectID, EntityType: "changeset", EntityID: ch.ID, Type: typ,
 		Actor: actor, OccurredAt: at, Payload: mustJSON(payload),
 	}
 }

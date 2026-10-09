@@ -17,7 +17,7 @@ Skill registry
 Ballet keeps a central skill registry
 (:doc:`/architecture/decisions/0010-central-skill-registry`):
 
-- **Scopes**: platform → customer → project. A lower scope may add
+- **Scopes**: platform → organization → project. A lower scope may add
   skills or override a higher-scope skill of the same name. A project's
   effective set contains every *published* skill of its chain; drafts
   that were never published are not used.
@@ -32,14 +32,14 @@ Ballet keeps a central skill registry
   the runtime expects (``.claude/skills/`` for Claude Code,
   ``.config/opencode/skills/`` for opencode).
 
-Skills are shared across customers only at platform scope; a
-customer-scoped skill is as private as that customer's knowledge.
+Skills are shared across organizations only at platform scope; an
+organization-scoped skill is as private as that organization's knowledge.
 
 In the UI
 ~~~~~~~~~
 
 *Skills* in the header lists the skills of one scope (the platform,
-or for users without platform-wide access, their first customer or
+or for users without platform-wide access, their first organization or
 project). Users with ``skill.write`` on the scope create skills and
 edit the draft: description, ``SKILL.md`` (Markdown with preview) and
 supporting files. *Publish* snapshots the saved draft as the next

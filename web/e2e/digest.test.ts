@@ -6,10 +6,10 @@ import { fakeRealtime } from './fixtures/realtime';
 test('the digest summarizes a period and switches periods', async ({ page }) => {
 	await fakeOIDC(page);
 	const core = await fakeCore(page, {
-		me: [{ role: 'viewer', scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		me: [{ role: 'viewer', scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
 		projects: [
-			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web', description: '', version: 1 }
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web', description: '', version: 1 }
 		],
 		digest: {
 			project: 'WEB',

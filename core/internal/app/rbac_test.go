@@ -47,24 +47,24 @@ func user(t *testing.T, subject string, groups ...string) context.Context {
 	})
 }
 
-// seed creates customers acme (project WEB, APP) and globex (project GLX)
+// seed creates organizations acme (project WEB, APP) and globex (project GLX)
 // as the bootstrap admin, and binds acme-devs as engineers and acme-viewers
 // as viewers of acme.
 func seed(t *testing.T, env rbacEnv) {
 	t.Helper()
 	alice := user(t, "alice", "ballet-admins")
 	for _, c := range []string{"acme", "globex"} {
-		_, err := env.tenancy.CreateCustomer(alice, app.CreateCustomerInput{Key: c, Name: c})
+		_, err := env.tenancy.CreateOrganization(alice, app.CreateOrganizationInput{Key: c, Name: c})
 		require.NoError(t, err)
 	}
 	for p, c := range map[string]string{"WEB": "acme", "APP": "acme", "GLX": "globex"} {
-		_, err := env.tenancy.CreateProject(alice, app.CreateProjectInput{CustomerKey: c, Key: p, Name: p})
+		_, err := env.tenancy.CreateProject(alice, app.CreateProjectInput{OrganizationKey: c, Key: p, Name: p})
 		require.NoError(t, err)
 	}
 	for _, in := range []app.CreateRoleBindingInput{
-		{Claim: "groups", Value: "acme-devs", Role: "engineer", Scope: "customer:acme"},
+		{Claim: "groups", Value: "acme-devs", Role: "engineer", Scope: "organization:acme"},
 		{Claim: "groups", Value: "acme-viewers", Role: "viewer", Scope: "project:WEB"},
-		{Claim: "groups", Value: "acme-admins", Role: "customer-admin", Scope: "customer:acme"},
+		{Claim: "groups", Value: "acme-admins", Role: "organization-admin", Scope: "organization:acme"},
 	} {
 		_, err := env.bindings.Create(alice, in)
 		require.NoError(t, err, in)
@@ -79,15 +79,15 @@ func keys(cs []app.ProjectView) []string {
 	return out
 }
 
-func TestRBAC_EngineerSeesOnlyOwnCustomer(t *testing.T) {
+func TestRBAC_EngineerSeesOnlyOwnOrganization(t *testing.T) {
 	env := newRBACEnv(t)
 	seed(t, env)
 	bob := user(t, "bob", "acme-devs")
 
-	customers, err := env.tenancy.ListCustomers(bob)
+	organizations, err := env.tenancy.ListOrganizations(bob)
 	require.NoError(t, err)
-	require.Len(t, customers, 1)
-	assert.Equal(t, "acme", customers[0].Key)
+	require.Len(t, organizations, 1)
+	assert.Equal(t, "acme", organizations[0].Key)
 
 	projects, err := env.tenancy.ListProjects(bob, "acme")
 	require.NoError(t, err)
@@ -95,47 +95,47 @@ func TestRBAC_EngineerSeesOnlyOwnCustomer(t *testing.T) {
 
 	_, err = env.tenancy.GetProject(bob, "GLX")
 	assert.ErrorIs(t, err, app.ErrForbidden)
-	_, err = env.tenancy.CreateCustomer(bob, app.CreateCustomerInput{Key: "initech", Name: "I"})
+	_, err = env.tenancy.CreateOrganization(bob, app.CreateOrganizationInput{Key: "initech", Name: "I"})
 	assert.ErrorIs(t, err, app.ErrForbidden)
 	_, err = env.tenancy.UpdateProject(bob, app.UpdateProjectInput{Key: "WEB", Name: "x", Version: 1})
 	assert.ErrorIs(t, err, app.ErrForbidden, "engineers read projects but do not administer them")
 }
 
-func TestRBAC_ProjectViewerSeesProjectAndItsCustomerOnly(t *testing.T) {
+func TestRBAC_ProjectViewerSeesProjectAndItsOrganizationOnly(t *testing.T) {
 	env := newRBACEnv(t)
 	seed(t, env)
 	carol := user(t, "carol", "acme-viewers")
 
-	customers, err := env.tenancy.ListCustomers(carol)
+	organizations, err := env.tenancy.ListOrganizations(carol)
 	require.NoError(t, err)
-	require.Len(t, customers, 1)
+	require.Len(t, organizations, 1)
 
 	projects, err := env.tenancy.ListProjects(carol, "acme")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"WEB"}, keys(projects))
 }
 
-func TestRBAC_CustomerAdminManagesOnlyWithinCustomer(t *testing.T) {
+func TestRBAC_OrganizationAdminManagesOnlyWithinOrganization(t *testing.T) {
 	env := newRBACEnv(t)
 	seed(t, env)
 	dave := user(t, "dave", "acme-admins")
 
-	_, err := env.tenancy.CreateProject(dave, app.CreateProjectInput{CustomerKey: "acme", Key: "API", Name: "API"})
+	_, err := env.tenancy.CreateProject(dave, app.CreateProjectInput{OrganizationKey: "acme", Key: "API", Name: "API"})
 	require.NoError(t, err)
-	_, err = env.tenancy.CreateProject(dave, app.CreateProjectInput{CustomerKey: "globex", Key: "GX2", Name: "x"})
+	_, err = env.tenancy.CreateProject(dave, app.CreateProjectInput{OrganizationKey: "globex", Key: "GX2", Name: "x"})
 	assert.ErrorIs(t, err, app.ErrForbidden)
 
 	_, err = env.bindings.Create(dave, app.CreateRoleBindingInput{Claim: "email", Value: "pm@acme.test", Role: "approver", Scope: "project:API"})
 	require.NoError(t, err)
 	_, err = env.bindings.Create(dave, app.CreateRoleBindingInput{Claim: "groups", Value: "acme-admins", Role: "platform-admin", Scope: "platform"})
 	assert.ErrorIs(t, err, app.ErrForbidden, "cannot escalate to platform scope")
-	_, err = env.bindings.Create(dave, app.CreateRoleBindingInput{Claim: "groups", Value: "x", Role: "viewer", Scope: "customer:globex"})
+	_, err = env.bindings.Create(dave, app.CreateRoleBindingInput{Claim: "groups", Value: "x", Role: "viewer", Scope: "organization:globex"})
 	assert.ErrorIs(t, err, app.ErrForbidden)
 
 	visible, err := env.bindings.List(dave)
 	require.NoError(t, err)
 	for _, b := range visible {
-		assert.Equal(t, "acme", b.Scope.Customer, "customer admins only see their customer's bindings")
+		assert.Equal(t, "acme", b.Scope.Organization, "organization admins only see their organization's bindings")
 	}
 }
 
@@ -146,12 +146,12 @@ func TestRoleBindings_CreateValidatesAndResolvesScopes(t *testing.T) {
 
 	b, err := env.bindings.Create(alice, app.CreateRoleBindingInput{Claim: "groups", Value: "web", Role: "engineer", Scope: "project:WEB"})
 	require.NoError(t, err)
-	assert.Equal(t, "acme", b.Scope.Customer, "project scope records its customer")
+	assert.Equal(t, "acme", b.Scope.Organization, "project scope records its organization")
 
 	for name, in := range map[string]app.CreateRoleBindingInput{
 		"bad scope":             {Claim: "groups", Value: "x", Role: "viewer", Scope: "team:x"},
 		"unknown role":          {Claim: "groups", Value: "x", Role: "root", Scope: "platform"},
-		"platform-admin scoped": {Claim: "groups", Value: "x", Role: "platform-admin", Scope: "customer:acme"},
+		"platform-admin scoped": {Claim: "groups", Value: "x", Role: "platform-admin", Scope: "organization:acme"},
 		"empty claim":           {Claim: "", Value: "x", Role: "viewer", Scope: "platform"},
 	} {
 		_, err := env.bindings.Create(alice, in)
@@ -181,7 +181,7 @@ func TestRoleBindings_DeleteRevokesAccess(t *testing.T) {
 
 	require.NoError(t, env.bindings.Delete(alice, devs.ID))
 
-	_, err = env.tenancy.GetCustomer(bob, "acme")
+	_, err = env.tenancy.GetOrganization(bob, "acme")
 	assert.ErrorIs(t, err, app.ErrForbidden)
 	assert.ErrorIs(t, env.bindings.Delete(alice, devs.ID), app.ErrNotFound)
 	assert.ErrorIs(t, env.bindings.Delete(alice, all[0].ID), app.ErrNotFound, "bootstrap bindings are not stored")
@@ -199,12 +199,12 @@ func TestRBAC_WorkloadsAndUnboundUsersAreDenied(t *testing.T) {
 		Kind: auth.KindService, Subject: "run:1", Claims: map[string]any{"groups": []any{"ballet-admins"}},
 	})
 
-	_, err := env.tenancy.GetCustomer(svc, "acme")
+	_, err := env.tenancy.GetOrganization(svc, "acme")
 	assert.ErrorIs(t, err, app.ErrForbidden)
 
-	customers, err := env.tenancy.ListCustomers(user(t, "eve"))
+	organizations, err := env.tenancy.ListOrganizations(user(t, "eve"))
 	require.NoError(t, err)
-	assert.Empty(t, customers)
+	assert.Empty(t, organizations)
 }
 
 func TestRBAC_Effective(t *testing.T) {
@@ -220,5 +220,5 @@ func TestRBAC_Effective(t *testing.T) {
 	for _, b := range got {
 		scopes = append(scopes, string(b.Role)+"@"+b.Scope.String())
 	}
-	assert.ElementsMatch(t, []string{"engineer@customer:acme", "viewer@project:WEB"}, scopes)
+	assert.ElementsMatch(t, []string{"engineer@organization:acme", "viewer@project:WEB"}, scopes)
 }

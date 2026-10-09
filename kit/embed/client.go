@@ -9,14 +9,14 @@ import (
 )
 
 // Gateway embeds through the LLM gateway's /v1/embeddings endpoint with a
-// service token, attributing usage to a customer (and project).
+// service token, attributing usage to an organization (and project).
 type Gateway struct {
-	URL      string // gateway base URL
-	Token    func(context.Context) (string, error)
-	ModelID  string
-	Customer string
-	Project  string
-	HTTP     *http.Client
+	URL          string // gateway base URL
+	Token        func(context.Context) (string, error)
+	ModelID      string
+	Organization string
+	Project      string
+	HTTP         *http.Client
 }
 
 // Model returns the configured model.
@@ -38,7 +38,7 @@ func (g *Gateway) Embed(ctx context.Context, texts []string) ([][]float32, error
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(HeaderCustomer, g.Customer)
+	req.Header.Set(HeaderOrganization, g.Organization)
 	if g.Project != "" {
 		req.Header.Set(HeaderProject, g.Project)
 	}
@@ -72,11 +72,11 @@ func (g *Gateway) Embed(ctx context.Context, texts []string) ([][]float32, error
 	return vecs, nil
 }
 
-// Headers by which service callers name the customer/project an
+// Headers by which service callers name the organization/project an
 // embedding request is made for (ignored for run tokens).
 const (
-	HeaderCustomer = "X-Ballet-Customer"
-	HeaderProject  = "X-Ballet-Project"
+	HeaderOrganization = "X-Ballet-Organization"
+	HeaderProject      = "X-Ballet-Project"
 )
 
 // Response is the OpenAI-compatible embeddings response.

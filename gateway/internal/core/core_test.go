@@ -22,7 +22,7 @@ func TestClient_ResolvesWithServiceTokenAndCaches(t *testing.T) {
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
-		assert.Equal(t, "acme", r.URL.Query().Get("customer"))
+		assert.Equal(t, "acme", r.URL.Query().Get("organization"))
 		_, _ = w.Write([]byte(`{"provider":"anthropic","api_key":"sk","base_url":""}`))
 	}))
 	t.Cleanup(srv.Close)

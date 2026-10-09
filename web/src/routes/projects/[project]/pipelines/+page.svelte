@@ -18,7 +18,7 @@
 	];
 
 	let session = $state<Session>();
-	let customer = $state<string>();
+	let organization = $state<string>();
 	let pipelines = $state<Schemas['Pipeline'][]>([]);
 	let name = $state('default');
 	/** The version the editor started from (0: Ballet's template). */
@@ -33,7 +33,7 @@
 	let loaded = $state(false);
 	let publishing = $state(false);
 
-	const canEdit = $derived(!!session?.permissions.can('project.update', { customer, project }));
+	const canEdit = $derived(!!session?.permissions.can('project.update', { organization, project }));
 	const stageIDs = $derived(definition.stages.map((s) => s.id));
 
 	async function loadList(s: Session) {
@@ -45,7 +45,7 @@
 			error = apiError(list.error);
 			return;
 		}
-		customer = p.data?.customer;
+		organization = p.data?.organization;
 		pipelines = list.data.items;
 	}
 

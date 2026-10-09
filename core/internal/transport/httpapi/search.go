@@ -10,14 +10,14 @@ import (
 )
 
 type searchHitJSON struct {
-	Kind     string  `json:"kind"`
-	Ref      string  `json:"ref"`
-	Title    string  `json:"title"`
-	Snippet  string  `json:"snippet"`
-	Customer string  `json:"customer,omitempty"`
-	Project  string  `json:"project,omitempty"`
-	Scope    string  `json:"scope,omitempty"`
-	Score    float64 `json:"score"`
+	Kind         string  `json:"kind"`
+	Ref          string  `json:"ref"`
+	Title        string  `json:"title"`
+	Snippet      string  `json:"snippet"`
+	Organization string  `json:"organization,omitempty"`
+	Project      string  `json:"project,omitempty"`
+	Scope        string  `json:"scope,omitempty"`
+	Score        float64 `json:"score"`
 }
 
 func registerSearch(mux *router, s *app.Search) {
@@ -44,7 +44,7 @@ func registerSearch(mux *router, s *app.Search) {
 				snippet = string([]rune(snippet)[:240]) + "…"
 			}
 			out.Items = append(out.Items, searchHitJSON{Kind: h.Kind, Ref: h.Ref, Title: h.Title, Snippet: snippet,
-				Customer: h.Customer, Project: h.Project, Scope: h.Scope, Score: h.Score})
+				Organization: h.Organization, Project: h.Project, Scope: h.Scope, Score: h.Score})
 		}
 		writeJSON(w, http.StatusOK, out)
 	})

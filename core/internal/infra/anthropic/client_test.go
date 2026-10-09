@@ -42,7 +42,7 @@ func setup(t *testing.T, handler http.HandlerFunc) (*anthropic.Client, *runtoken
 }
 
 var request = app.LLMRequest{
-	Caller: app.LLMCaller{CustomerKey: "acme", ProjectKey: "WEB", SessionID: "s1", ActingFor: "bob"},
+	Caller: app.LLMCaller{OrganizationKey: "acme", ProjectKey: "WEB", SessionID: "s1", ActingFor: "bob"},
 	Model:  "claude-test", System: "Be brief.", MaxTokens: 100,
 	Messages: []planner.Message{
 		{Role: planner.RoleUser, Content: []planner.Block{planner.Text("hi")}},

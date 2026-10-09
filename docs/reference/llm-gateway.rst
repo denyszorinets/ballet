@@ -17,7 +17,7 @@ Authentication
    A Ballet run token with audience ``gateway`` and capability
    ``llm.invoke``, in ``Authorization: Bearer <token>`` or ``x-api-key:
    <token>``. The token's ``cust``/``proj`` claims select the credential:
-   the project's override, else the customer default
+   the project's override, else the organization default
    (:doc:`rest-api`, *LLM credentials*).
 
 Configuring an agent
@@ -64,13 +64,13 @@ Models
    the gateway itself: deterministic feature hashing of words and word
    pairs into 256 dimensions. It needs no provider and captures lexical
    overlap only — suitable for development, tests and offline use. Any
-   other model is forwarded to the customer's ``openai`` credential
+   other model is forwarded to the organization's ``openai`` credential
    (OpenAI or any OpenAI-compatible API via ``base_url``).
 
 Callers
    Run tokens with ``llm.invoke`` (scope from the token), or service
    tokens with ``llm.embed`` (Knowledge, Core indexing), which must name
-   the customer in ``X-Ballet-Customer`` (and optionally
+   the organization in ``X-Ballet-Organization`` (and optionally
    ``X-Ballet-Project``) for credentials and metering. ``kit/embed``
    provides the ``Gateway`` client and the ``Hash`` embedder.
 
@@ -80,12 +80,12 @@ Usage metering
 The gateway reads token usage from every response — the ``usage`` object
 of JSON responses, or ``message_start`` / ``message_delta`` events of
 streams, without buffering them — and attributes it to the run token's
-customer, project and ticket:
+organization, project and ticket:
 
 - **Prometheus** (gateway ``/metrics``): ``ballet_llm_tokens_total``
-  (labels ``customer``, ``project``, ``model``, ``token_type`` =
+  (labels ``organization``, ``project``, ``model``, ``token_type`` =
   ``input|output|cache_read|cache_write``) and
-  ``ballet_llm_requests_total`` (``customer``, ``project``, ``model``,
+  ``ballet_llm_requests_total`` (``organization``, ``project``, ``model``,
   ``status``).
 - **Core**: records are delivered in batches every 2 seconds to
   ``POST /internal/v1/usage`` (``usage.write``) and kept while Core is
@@ -105,7 +105,7 @@ a real provider:
 .. code-block:: bash
 
    go build -o bin/devtoken ./core/cmd/devtoken
-   TOKEN=$(bin/devtoken -keys data/token-keys.json -customer acme -project WEB \
+   TOKEN=$(bin/devtoken -keys data/token-keys.json -organization acme -project WEB \
      -ticket WEB-1 -aud gateway -caps llm.invoke)
    curl localhost:8082/v1/messages -H "x-api-key: $TOKEN" \
      -H "anthropic-version: 2023-06-01" -H "content-type: application/json" \

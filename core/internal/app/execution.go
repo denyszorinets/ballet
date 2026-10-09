@@ -61,7 +61,7 @@ func (ex *Execution) Set(ctx context.Context, projectKey string, in execution.Se
 		return ExecutionView{}, invalid(err)
 	}
 	in.ProjectID, in.UpdatedAt, in.Version = p.ID, ex.Now(), version+1
-	e := event.Event{Customer: c.ID, Project: p.ID, EntityType: "project", EntityID: p.ID, Type: "project.execution_updated",
+	e := event.Event{Organization: c.ID, Project: p.ID, EntityType: "project", EntityID: p.ID, Type: "project.execution_updated",
 		Actor: actorIn(ctx, id), OccurredAt: in.UpdatedAt, Payload: mustJSON(map[string]any{"repo_url": in.RepoURL})}
 	if err := ex.Store.SetExecutionSettings(ctx, in, version, e); err != nil {
 		if errors.Is(err, ErrAlreadyExists) {
@@ -72,21 +72,21 @@ func (ex *Execution) Set(ctx context.Context, projectKey string, in execution.Se
 	return ExecutionView{Settings: in, ProjectKey: p.Key}, nil
 }
 
-func (ex *Execution) authorize(ctx context.Context, projectKey string, a Action) (identity, tenancy.Project, tenancy.Customer, error) {
+func (ex *Execution) authorize(ctx context.Context, projectKey string, a Action) (identity, tenancy.Project, tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	p, err := ex.Tenancy.ProjectByKey(ctx, projectKey)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := ex.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := ex.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	if err := ex.Authz.Authorize(ctx, id, a, Scope{Customer: c.Key, Project: p.Key}); err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+	if err := ex.Authz.Authorize(ctx, id, a, Scope{Organization: c.Key, Project: p.Key}); err != nil {
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	return id, p, c, nil
 }

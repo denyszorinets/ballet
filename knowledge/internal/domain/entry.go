@@ -1,5 +1,5 @@
 // Package domain defines knowledge entries: documents, decisions, notes
-// and technical debt records of one customer's knowledge space.
+// and technical debt records of one organization's knowledge space.
 package domain
 
 import (
@@ -25,20 +25,20 @@ const (
 
 var kinds = []Kind{KindDocument, KindDecision, KindNote, KindDebt}
 
-// Entry is a knowledge entry. Customer is the knowledge space.
+// Entry is a knowledge entry. Organization is the knowledge space.
 type Entry struct {
-	ID        string
-	Customer  string // customer key
-	Kind      Kind
-	Title     string
-	Body      string   // Markdown
-	Projects  []string // project keys the entry concerns
-	Items     []string // linked tracker items, e.g. WEB-42
-	Version   int64
-	CreatedBy string
-	UpdatedBy string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID           string
+	Organization string // organization key
+	Kind         Kind
+	Title        string
+	Body         string   // Markdown
+	Projects     []string // project keys the entry concerns
+	Items        []string // linked tracker items, e.g. WEB-42
+	Version      int64
+	CreatedBy    string
+	UpdatedBy    string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // Version is an immutable snapshot of an entry.

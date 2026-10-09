@@ -39,7 +39,7 @@ answer in the morning and the parked session resumes where it stopped. Other tic
 <p align="center"><img src="docs/_static/readme/question.gif" width="880" alt="Answering a blocking question in the inbox; the answer appears as the next message in the agent's session"></p>
 
 <sub>Recorded from a real Ballet with its built-in fake model (no API key), which runs the tool call a
-ticket scripts instead of writing code. Re-record with <code>make readme-media</code>.</sub>
+ticket scripts instead of writing code. Re-record with <code>make media</code>.</sub>
 
 ## Why Ballet
 
@@ -51,7 +51,7 @@ ticket scripts instead of writing code. Re-record with <code>make readme-media</
 | 📚 **Knowledge that grows** | Docs, decisions and debt are written back on every ticket; every answer becomes a recorded decision. |
 | 🧩 **Your agents, your infrastructure** | Self-hosted. Claude Code or opencode per stage, on agents built from each project's devcontainer: a laptop, VMs or N containers on Kubernetes. |
 | 🛑 **Safe to leave alone** | Token budgets enforced at Ballet's LLM gateway, pause and kill switches, retries, durable state and a morning digest. |
-| 🏢 **Built for many customers** | Customers are isolated: code, knowledge, keys and budgets. OIDC sign-in with role bindings. |
+| 🏢 **Many organizations, one platform** | Each organization is isolated: its code, knowledge, keys and budgets. OIDC sign-in with role bindings; platform admins run the installation. |
 
 <table>
 <tr>
@@ -90,7 +90,7 @@ flowchart LR
 
 **Core** holds the tracker, planner, scheduler and pipelines, and serves the web UI. **Agents** run in
 containers or VMs built from each project's devcontainer and run sessions as processes. The **LLM gateway**
-adds your keys and meters every token; **Knowledge** keeps each customer's docs and decisions. See the
+adds your keys and meters every token; **Knowledge** keeps each organization's docs and decisions. See the
 [architecture overview](docs/architecture/overview.rst) and the
 [decisions](docs/architecture/decisions/index.rst) behind it.
 
@@ -116,7 +116,7 @@ make docs           # build into docs/_build/html
 make docs-serve     # live preview on http://127.0.0.1:8000
 make docs-check     # strict build + link check
 make site           # landing page + docs, as published, into _site/
-make readme-media   # re-record this README's GIFs and screenshots
+make media          # re-record the README's GIFs and the docs screenshots
 ```
 
 ## Development

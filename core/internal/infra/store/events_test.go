@@ -23,7 +23,7 @@ func newStore(t *testing.T) *store.Store {
 
 func ticketEvent(entityID, typ string) event.Event {
 	return event.Event{
-		Customer: "c1", Project: "p1", EntityType: "ticket", EntityID: entityID, Type: typ,
+		Organization: "c1", Project: "p1", EntityType: "ticket", EntityID: entityID, Type: typ,
 		Actor:   event.Actor{Kind: event.ActorHuman, Subject: "user-bob"},
 		Payload: json.RawMessage(`{"title":"Export invoices"}`),
 	}

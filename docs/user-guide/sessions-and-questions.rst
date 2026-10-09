@@ -56,7 +56,7 @@ Select a question to see its ticket and context, then:
    question and the latest reports, and can research. The planner
    suggests; you answer.
 
-Each answer is saved as a **decision** in the customer's knowledge base,
+Each answer is saved as a **decision** in the organization's knowledge base,
 linked to the ticket, so no agent asks it again.
 
 Answering online, or later

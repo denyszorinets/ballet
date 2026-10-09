@@ -20,7 +20,7 @@ each other's databases.
        events
    * - Knowledge
      - ``[storage] path`` (default ``data/knowledge.db``)
-     - Entries per customer space with all versions (search index and
+     - Entries per organization space with all versions (search index and
        embeddings follow)
 
 Writes follow the batch and optimistic-concurrency rules in
@@ -45,7 +45,7 @@ the reverse) cannot be committed.
      - UUIDv7
    * - ``occurred_at``
      - UTC timestamp
-   * - ``customer_id``, ``project_id``
+   * - ``organization_id``, ``project_id``
      - Scope, for isolation and per-project streams
    * - ``entity_type``, ``entity_id``
      - The changed entity (``ticket``, ``project``, …)

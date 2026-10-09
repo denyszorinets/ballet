@@ -9,15 +9,15 @@ test('without an identity provider the app needs no sign-in', async ({ page }) =
 	let auth = '';
 	await fakeCore(page, {
 		me: [{ role: 'platform-admin', scope: 'platform' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }]
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }]
 	});
 	page.on('request', (r) => {
-		if (r.url().includes('/api/v1/customers')) auth = r.headers()['authorization'] ?? '';
+		if (r.url().includes('/api/v1/organizations')) auth = r.headers()['authorization'] ?? '';
 	});
 	await fakeRealtime(page, async () => ({}));
 	await page.goto('/');
 
-	await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Sign in' })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
 	await expect(page.getByTestId('user-name')).toHaveText('Local user');

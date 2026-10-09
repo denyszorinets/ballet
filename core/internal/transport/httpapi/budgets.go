@@ -22,7 +22,7 @@ func toBudgetJSON(s app.BudgetStatus) budgetJSON {
 }
 
 func registerBudgets(mux *router, bs *app.Budgets) {
-	keys := func(r *http.Request) (string, string) { return r.PathValue("customer"), r.PathValue("project") }
+	keys := func(r *http.Request) (string, string) { return r.PathValue("organization"), r.PathValue("project") }
 	get := func(w http.ResponseWriter, r *http.Request) {
 		c, p := keys(r)
 		s, err := bs.Get(r.Context(), c, p)
@@ -50,8 +50,8 @@ func registerBudgets(mux *router, bs *app.Budgets) {
 		}
 		writeJSON(w, http.StatusOK, toBudgetJSON(s))
 	}
-	mux.handle("GET /api/v1/customers/{customer}/budget", get)
-	mux.handle("PUT /api/v1/customers/{customer}/budget", put)
+	mux.handle("GET /api/v1/organizations/{organization}/budget", get)
+	mux.handle("PUT /api/v1/organizations/{organization}/budget", put)
 	mux.handle("GET /api/v1/projects/{project}/budget", get)
 	mux.handle("PUT /api/v1/projects/{project}/budget", put)
 }

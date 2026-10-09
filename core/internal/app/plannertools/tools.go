@@ -19,9 +19,9 @@ import (
 )
 
 // Knowledge calls the Knowledge service for the caller in ctx (see
-// infra/knowledge.Client): path is relative to the customer's knowledge.
+// infra/knowledge.Client): path is relative to the organization's knowledge.
 type Knowledge interface {
-	Do(ctx context.Context, customer string, write bool, method, path string, query url.Values, body any) (json.RawMessage, error)
+	Do(ctx context.Context, organization string, write bool, method, path string, query url.Values, body any) (json.RawMessage, error)
 }
 
 // Deps are the use cases the tools call.
@@ -343,7 +343,7 @@ func searchKnowledge(d Deps) app.PlannerTool {
 		Limit int    `json:"limit"`
 	}
 	return newTool("search_knowledge",
-		"Search the customer's knowledge base (documents, decisions, notes, debt), hybrid full-text and semantic.",
+		"Search the organization's knowledge base (documents, decisions, notes, debt), hybrid full-text and semantic.",
 		`{"type":"object","required":["query"],"properties":{"query":{"type":"string"},
 			"kind":{"type":"string","enum":["document","decision","note","debt"]},
 			"limit":{"type":"integer","minimum":1,"maximum":50}}}`,
@@ -355,7 +355,7 @@ func searchKnowledge(d Deps) app.PlannerTool {
 			if in.Limit > 0 {
 				q.Set("limit", strconv.Itoa(in.Limit))
 			}
-			return d.Knowledge.Do(ctx, env.CustomerKey, false, http.MethodGet, "search", q, nil)
+			return d.Knowledge.Do(ctx, env.OrganizationKey, false, http.MethodGet, "search", q, nil)
 		})
 }
 
@@ -367,7 +367,7 @@ func getKnowledge(d Deps) app.PlannerTool {
 		"Read a knowledge entry (Markdown body, linked projects and items, version).",
 		`{"type":"object","required":["id"],"properties":{"id":{"type":"string"}}}`,
 		func(ctx context.Context, env app.ToolEnv, in in) (any, error) {
-			return d.Knowledge.Do(ctx, env.CustomerKey, false, http.MethodGet, "entries/"+url.PathEscape(in.ID), nil, nil)
+			return d.Knowledge.Do(ctx, env.OrganizationKey, false, http.MethodGet, "entries/"+url.PathEscape(in.ID), nil, nil)
 		})
 }
 
@@ -386,7 +386,7 @@ func createKnowledge(d Deps) app.PlannerTool {
 			"title":{"type":"string"},"body":{"type":"string","description":"Markdown"},
 			"items":{"type":"array","items":{"type":"string"},"description":"linked item keys"}}}`,
 		func(ctx context.Context, env app.ToolEnv, in in) (any, error) {
-			return d.Knowledge.Do(ctx, env.CustomerKey, true, http.MethodPost, "entries", nil, map[string]any{
+			return d.Knowledge.Do(ctx, env.OrganizationKey, true, http.MethodPost, "entries", nil, map[string]any{
 				"kind": in.Kind, "title": in.Title, "body": in.Body, "projects": []string{env.ProjectKey}, "items": in.Items,
 			})
 		})
@@ -422,6 +422,6 @@ func updateKnowledge(d Deps) app.PlannerTool {
 			if in.Items != nil {
 				body["items"] = *in.Items
 			}
-			return d.Knowledge.Do(ctx, env.CustomerKey, true, http.MethodPatch, "entries/"+url.PathEscape(in.ID), nil, body)
+			return d.Knowledge.Do(ctx, env.OrganizationKey, true, http.MethodPatch, "entries/"+url.PathEscape(in.ID), nil, body)
 		})
 }

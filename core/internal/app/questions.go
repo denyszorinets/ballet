@@ -33,11 +33,11 @@ type QuestionStore interface {
 
 // QuestionKnowledge is the knowledge base as Core itself uses it.
 type QuestionKnowledge interface {
-	// Search finds entries of a customer's knowledge about project.
-	Search(ctx context.Context, customer, project, query string, limit int) ([]onboarding.Knowledge, error)
+	// Search finds entries of an organization's knowledge about project.
+	Search(ctx context.Context, organization, project, query string, limit int) ([]onboarding.Knowledge, error)
 	// RecordAnswer writes an answered question to the knowledge base,
 	// linked to the ticket, as author.
-	RecordAnswer(ctx context.Context, customer, project, ticketKey, author string, q report.Question) error
+	RecordAnswer(ctx context.Context, organization, project, ticketKey, author string, q report.Question) error
 }
 
 // InboxStore finds what the humans' inbox shows.
@@ -115,7 +115,7 @@ func (qs *Questions) Answer(ctx context.Context, questionID, text string) (Quest
 	if err != nil {
 		return QuestionView{}, err
 	}
-	if err := qs.Authz.Authorize(ctx, id, ActTrackerWrite, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := qs.Authz.Authorize(ctx, id, ActTrackerWrite, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return QuestionView{}, err
 	}
 	text = strings.TrimSpace(text)
@@ -128,7 +128,7 @@ func (qs *Questions) Answer(ctx context.Context, questionID, text string) (Quest
 	return qs.answer(ctx, q, it, p, c, text, id.Subject, actorIn(ctx, id))
 }
 
-func (qs *Questions) answer(ctx context.Context, q report.Question, it tracker.Item, p tenancy.Project, c tenancy.Customer,
+func (qs *Questions) answer(ctx context.Context, q report.Question, it tracker.Item, p tenancy.Project, c tenancy.Organization,
 	text, by string, actor event.Actor) (QuestionView, error) {
 	q.Status, q.Answer, q.AnsweredBy, q.AnsweredAt = report.QuestionAnswered, text, by, qs.Now()
 	var jobs []Job
@@ -137,7 +137,7 @@ func (qs *Questions) answer(ctx context.Context, q report.Question, it tracker.I
 		// question still open. Resuming is idempotent.
 		jobs = append(jobs, NewJob(qs.NewID(), JobFlowResume, "", flowJob{TicketID: it.ID}, qs.Now(), 10))
 	}
-	e := event.Event{Customer: c.ID, Project: p.ID, EntityType: "item", EntityID: it.ID, Type: "item.question_answered",
+	e := event.Event{Organization: c.ID, Project: p.ID, EntityType: "item", EntityID: it.ID, Type: "item.question_answered",
 		Actor: actor, OccurredAt: qs.Now(), Payload: mustJSON(map[string]any{"question": q.ID, "by": by})}
 	if err := qs.Store.AnswerQuestion(ctx, q, jobs, e); err != nil {
 		return QuestionView{}, err
@@ -156,16 +156,16 @@ func (qs *Questions) answer(ctx context.Context, q report.Question, it tracker.I
 	return QuestionView{Question: q, TicketKey: it.Key}, nil
 }
 
-func (qs *Questions) scope(ctx context.Context, q report.Question) (tracker.Item, tenancy.Project, tenancy.Customer, error) {
+func (qs *Questions) scope(ctx context.Context, q report.Question) (tracker.Item, tenancy.Project, tenancy.Organization, error) {
 	it, err := qs.Items.ItemByID(ctx, q.TicketID)
 	if err != nil {
-		return tracker.Item{}, tenancy.Project{}, tenancy.Customer{}, err
+		return tracker.Item{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	p, err := qs.Tenancy.ProjectByID(ctx, q.ProjectID)
 	if err != nil {
-		return tracker.Item{}, tenancy.Project{}, tenancy.Customer{}, err
+		return tracker.Item{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := qs.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := qs.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	return it, p, c, err
 }
 
@@ -203,13 +203,13 @@ func (qs *Questions) handleRoute(ctx context.Context, j Job) error {
 	return ignoreConflict(err) // a human answered meanwhile
 }
 
-func (qs *Questions) escalate(ctx context.Context, q report.Question, it tracker.Item, c tenancy.Customer, reason string) error {
+func (qs *Questions) escalate(ctx context.Context, q report.Question, it tracker.Item, c tenancy.Organization, reason string) error {
 	e := qs.event(it, c, "item.question_escalated", map[string]any{"question": q.ID, "reason": reason})
 	return ignoreConflict(qs.Store.RouteQuestion(ctx, q.ID, report.RouteHuman, e))
 }
 
-func (qs *Questions) event(it tracker.Item, c tenancy.Customer, typ string, payload map[string]any) event.Event {
-	return event.Event{Customer: c.ID, Project: it.ProjectID, EntityType: "item", EntityID: it.ID, Type: typ,
+func (qs *Questions) event(it tracker.Item, c tenancy.Organization, typ string, payload map[string]any) event.Event {
+	return event.Event{Organization: c.ID, Project: it.ProjectID, EntityType: "item", EntityID: it.ID, Type: typ,
 		Actor: event.System, OccurredAt: qs.Now(), Payload: mustJSON(payload)}
 }
 
@@ -228,7 +228,7 @@ of the sources it rests on) or escalate (why the sources do not answer it).`
 // attempt lets the planner try to answer q. It returns the answer with its
 // sources, or the reason to escalate.
 func (qs *Questions) attempt(ctx context.Context, q report.Question, it tracker.Item, p tenancy.Project,
-	c tenancy.Customer) (answer, reason string, err error) {
+	c tenancy.Organization) (answer, reason string, err error) {
 	rounds := qs.MaxRounds
 	if rounds <= 0 {
 		rounds = 8
@@ -250,7 +250,7 @@ func (qs *Questions) attempt(ctx context.Context, q report.Question, it tracker.
 		fmt.Fprintf(&prompt, "\n# What the agent knows\n\n%s\n", q.Context)
 	}
 	msgs := []planner.Message{{Role: planner.RoleUser, Content: []planner.Block{planner.Text(prompt.String())}}}
-	req := LLMRequest{Caller: LLMCaller{CustomerKey: c.Key, ProjectKey: p.Key, SessionID: "question-" + q.ID, TicketKey: it.Key},
+	req := LLMRequest{Caller: LLMCaller{OrganizationKey: c.Key, ProjectKey: p.Key, SessionID: "question-" + q.ID, TicketKey: it.Key},
 		Model: qs.Model, System: QuestionInstructions, Tools: questionTools(qs.Knowledge != nil), MaxTokens: maxTokens}
 	for range rounds {
 		req.Messages = msgs
@@ -298,7 +298,7 @@ func (qs *Questions) attempt(ctx context.Context, q report.Question, it tracker.
 	return "", "The planner did not decide within its rounds.", nil
 }
 
-func (qs *Questions) tool(ctx context.Context, b planner.Block, it tracker.Item, p tenancy.Project, c tenancy.Customer) (string, error) {
+func (qs *Questions) tool(ctx context.Context, b planner.Block, it tracker.Item, p tenancy.Project, c tenancy.Organization) (string, error) {
 	switch b.Name {
 	case "search_knowledge":
 		var in struct {
@@ -352,12 +352,12 @@ func questionTools(knowledge bool) []ToolSpec {
 // InboxEntry is an open question as the inbox shows it.
 type InboxEntry struct {
 	QuestionView
-	CustomerKey   string
-	ProjectKey    string
-	TicketTitle   string
-	TicketState   tracker.State
-	BlockedBehind int    // unresolved items waiting behind the ticket
-	Chat          string // the question's sub-chat session, if any
+	OrganizationKey string
+	ProjectKey      string
+	TicketTitle     string
+	TicketState     tracker.State
+	BlockedBehind   int    // unresolved items waiting behind the ticket
+	Chat            string // the question's sub-chat session, if any
 }
 
 // ListInbox returns the open questions of every project the caller can
@@ -382,7 +382,7 @@ func (qs *Questions) ListInbox(ctx context.Context) ([]InboxEntry, error) {
 			return nil, err
 		}
 		if !seen {
-			ok = qs.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: c.Key, Project: p.Key}) == nil
+			ok = qs.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Organization: c.Key, Project: p.Key}) == nil
 			allowed[q.ProjectID] = ok
 		}
 		if !ok {
@@ -392,7 +392,7 @@ func (qs *Questions) ListInbox(ctx context.Context) ([]InboxEntry, error) {
 		if err != nil {
 			return nil, err
 		}
-		e := InboxEntry{QuestionView: QuestionView{Question: q, TicketKey: it.Key}, CustomerKey: c.Key, ProjectKey: p.Key,
+		e := InboxEntry{QuestionView: QuestionView{Question: q, TicketKey: it.Key}, OrganizationKey: c.Key, ProjectKey: p.Key,
 			TicketTitle: it.Title, TicketState: it.State, BlockedBehind: n}
 		if qs.Planner != nil {
 			if s, err := qs.Planner.Store.QuestionSession(ctx, q.ID); err == nil {

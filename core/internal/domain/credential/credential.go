@@ -1,5 +1,5 @@
 // Package credential defines LLM provider credentials (ADR-0011): a
-// customer default per provider, optionally overridden per project.
+// organization default per provider, optionally overridden per project.
 package credential
 
 import (
@@ -28,18 +28,18 @@ var providers = []Provider{ProviderAnthropic, ProviderOpenAI, ProviderGit}
 // LLM reports whether p is an LLM provider (served to the gateway).
 func (p Provider) LLM() bool { return p == ProviderAnthropic || p == ProviderOpenAI }
 
-// Credential is a provider API key at customer or project scope. APIKey is
+// Credential is a provider API key at organization or project scope. APIKey is
 // only populated when resolved for the gateway.
 type Credential struct {
-	ID          string
-	CustomerID  string
-	ProjectID   string // empty: customer default
-	Provider    Provider
-	APIKey      string
-	BaseURL     string // empty: provider default
-	Fingerprint string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID             string
+	OrganizationID string
+	ProjectID      string // empty: organization default
+	Provider       Provider
+	APIKey         string
+	BaseURL        string // empty: provider default
+	Fingerprint    string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // Fingerprint identifies a key without revealing it: a short hash plus the

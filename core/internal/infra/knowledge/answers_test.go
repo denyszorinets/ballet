@@ -28,11 +28,11 @@ func TestReader_SearchAndRecordAnswer(t *testing.T) {
 		c, err := verifier.Verify(r.Context(), strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), "knowledge")
 		require.NoError(t, err)
 		switch {
-		case r.Method == http.MethodGet && r.URL.Path == "/v1/customers/acme/knowledge/search":
+		case r.Method == http.MethodGet && r.URL.Path == "/v1/organizations/acme/knowledge/search":
 			assert.Equal(t, []string{runtoken.CapKnowledgeRead}, c.Capabilities)
 			assert.Equal(t, "WEB", r.URL.Query().Get("project"))
 			_, _ = w.Write([]byte(`{"items":[{"entry":{"id":"k1","kind":"decision","title":"Use OIDC","body":"b1"},"score":1}]}`))
-		case r.Method == http.MethodPost && r.URL.Path == "/v1/customers/acme/knowledge/entries":
+		case r.Method == http.MethodPost && r.URL.Path == "/v1/organizations/acme/knowledge/entries":
 			assert.Equal(t, []string{runtoken.CapKnowledgeWrite}, c.Capabilities)
 			author = c.ActingFor
 			require.NoError(t, json.NewDecoder(r.Body).Decode(&created))

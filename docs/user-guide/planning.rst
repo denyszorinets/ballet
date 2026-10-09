@@ -13,7 +13,7 @@ to it as to a colleague: the goal, constraints, what is out of scope. The
 planner can
 
 - read the project's milestones, epics and tickets and search them;
-- search and read the customer's knowledge base, and write documents and
+- search and read the organization's knowledge base, and write documents and
   decisions into it;
 - read the project's skills, to plan work that fits its process;
 - propose **changesets**.

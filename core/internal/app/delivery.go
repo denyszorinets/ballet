@@ -13,14 +13,14 @@ import (
 )
 
 // DeliveryObserver records delivery measurements (Prometheus in
-// production). Customer and project are keys.
+// production). Organization and project are keys.
 type DeliveryObserver interface {
-	StageFinished(customer, project, stage, outcome string)
-	FlowFinished(customer, project, status string, leadTime time.Duration, iterations int)
-	FlowWaiting(customer, project, reason string)
-	RunFinished(customer, project, stage, status string, duration time.Duration)
-	QuestionRaised(customer, project string, blocking bool)
-	QuestionAnswered(customer, project, by string, wait time.Duration)
+	StageFinished(organization, project, stage, outcome string)
+	FlowFinished(organization, project, status string, leadTime time.Duration, iterations int)
+	FlowWaiting(organization, project, reason string)
+	RunFinished(organization, project, stage, status string, duration time.Duration)
+	QuestionRaised(organization, project string, blocking bool)
+	QuestionAnswered(organization, project, by string, wait time.Duration)
 }
 
 // Delivery turns Core's event log into delivery measurements: it follows
@@ -37,7 +37,7 @@ type Delivery struct {
 	Logger   *slog.Logger
 
 	mu   sync.Mutex
-	keys map[string]string // customer/project ID → key
+	keys map[string]string // organization/project ID → key
 }
 
 // Run observes events until ctx is cancelled.
@@ -91,11 +91,11 @@ func (d *Delivery) observe(ctx context.Context, e event.Event) {
 		By       string `json:"by"`
 	}
 	_ = json.Unmarshal(e.Payload, &p)
-	customer, project := d.key(ctx, e.Customer, "customer"), d.key(ctx, e.Project, "project")
+	organization, project := d.key(ctx, e.Organization, "organization"), d.key(ctx, e.Project, "project")
 	o := d.Observer
 	switch e.Type {
 	case "flow.stage_finished":
-		o.StageFinished(customer, project, p.Stage, p.Outcome)
+		o.StageFinished(organization, project, p.Stage, p.Outcome)
 	case "flow.done", "flow.failed", "flow.stopped":
 		status := e.Type[len("flow."):]
 		var lead time.Duration
@@ -103,9 +103,9 @@ func (d *Delivery) observe(ctx context.Context, e event.Event) {
 		if f, err := d.Flows.Flow(ctx, e.EntityID); err == nil {
 			lead, iterations = e.OccurredAt.Sub(f.StartedAt), f.Iteration
 		}
-		o.FlowFinished(customer, project, status, lead, iterations)
+		o.FlowFinished(organization, project, status, lead, iterations)
 	case "flow.waiting":
-		o.FlowWaiting(customer, project, p.For)
+		o.FlowWaiting(organization, project, p.For)
 	case "run.finished":
 		r, err := d.Runs.Run(ctx, e.EntityID)
 		if err != nil {
@@ -115,9 +115,9 @@ func (d *Delivery) observe(ctx context.Context, e event.Event) {
 		if !r.StartedAt.IsZero() {
 			took = r.FinishedAt.Sub(r.StartedAt)
 		}
-		o.RunFinished(customer, project, r.Stage, string(orStatus(run.Status(p.Status), r.Status)), took)
+		o.RunFinished(organization, project, r.Stage, string(orStatus(run.Status(p.Status), r.Status)), took)
 	case "item.question_raised":
-		o.QuestionRaised(customer, project, p.Blocking)
+		o.QuestionRaised(organization, project, p.Blocking)
 	case "item.question_answered":
 		q, err := d.Reports.Question(ctx, p.Question)
 		if err != nil || q.Status != report.QuestionAnswered {
@@ -127,7 +127,7 @@ func (d *Delivery) observe(ctx context.Context, e event.Event) {
 		if p.By == "planner" {
 			by = "planner"
 		}
-		o.QuestionAnswered(customer, project, by, q.AnsweredAt.Sub(q.CreatedAt))
+		o.QuestionAnswered(organization, project, by, q.AnsweredAt.Sub(q.CreatedAt))
 	}
 }
 
@@ -138,7 +138,7 @@ func orStatus(s, fallback run.Status) run.Status {
 	return fallback
 }
 
-// key returns the key of a customer or project ID, cached.
+// key returns the key of an organization or project ID, cached.
 func (d *Delivery) key(ctx context.Context, id, kind string) string {
 	if id == "" {
 		return ""
@@ -153,7 +153,7 @@ func (d *Delivery) key(ctx context.Context, id, kind string) string {
 		if p, err := d.Tenancy.ProjectByID(ctx, id); err == nil {
 			k = p.Key
 		}
-	} else if c, err := d.Tenancy.CustomerByID(ctx, id); err == nil {
+	} else if c, err := d.Tenancy.OrganizationByID(ctx, id); err == nil {
 		k = c.Key
 	}
 	if k == "" {
@@ -168,11 +168,11 @@ func (d *Delivery) key(ctx context.Context, id, kind string) string {
 	return k
 }
 
-// GaugeRow is a count of things in a state, by customer and project key.
+// GaugeRow is a count of things in a state, by organization and project key.
 type GaugeRow struct {
-	Customer, Project string
-	State, Detail     string // e.g. a flow's status and what it waits for
-	Count             int
+	Organization, Project string
+	State, Detail         string // e.g. a flow's status and what it waits for
+	Count                 int
 }
 
 // DeliveryGauges is the current state of delivery.

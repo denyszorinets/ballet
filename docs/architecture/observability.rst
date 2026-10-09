@@ -13,16 +13,16 @@ Two stores, by purpose:
 
 **Usage records (Core database) — source of truth.**
    One row per request or per run aggregate, attributed to run, ticket,
-   epic, project and customer. Used for per-ticket analysis, customer
+   epic, project and organization. Used for per-ticket analysis, organization
    billing and in-app usage views.
 
 **Metrics (Prometheus) — trends and alerting.**
    Counters such as ``ballet_llm_tokens_total`` with labels
-   ``customer``, ``project``, ``model`` and ``token_type``
+   ``organization``, ``project``, ``model`` and ``token_type``
    (:doc:`/reference/metrics`); cost per token is planned.
 
 Ticket and run IDs are **not** metric labels: each would create
-unbounded time series. Grafana uses Prometheus for customer/project
+unbounded time series. Grafana uses Prometheus for organization/project
 trends; per-ticket breakdowns come from Core (Ballet UI, and the REST
 API through a Grafana JSON data source).
 
@@ -34,7 +34,7 @@ software. Core counts delivery from its event log — stages and their
 outcomes, pipeline lead time and rework (iterations), agent sessions and
 their duration, questions and how long they wait, waits for humans,
 pauses and budgets — and reports the current state (active pipelines,
-open questions, active runs) at each scrape. Labels are ``customer``,
+open questions, active runs) at each scrape. Labels are ``organization``,
 ``project``, ``stage`` and small enumerations, never ticket IDs. The
 metrics are listed in :doc:`/reference/metrics`.
 
@@ -47,12 +47,12 @@ Dashboards
 The single-host installation provisions Prometheus and Grafana with
 three dashboards (:doc:`/how-to/install-single-host`):
 
-- **Delivery** — per customer and project: throughput (tickets done per
+- **Delivery** — per organization and project: throughput (tickets done per
   day), lead time, rework rate, stage outcomes, pipelines in progress and
   their waits, questions per day and human versus planner answers and
   wait times.
 - **LLM usage** — tokens over time by project, model and token type;
-  tokens per customer and project; requests and refusals.
+  tokens per organization and project; requests and refusals.
 - **Platform** — services up, jobs and dead jobs, active runs, session
   durations per stage, versions.
 

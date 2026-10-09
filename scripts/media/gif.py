@@ -4,7 +4,7 @@
 # ///
 """Turns the frames record.mjs saved into GIFs for the README.
 
-Usage: uv run scripts/readme-media/gif.py <frames dir> <output dir>
+Usage: uv run scripts/media/gif.py <frames dir> <output dir>
 """
 
 import json

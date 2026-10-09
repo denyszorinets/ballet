@@ -11,8 +11,8 @@ import (
 )
 
 // Budget limits the tokens unattended work uses in a scope
-// ("customer:<id>" or "project:<id>"); 0 means no limit. A project's
-// ticket limit overrides its customer's.
+// ("organization:<id>" or "project:<id>"); 0 means no limit. A project's
+// ticket limit overrides its organization's.
 type Budget struct {
 	Scope        string
 	TicketTokens int64 // per ticket, over its lifetime
@@ -24,8 +24,8 @@ type Budget struct {
 
 // UsageFilter selects usage records; empty fields match everything.
 type UsageFilter struct {
-	CustomerID, ProjectID, Ticket string
-	Since, Until                  time.Time // Until zero: no bound
+	OrganizationID, ProjectID, Ticket string
+	Since, Until                      time.Time // Until zero: no bound
 }
 
 // BudgetStore persists budgets and sums usage.
@@ -38,7 +38,7 @@ type BudgetStore interface {
 }
 
 // Budgets bounds the spending of unattended work: per ticket, per project
-// per day and per customer per day, in tokens reported by the gateway.
+// per day and per organization per day, in tokens reported by the gateway.
 type Budgets struct {
 	Store   BudgetStore
 	Tenancy TenancyStore
@@ -54,22 +54,22 @@ type BudgetStatus struct {
 
 // Exceeded says which budget work ran out of.
 type Exceeded struct {
-	Scope       string // "ticket", "project" or "customer"
+	Scope       string // "ticket", "project" or "organization"
 	Used, Limit int64
 }
 
 // Reason describes the exhausted budget for humans.
 func (e Exceeded) Reason() string {
 	per := map[string]string{"ticket": "budget of the ticket", "project": "daily budget of the project",
-		"customer": "daily budget of the customer"}[e.Scope]
+		"organization": "daily budget of the organization"}[e.Scope]
 	return fmt.Sprintf("The %s is used up: %d of %d tokens.", per, e.Used, e.Limit)
 }
 
 // Get returns the budget of a project (projectKey) or, with "", of a
-// customer, with today's use. Needs tracker.read on the project or
-// customer.read on the customer.
-func (bs *Budgets) Get(ctx context.Context, customerKey, projectKey string) (BudgetStatus, error) {
-	scope, filter, _, _, err := bs.scope(ctx, customerKey, projectKey, ActTrackerRead, ActCustomerRead)
+// organization, with today's use. Needs tracker.read on the project or
+// organization.read on the organization.
+func (bs *Budgets) Get(ctx context.Context, organizationKey, projectKey string) (BudgetStatus, error) {
+	scope, filter, _, _, err := bs.scope(ctx, organizationKey, projectKey, ActTrackerRead, ActOrganizationRead)
 	if err != nil {
 		return BudgetStatus{}, err
 	}
@@ -82,11 +82,11 @@ func (bs *Budgets) Get(ctx context.Context, customerKey, projectKey string) (Bud
 	return BudgetStatus{Budget: b, UsedToday: used}, err
 }
 
-// Set sets the budget of a project or, with projectKey "", of a customer,
+// Set sets the budget of a project or, with projectKey "", of an organization,
 // if it is at version (0: never set). Needs project.update or
-// customer.update.
-func (bs *Budgets) Set(ctx context.Context, customerKey, projectKey string, ticketTokens, dailyTokens, version int64) (BudgetStatus, error) {
-	scope, _, p, c, err := bs.scope(ctx, customerKey, projectKey, ActProjectUpdate, ActCustomerUpdate)
+// organization.update.
+func (bs *Budgets) Set(ctx context.Context, organizationKey, projectKey string, ticketTokens, dailyTokens, version int64) (BudgetStatus, error) {
+	scope, _, p, c, err := bs.scope(ctx, organizationKey, projectKey, ActProjectUpdate, ActOrganizationUpdate)
 	if err != nil {
 		return BudgetStatus{}, err
 	}
@@ -96,53 +96,53 @@ func (bs *Budgets) Set(ctx context.Context, customerKey, projectKey string, tick
 	id, _ := caller(ctx)
 	b := Budget{Scope: scope, TicketTokens: ticketTokens, DailyTokens: dailyTokens, UpdatedBy: id.Subject,
 		UpdatedAt: bs.Now(), Version: version + 1}
-	e := event.Event{Customer: c.ID, Project: p.ID, EntityType: "budget", EntityID: scope, Type: "budget.set",
+	e := event.Event{Organization: c.ID, Project: p.ID, EntityType: "budget", EntityID: scope, Type: "budget.set",
 		Actor: actorIn(ctx, id), OccurredAt: b.UpdatedAt,
 		Payload: mustJSON(map[string]any{"ticket_tokens": ticketTokens, "daily_tokens": dailyTokens})}
 	if err := bs.Store.SetBudget(ctx, b, version, e); err != nil {
 		return BudgetStatus{}, err
 	}
-	return bs.Get(ctx, customerKey, projectKey)
+	return bs.Get(ctx, organizationKey, projectKey)
 }
 
-func (bs *Budgets) scope(ctx context.Context, customerKey, projectKey string, projectAct, customerAct Action) (
-	string, UsageFilter, tenancy.Project, tenancy.Customer, error) {
+func (bs *Budgets) scope(ctx context.Context, organizationKey, projectKey string, projectAct, organizationAct Action) (
+	string, UsageFilter, tenancy.Project, tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return "", UsageFilter{}, tenancy.Project{}, tenancy.Customer{}, err
+		return "", UsageFilter{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	if projectKey != "" {
 		p, err := bs.Tenancy.ProjectByKey(ctx, projectKey)
 		if err != nil {
-			return "", UsageFilter{}, tenancy.Project{}, tenancy.Customer{}, err
+			return "", UsageFilter{}, tenancy.Project{}, tenancy.Organization{}, err
 		}
-		c, err := bs.Tenancy.CustomerByID(ctx, p.CustomerID)
+		c, err := bs.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 		if err != nil {
-			return "", UsageFilter{}, tenancy.Project{}, tenancy.Customer{}, err
+			return "", UsageFilter{}, tenancy.Project{}, tenancy.Organization{}, err
 		}
-		if err := bs.Authz.Authorize(ctx, id, projectAct, Scope{Customer: c.Key, Project: p.Key}); err != nil {
-			return "", UsageFilter{}, tenancy.Project{}, tenancy.Customer{}, err
+		if err := bs.Authz.Authorize(ctx, id, projectAct, Scope{Organization: c.Key, Project: p.Key}); err != nil {
+			return "", UsageFilter{}, tenancy.Project{}, tenancy.Organization{}, err
 		}
 		return "project:" + p.ID, UsageFilter{ProjectID: p.ID}, p, c, nil
 	}
-	c, err := bs.Tenancy.CustomerByKey(ctx, customerKey)
+	c, err := bs.Tenancy.OrganizationByKey(ctx, organizationKey)
 	if err != nil {
-		return "", UsageFilter{}, tenancy.Project{}, tenancy.Customer{}, err
+		return "", UsageFilter{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	if err := bs.Authz.Authorize(ctx, id, customerAct, Scope{Customer: c.Key}); err != nil {
-		return "", UsageFilter{}, tenancy.Project{}, tenancy.Customer{}, err
+	if err := bs.Authz.Authorize(ctx, id, organizationAct, Scope{Organization: c.Key}); err != nil {
+		return "", UsageFilter{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	return "customer:" + c.ID, UsageFilter{CustomerID: c.ID}, tenancy.Project{}, c, nil
+	return "organization:" + c.ID, UsageFilter{OrganizationID: c.ID}, tenancy.Project{}, c, nil
 }
 
 // Check returns the budget work in a project (and on a ticket, when
 // ticketKey is set) ran out of, or nil.
-func (bs *Budgets) Check(ctx context.Context, customerID, projectID, ticketKey string) (*Exceeded, error) {
+func (bs *Budgets) Check(ctx context.Context, organizationID, projectID, ticketKey string) (*Exceeded, error) {
 	pb, err := bs.Store.Budget(ctx, "project:"+projectID)
 	if err != nil {
 		return nil, err
 	}
-	cb, err := bs.Store.Budget(ctx, "customer:"+customerID)
+	cb, err := bs.Store.Budget(ctx, "organization:"+organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +157,7 @@ func (bs *Budgets) Check(ctx context.Context, customerID, projectID, ticketKey s
 	}{
 		{"ticket", ticketLimit, UsageFilter{Ticket: ticketKey}},
 		{"project", pb.DailyTokens, UsageFilter{ProjectID: projectID, Since: bs.today()}},
-		{"customer", cb.DailyTokens, UsageFilter{CustomerID: customerID, Since: bs.today()}},
+		{"organization", cb.DailyTokens, UsageFilter{OrganizationID: organizationID, Since: bs.today()}},
 	}
 	for _, ch := range checks {
 		if ch.limit <= 0 || (ch.scope == "ticket" && ticketKey == "") {
@@ -180,12 +180,12 @@ func (bs *Budgets) CheckTicket(ctx context.Context, it tracker.Item) (*Exceeded,
 	if err != nil {
 		return nil, err
 	}
-	return bs.Check(ctx, p.CustomerID, p.ID, it.Key)
+	return bs.Check(ctx, p.OrganizationID, p.ID, it.Key)
 }
 
-// CheckKeys is Check by customer and project keys (the gateway's view).
-func (bs *Budgets) CheckKeys(ctx context.Context, customerKey, projectKey, ticketKey string) (*Exceeded, error) {
-	c, err := bs.Tenancy.CustomerByKey(ctx, customerKey)
+// CheckKeys is Check by organization and project keys (the gateway's view).
+func (bs *Budgets) CheckKeys(ctx context.Context, organizationKey, projectKey, ticketKey string) (*Exceeded, error) {
+	c, err := bs.Tenancy.OrganizationByKey(ctx, organizationKey)
 	if err != nil {
 		return nil, err
 	}
@@ -193,8 +193,8 @@ func (bs *Budgets) CheckKeys(ctx context.Context, customerKey, projectKey, ticke
 	if err != nil {
 		return nil, err
 	}
-	if p.CustomerID != c.ID {
-		return nil, fmt.Errorf("%w: project %s is not a project of %s", ErrNotFound, projectKey, customerKey)
+	if p.OrganizationID != c.ID {
+		return nil, fmt.Errorf("%w: project %s is not a project of %s", ErrNotFound, projectKey, organizationKey)
 	}
 	return bs.Check(ctx, c.ID, p.ID, ticketKey)
 }

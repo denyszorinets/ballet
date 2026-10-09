@@ -23,7 +23,7 @@
 	const canAnswer = $derived(
 		!!selected &&
 			!!session?.permissions.can('tracker.write', {
-				customer: selected.customer,
+				organization: selected.organization,
 				project: selected.project
 			})
 	);

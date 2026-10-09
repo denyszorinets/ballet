@@ -14,17 +14,17 @@ import (
 
 // SaveEmbedding stores (or replaces) the vector of an entry.
 func (s *Store) SaveEmbedding(ctx context.Context, e domain.Entry, model, contentHash string, vector []float32) error {
-	return s.db.Batch(ctx, sqlstore.Exec(`INSERT INTO entry_embeddings (entry_id, customer, model, content_hash, vector, updated_at)
+	return s.db.Batch(ctx, sqlstore.Exec(`INSERT INTO entry_embeddings (entry_id, organization, model, content_hash, vector, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)
 		ON CONFLICT (entry_id) DO UPDATE SET model = excluded.model, content_hash = excluded.content_hash,
 			vector = excluded.vector, updated_at = excluded.updated_at`,
-		e.ID, e.Customer, model, contentHash, sqlstore.EncodeFloat32(vector), ts(time.Now())))
+		e.ID, e.Organization, model, contentHash, sqlstore.EncodeFloat32(vector), ts(time.Now())))
 }
 
 // StaleEmbeddings returns up to limit entries whose embedding is missing,
 // of another model, or of older content (contentHash computes the hash).
 func (s *Store) StaleEmbeddings(ctx context.Context, model string, limit int, contentHash func(domain.Entry) string) ([]domain.Entry, error) {
-	rows, err := s.db.Query(ctx, `SELECT e.id, e.customer, e.kind, e.title, e.body, e.projects, e.items, e.version,
+	rows, err := s.db.Query(ctx, `SELECT e.id, e.organization, e.kind, e.title, e.body, e.projects, e.items, e.version,
 			e.created_by, e.updated_by, e.created_at, e.updated_at, COALESCE(x.model, ''), COALESCE(x.content_hash, '')
 		FROM entries e LEFT JOIN entry_embeddings x ON x.entry_id = e.id`)
 	if err != nil {
@@ -46,8 +46,8 @@ func (s *Store) StaleEmbeddings(ctx context.Context, model string, limit int, co
 }
 
 // Search runs the full-text and vector halves of a hybrid query for one
-// customer and fuses them with reciprocal rank fusion (k = 60).
-func (s *Store) Search(ctx context.Context, customer string, q app.SearchQuery) ([]app.SearchHit, error) {
+// organization and fuses them with reciprocal rank fusion (k = 60).
+func (s *Store) Search(ctx context.Context, organization string, q app.SearchQuery) ([]app.SearchHit, error) {
 	terms := embed.Words(q.Text)
 	if len(terms) == 0 {
 		return nil, nil
@@ -56,7 +56,7 @@ func (s *Store) Search(ctx context.Context, customer string, q app.SearchQuery) 
 	for i, t := range terms {
 		quoted[i] = `"` + t + `"` // quoted terms: no FTS syntax from user input
 	}
-	where, args := []string{"e.customer = ?"}, []any{}
+	where, args := []string{"e.organization = ?"}, []any{}
 	if q.Kind != "" {
 		where, args = append(where, "e.kind = ?"), append(args, string(q.Kind))
 	}
@@ -73,7 +73,7 @@ WITH fts AS (
   WHERE entries_fts MATCH ? AND ` + filter + `
   ORDER BY bm25(entries_fts) LIMIT ` + fmt.Sprint(candidates) + `
 )`
-	fullArgs := append([]any{strings.Join(quoted, " OR "), customer}, args...)
+	fullArgs := append([]any{strings.Join(quoted, " OR "), organization}, args...)
 	fused := `SELECT id, SUM(1.0 / (60 + r)) AS score FROM (SELECT * FROM fts) GROUP BY id`
 	if q.Vector != nil {
 		sqlText += `, vec AS (
@@ -83,7 +83,7 @@ WITH fts AS (
   ORDER BY r LIMIT ` + fmt.Sprint(candidates) + `
 )`
 		vec := sqlstore.EncodeFloat32(q.Vector)
-		fullArgs = append(fullArgs, vec, q.Model, vec, q.MaxDistance, customer)
+		fullArgs = append(fullArgs, vec, q.Model, vec, q.MaxDistance, organization)
 		fullArgs = append(fullArgs, args...)
 		fused = `SELECT id, SUM(1.0 / (60 + r)) AS score FROM (SELECT * FROM fts UNION ALL SELECT * FROM vec) GROUP BY id`
 	}
@@ -93,8 +93,8 @@ WITH fts AS (
 	}
 	sqlText += `
 SELECT ` + prefixed("e.") + `, f.score FROM (` + fused + `) f JOIN entries e ON e.id = f.id
-WHERE e.customer = ? ORDER BY f.score DESC, e.updated_at DESC LIMIT ?`
-	fullArgs = append(fullArgs, customer, limit)
+WHERE e.organization = ? ORDER BY f.score DESC, e.updated_at DESC LIMIT ?`
+	fullArgs = append(fullArgs, organization, limit)
 
 	rows, err := s.db.Query(ctx, sqlText, fullArgs...)
 	if err != nil {
@@ -125,7 +125,7 @@ func prefixed(p string) string {
 func scanWith(r scanner, extra ...any) (domain.Entry, error) {
 	var e domain.Entry
 	var kind, projects, items, created, updated string
-	dest := append([]any{&e.ID, &e.Customer, &kind, &e.Title, &e.Body, &projects, &items, &e.Version,
+	dest := append([]any{&e.ID, &e.Organization, &kind, &e.Title, &e.Body, &projects, &items, &e.Version,
 		&e.CreatedBy, &e.UpdatedBy, &created, &updated}, extra...)
 	if err := r.Scan(dest...); err != nil {
 		return domain.Entry{}, err

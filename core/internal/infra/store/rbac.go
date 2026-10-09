@@ -9,7 +9,7 @@ import (
 	"github.com/denyszorinets/ballet/kit/sqlstore"
 )
 
-const bindingCols = `id, claim, value, role, scope_kind, customer_key, project_key, created_at`
+const bindingCols = `id, claim, value, role, scope_kind, organization_key, project_key, created_at`
 
 // ListRoleBindings returns all stored bindings in creation order.
 func (s *Store) ListRoleBindings(ctx context.Context) ([]rbac.Binding, error) {
@@ -39,7 +39,7 @@ func (s *Store) RoleBinding(ctx context.Context, id string) (rbac.Binding, error
 func (s *Store) CreateRoleBinding(ctx context.Context, b rbac.Binding, e event.Event) error {
 	return mapWriteErr("create role binding", s.db.Batch(ctx,
 		sqlstore.Exec(`INSERT INTO role_bindings (`+bindingCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-			b.ID, b.Claim, b.Value, string(b.Role), string(b.Scope.Kind), b.Scope.Customer, b.Scope.Project,
+			b.ID, b.Claim, b.Value, string(b.Role), string(b.Scope.Kind), b.Scope.Organization, b.Scope.Project,
 			formatTime(b.CreatedAt)),
 		s.AppendEvent(e),
 	))
@@ -56,7 +56,7 @@ func (s *Store) DeleteRoleBinding(ctx context.Context, id string, e event.Event)
 func scanBinding(r scanner) (rbac.Binding, error) {
 	var b rbac.Binding
 	var role, kind, created string
-	if err := r.Scan(&b.ID, &b.Claim, &b.Value, &role, &kind, &b.Scope.Customer, &b.Scope.Project, &created); err != nil {
+	if err := r.Scan(&b.ID, &b.Claim, &b.Value, &role, &kind, &b.Scope.Organization, &b.Scope.Project, &created); err != nil {
 		return rbac.Binding{}, err
 	}
 	b.Role, b.Scope.Kind = rbac.Role(role), rbac.ScopeKind(kind)

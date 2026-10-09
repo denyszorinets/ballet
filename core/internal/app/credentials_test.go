@@ -23,11 +23,11 @@ func newCredentials(t *testing.T) (*app.Credentials, rbacEnv) {
 	return &app.Credentials{Store: env.store, Tenancy: env.store, Authz: env.rbac, Box: box, Now: time.Now, NewID: store.NewID}, env
 }
 
-func TestCredentials_ProjectOverrideWinsOverCustomerDefault(t *testing.T) {
+func TestCredentials_ProjectOverrideWinsOverOrganizationDefault(t *testing.T) {
 	cr, _ := newCredentials(t)
 	dave := user(t, "dave", "acme-admins")
 
-	_, err := cr.Set(dave, app.SetCredentialInput{CustomerKey: "acme", Provider: credential.ProviderAnthropic, APIKey: "sk-default-1111"})
+	_, err := cr.Set(dave, app.SetCredentialInput{OrganizationKey: "acme", Provider: credential.ProviderAnthropic, APIKey: "sk-default-1111"})
 	require.NoError(t, err)
 	_, err = cr.Set(dave, app.SetCredentialInput{ProjectKey: "WEB", Provider: credential.ProviderAnthropic, APIKey: "sk-web-2222", BaseURL: "https://llm.example"})
 	require.NoError(t, err)
@@ -39,18 +39,18 @@ func TestCredentials_ProjectOverrideWinsOverCustomerDefault(t *testing.T) {
 
 	got, err = cr.Resolve(t.Context(), "acme", "APP", credential.ProviderAnthropic)
 	require.NoError(t, err)
-	assert.Equal(t, "sk-default-1111", got.APIKey, "projects without override use the customer default")
+	assert.Equal(t, "sk-default-1111", got.APIKey, "projects without override use the organization default")
 
 	_, err = cr.Resolve(t.Context(), "acme", "WEB", credential.ProviderOpenAI)
 	assert.ErrorIs(t, err, app.ErrNotFound)
 	_, err = cr.Resolve(t.Context(), "acme", "GLX", credential.ProviderAnthropic)
-	assert.ErrorIs(t, err, app.ErrNotFound, "project of another customer")
+	assert.ErrorIs(t, err, app.ErrNotFound, "project of another organization")
 }
 
 func TestCredentials_SecretsAreNeverListedAndEncryptedAtRest(t *testing.T) {
 	cr, env := newCredentials(t)
 	dave := user(t, "dave", "acme-admins")
-	_, err := cr.Set(dave, app.SetCredentialInput{CustomerKey: "acme", Provider: credential.ProviderAnthropic, APIKey: "sk-very-secret-9876"})
+	_, err := cr.Set(dave, app.SetCredentialInput{OrganizationKey: "acme", Provider: credential.ProviderAnthropic, APIKey: "sk-very-secret-9876"})
 	require.NoError(t, err)
 
 	list, err := cr.List(dave, "acme")
@@ -91,17 +91,17 @@ func TestCredentials_AuthorizationAndValidation(t *testing.T) {
 	bob := user(t, "bob", "acme-devs")
 	dave := user(t, "dave", "acme-admins")
 
-	_, err := cr.Set(bob, app.SetCredentialInput{CustomerKey: "acme", Provider: credential.ProviderAnthropic, APIKey: "k"})
+	_, err := cr.Set(bob, app.SetCredentialInput{OrganizationKey: "acme", Provider: credential.ProviderAnthropic, APIKey: "k"})
 	assert.ErrorIs(t, err, app.ErrForbidden, "engineers cannot manage credentials")
 	_, err = cr.List(bob, "acme")
 	assert.ErrorIs(t, err, app.ErrForbidden)
-	_, err = cr.Set(dave, app.SetCredentialInput{CustomerKey: "globex", Provider: credential.ProviderAnthropic, APIKey: "k"})
-	assert.ErrorIs(t, err, app.ErrForbidden, "customer admins only for their customer")
+	_, err = cr.Set(dave, app.SetCredentialInput{OrganizationKey: "globex", Provider: credential.ProviderAnthropic, APIKey: "k"})
+	assert.ErrorIs(t, err, app.ErrForbidden, "organization admins only for their organization")
 
 	for name, in := range map[string]app.SetCredentialInput{
-		"unknown provider": {CustomerKey: "acme", Provider: "gemini", APIKey: "k"},
-		"empty key":        {CustomerKey: "acme", Provider: credential.ProviderAnthropic, APIKey: " "},
-		"bad base url":     {CustomerKey: "acme", Provider: credential.ProviderAnthropic, APIKey: "k", BaseURL: "ftp://x"},
+		"unknown provider": {OrganizationKey: "acme", Provider: "gemini", APIKey: "k"},
+		"empty key":        {OrganizationKey: "acme", Provider: credential.ProviderAnthropic, APIKey: " "},
+		"bad base url":     {OrganizationKey: "acme", Provider: credential.ProviderAnthropic, APIKey: "k", BaseURL: "ftp://x"},
 	} {
 		_, err := cr.Set(dave, in)
 		assert.ErrorIs(t, err, app.ErrInvalid, name)

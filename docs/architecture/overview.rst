@@ -9,7 +9,7 @@ System context
    flowchart LR
      subgraph Humans
        ENG[Engineers]
-       CUST[Customer staff]
+       CUST[Organization staff]
      end
      IDP[OIDC identity provider]
      UI[Web UI<br/>Svelte]
@@ -46,7 +46,7 @@ Principles
 
 - **Orchestrate, don't reimplement.** Coding agents are external
   products, driven by Ballet's agents through drivers.
-- **The customer is the isolation boundary** for data, credentials and
+- **The organization is the isolation boundary** for data, credentials and
   knowledge — enforced server-side on every request.
 - **Ballet checks, agents don't self-report.** Gates are evaluated by
   Ballet from observable facts (test results, knowledge entries, review

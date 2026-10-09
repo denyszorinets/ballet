@@ -27,15 +27,15 @@ func TestBudgetCheck_RefusesWorkOverBudget(t *testing.T) {
 	authz := &app.RBAC{Store: st, Bootstrap: []rbac.Binding{boot}}
 	admin := auth.WithIdentity(t.Context(), auth.Identity{Kind: auth.KindHuman, Subject: "alice", Claims: map[string]any{"sub": "alice"}})
 	ten := &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID}
-	_, err = ten.CreateCustomer(admin, app.CreateCustomerInput{Key: "acme", Name: "Acme"})
+	_, err = ten.CreateOrganization(admin, app.CreateOrganizationInput{Key: "acme", Name: "Acme"})
 	require.NoError(t, err)
-	_, err = ten.CreateProject(admin, app.CreateProjectInput{CustomerKey: "acme", Key: "WEB", Name: "Web"})
+	_, err = ten.CreateProject(admin, app.CreateProjectInput{OrganizationKey: "acme", Key: "WEB", Name: "Web"})
 	require.NoError(t, err)
 	bs := &app.Budgets{Store: st, Tenancy: st, Authz: authz, Now: time.Now}
 	_, err = bs.Set(admin, "acme", "WEB", 1000, 5000, 0)
 	require.NoError(t, err)
 	usage := &app.Usage{Store: st, Tenancy: st, Authz: authz}
-	_, _, err = usage.Ingest(t.Context(), []app.UsageInput{{OccurredAt: time.Now(), Customer: "acme", Project: "WEB",
+	_, _, err = usage.Ingest(t.Context(), []app.UsageInput{{OccurredAt: time.Now(), Organization: "acme", Project: "WEB",
 		Ticket: "WEB-1", Status: 200, InputTokens: 600, OutputTokens: 300, CacheWrite: 100, CacheRead: 99999}})
 	require.NoError(t, err)
 
@@ -56,15 +56,15 @@ func TestBudgetCheck_RefusesWorkOverBudget(t *testing.T) {
 		return rec.Code, v
 	}
 
-	code, v := check("customer=acme&project=WEB&ticket=WEB-1")
+	code, v := check("organization=acme&project=WEB&ticket=WEB-1")
 	require.Equal(t, http.StatusOK, code)
 	assert.False(t, v.Allowed, "1000 counted tokens (cache reads excluded) reach the ticket budget")
 	assert.Contains(t, v.Reason, "budget of the ticket is used up: 1000 of 1000 tokens")
-	_, v = check("customer=acme&project=WEB&ticket=WEB-2")
+	_, v = check("organization=acme&project=WEB&ticket=WEB-2")
 	assert.True(t, v.Allowed)
-	_, v = check("customer=acme&project=WEB")
+	_, v = check("organization=acme&project=WEB")
 	assert.True(t, v.Allowed, "the project's daily budget has room")
-	code, _ = check("customer=acme&project=NOPE")
+	code, _ = check("organization=acme&project=NOPE")
 	assert.Equal(t, http.StatusNotFound, code)
 
 	status, err := bs.Get(admin, "acme", "WEB")
@@ -74,7 +74,7 @@ func TestBudgetCheck_RefusesWorkOverBudget(t *testing.T) {
 	assert.ErrorIs(t, err, app.ErrConflict, "stale version")
 	_, err = bs.Set(admin, "acme", "", 0, 900, 0)
 	require.NoError(t, err)
-	_, v = check("customer=acme&project=WEB")
+	_, v = check("organization=acme&project=WEB")
 	assert.False(t, v.Allowed)
-	assert.Contains(t, v.Reason, "daily budget of the customer")
+	assert.Contains(t, v.Reason, "daily budget of the organization")
 }

@@ -24,15 +24,15 @@ import (
 
 type tenants struct{ app.TenancyStore }
 
-func (tenants) CustomerByKey(_ context.Context, key string) (tenancy.Customer, error) {
-	return tenancy.Customer{ID: "c1", Key: key}, nil
+func (tenants) OrganizationByKey(_ context.Context, key string) (tenancy.Organization, error) {
+	return tenancy.Organization{ID: "c1", Key: key}, nil
 }
 
 // readers may read acme's knowledge; writers may also write.
 type authz struct{ write bool }
 
 func (a authz) Authorize(_ context.Context, _ auth.Identity, action app.Action, s app.Scope) error {
-	if s.Customer == "acme" && (action == app.ActKnowledgeRead || a.write) {
+	if s.Organization == "acme" && (action == app.ActKnowledgeRead || a.write) {
 		return nil
 	}
 	return app.ErrForbidden
@@ -51,9 +51,9 @@ func TestClient_ForwardsWithScopedToken(t *testing.T) {
 		body = nil
 		_ = json.Unmarshal(data, &body)
 		switch {
-		case r.URL.Path == "/v1/customers/acme/knowledge/search" && r.URL.Query().Get("q") == "auth":
+		case r.URL.Path == "/v1/organizations/acme/knowledge/search" && r.URL.Query().Get("q") == "auth":
 			_, _ = w.Write([]byte(`{"items":[]}`))
-		case r.URL.Path == "/v1/customers/acme/knowledge/entries" && r.Method == http.MethodPost:
+		case r.URL.Path == "/v1/organizations/acme/knowledge/entries" && r.Method == http.MethodPost:
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte(`{"id":"k1"}`))
 		default:

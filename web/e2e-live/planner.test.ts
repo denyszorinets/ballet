@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 // Needs Core, the LLM gateway and fake-anthropic (bin/fake-anthropic) with
-// an Anthropic credential for project WEB of customer acme pointing at it:
+// an Anthropic credential for project WEB of organization acme pointing at it:
 // the fake calls a tool when a message reads "/tool <name> <json>".
 test('alice plans in chat and approves the planner’s changeset', async ({ page }) => {
 	const errors: string[] = [];
@@ -16,7 +16,7 @@ test('alice plans in chat and approves the planner’s changeset', async ({ page
 		.first()
 		.fill('alice');
 	await page.getByRole('button', { name: /sign in/i }).click();
-	await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
 
 	await page.goto('/projects/WEB/planner');
 	await page.getByLabel('Topic').fill(title);

@@ -45,7 +45,7 @@ func (e parkingEnv) ask(t *testing.T, text string, at time.Time) report.Question
 	require.NoError(t, err)
 	q := report.Question{ID: text, ProjectID: p.ID, TicketID: e.run.TicketID, RunID: e.run.ID, Text: text,
 		Blocking: true, Status: report.QuestionOpen, CreatedAt: at}
-	require.NoError(t, e.st.CreateQuestion(t.Context(), q, event.Event{Customer: p.CustomerID, Project: p.ID,
+	require.NoError(t, e.st.CreateQuestion(t.Context(), q, event.Event{Organization: p.OrganizationID, Project: p.ID,
 		EntityType: "item", EntityID: e.run.TicketID, Type: "item.question_raised", Actor: event.System, OccurredAt: at,
 		Payload: []byte(`{}`)}))
 	return q
@@ -56,7 +56,7 @@ func (e parkingEnv) answer(t *testing.T, q report.Question, text string) report.
 	p, err := e.st.ProjectByID(t.Context(), q.ProjectID)
 	require.NoError(t, err)
 	q.Status, q.Answer, q.AnsweredBy, q.AnsweredAt = report.QuestionAnswered, text, "alice", time.Now()
-	require.NoError(t, e.st.AnswerQuestion(t.Context(), q, nil, event.Event{Customer: p.CustomerID, Project: p.ID,
+	require.NoError(t, e.st.AnswerQuestion(t.Context(), q, nil, event.Event{Organization: p.OrganizationID, Project: p.ID,
 		EntityType: "item", EntityID: q.TicketID, Type: "item.question_answered", Actor: event.System,
 		OccurredAt: time.Now(), Payload: []byte(`{}`)}))
 	return q

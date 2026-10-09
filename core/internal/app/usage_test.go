@@ -16,7 +16,7 @@ func TestUsage_IngestAndReport(t *testing.T) {
 	u := &app.Usage{Store: env.store, Tenancy: env.store, Authz: env.rbac}
 	now := time.Now()
 	rec := func(project, ticket, model string, in, out int64) app.UsageInput {
-		return app.UsageInput{OccurredAt: now, Customer: "acme", Project: project, Ticket: ticket, Model: model,
+		return app.UsageInput{OccurredAt: now, Organization: "acme", Project: project, Ticket: ticket, Model: model,
 			Status: 200, InputTokens: in, OutputTokens: out}
 	}
 
@@ -25,8 +25,8 @@ func TestUsage_IngestAndReport(t *testing.T) {
 		rec("WEB", "WEB-1", "haiku", 50, 5),
 		rec("WEB", "WEB-2", "opus", 10, 1),
 		rec("APP", "APP-1", "opus", 999, 9),
-		{Customer: "globex", Project: "WEB", Ticket: "WEB-1", InputTokens: 1}, // wrong customer for WEB
-		{Customer: "acme", Project: "NOPE", InputTokens: 1},
+		{Organization: "globex", Project: "WEB", Ticket: "WEB-1", InputTokens: 1}, // wrong organization for WEB
+		{Organization: "acme", Project: "NOPE", InputTokens: 1},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 4, stored)

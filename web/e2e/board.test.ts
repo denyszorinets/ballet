@@ -21,10 +21,10 @@ function ticket(n: number, state: string, title: string): FakeItem {
 async function open(page: Page, role: string, path: string) {
 	await fakeOIDC(page);
 	const core = await fakeCore(page, {
-		me: [{ role, scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		me: [{ role, scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
 		projects: [
-			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web shop', description: '', version: 1 }
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web shop', description: '', version: 1 }
 		],
 		items: [ticket(1, 'ready', 'Schema'), ticket(2, 'ready', 'API'), ticket(3, 'done', 'Setup')],
 		deps: [{ id: 'd1', from: 'WEB-1', to: 'WEB-2', type: 'blocks' }]
@@ -105,10 +105,10 @@ test('the item page shows agent activity', async ({ page }) => {
 	await fakeOIDC(page);
 	const at = '2026-10-01T10:00:00Z';
 	await fakeCore(page, {
-		me: [{ role: 'viewer', scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		me: [{ role: 'viewer', scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
 		projects: [
-			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web shop', description: '', version: 1 }
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web shop', description: '', version: 1 }
 		],
 		items: [ticket(1, 'in_progress', 'Login')],
 		activity: {
@@ -230,10 +230,10 @@ test('admins talk to a running agent session', async ({ page }) => {
 	await fakeOIDC(page);
 	const at = '2026-10-01T10:00:00Z';
 	const core = await fakeCore(page, {
-		me: [{ role: 'customer-admin', scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		me: [{ role: 'organization-admin', scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
 		projects: [
-			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web shop', description: '', version: 1 }
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web shop', description: '', version: 1 }
 		],
 		items: [ticket(1, 'in_progress', 'Login')],
 		activity: {
@@ -304,7 +304,7 @@ test('engineers open and merge the pull request of a ticket', async ({ page }) =
 });
 
 test('admins start a pipeline and humans decide human stages', async ({ page }) => {
-	const core = await open(page, 'customer-admin', '/items/WEB-1');
+	const core = await open(page, 'organization-admin', '/items/WEB-1');
 	await expect(page.getByText('Not started.')).toBeVisible();
 	await page.getByRole('button', { name: 'Start pipeline' }).click();
 	const stages = page.getByRole('list', { name: 'Pipeline stages' });

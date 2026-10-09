@@ -2,7 +2,7 @@
 	import { apiError, type Schemas } from '$lib/api/client';
 	import { getSession, type Session } from '$lib/session';
 
-	type Kind = 'platform' | 'customer' | 'project';
+	type Kind = 'platform' | 'organization' | 'project';
 
 	let session = $state<Session>();
 	let bindings = $state<Schemas['RoleBinding'][]>();
@@ -12,7 +12,7 @@
 		claim: 'groups',
 		value: '',
 		role: 'engineer',
-		kind: 'customer' as Kind,
+		kind: 'organization' as Kind,
 		key: ''
 	});
 	let formError = $state<string>();
@@ -127,13 +127,13 @@
 			>Scope
 			<select bind:value={form.kind}>
 				<option value="platform">platform</option>
-				<option value="customer">customer</option>
+				<option value="organization">organization</option>
 				<option value="project">project</option>
 			</select>
 		</label>
 		{#if form.kind !== 'platform'}
 			<label
-				>{form.kind === 'customer' ? 'Customer key' : 'Project key'}
+				>{form.kind === 'organization' ? 'Organization key' : 'Project key'}
 				<input bind:value={form.key} required /></label
 			>
 		{/if}

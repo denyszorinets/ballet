@@ -17,9 +17,9 @@ import (
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 )
 
-// Search finds entries about project in customer's knowledge.
-func (r *Reader) Search(ctx context.Context, customer, project, query string, limit int) ([]onboarding.Knowledge, error) {
-	tok, err := r.token(customer, "", runtoken.CapKnowledgeRead)
+// Search finds entries about project in organization's knowledge.
+func (r *Reader) Search(ctx context.Context, organization, project, query string, limit int) ([]onboarding.Knowledge, error) {
+	tok, err := r.token(organization, "", runtoken.CapKnowledgeRead)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,7 @@ func (r *Reader) Search(ctx context.Context, customer, project, query string, li
 		} `json:"items"`
 	}
 	q := url.Values{"q": {query}, "project": {project}, "limit": {fmt.Sprint(limit)}}
-	if err := r.get(ctx, tok, customer, "search", q, &found); err != nil {
+	if err := r.get(ctx, tok, organization, "search", q, &found); err != nil {
 		return nil, err
 	}
 	out := make([]onboarding.Knowledge, 0, len(found.Items))
@@ -41,8 +41,8 @@ func (r *Reader) Search(ctx context.Context, customer, project, query string, li
 
 // RecordAnswer writes an answered question as a decision entry linked to
 // the ticket, authored by author (a human subject, or "planner").
-func (r *Reader) RecordAnswer(ctx context.Context, customer, project, ticketKey, author string, q report.Question) error {
-	tok, err := r.token(customer, author, runtoken.CapKnowledgeWrite)
+func (r *Reader) RecordAnswer(ctx context.Context, organization, project, ticketKey, author string, q report.Question) error {
+	tok, err := r.token(organization, author, runtoken.CapKnowledgeWrite)
 	if err != nil {
 		return err
 	}
@@ -58,7 +58,7 @@ func (r *Reader) RecordAnswer(ctx context.Context, customer, project, ticketKey,
 	if err != nil {
 		return err
 	}
-	u := r.URL.JoinPath("v1", "customers", customer, "knowledge", "entries")
+	u := r.URL.JoinPath("v1", "organizations", organization, "knowledge", "entries")
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(data))
 	if err != nil {
 		return err
@@ -77,9 +77,9 @@ func (r *Reader) RecordAnswer(ctx context.Context, customer, project, ticketKey,
 	return nil
 }
 
-func (r *Reader) token(customer, actingFor, capability string) (string, error) {
+func (r *Reader) token(organization, actingFor, capability string) (string, error) {
 	return r.Tokens.Issue(runtoken.Claims{Kind: runtoken.KindService, Subject: "service:core", Audience: []string{"knowledge"},
-		Customer: customer, ActingFor: actingFor, Capabilities: []string{capability}}, time.Minute)
+		Organization: organization, ActingFor: actingFor, Capabilities: []string{capability}}, time.Minute)
 }
 
 func (r *Reader) client() *http.Client {

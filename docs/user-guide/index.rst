@@ -7,7 +7,7 @@ Everyday use of Ballet, task by task. For the ideas behind it, see
 .. toctree::
    :maxdepth: 1
 
-   customers-and-projects
+   organizations-and-projects
    planning
    tickets
    sessions-and-questions

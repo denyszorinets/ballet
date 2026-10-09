@@ -47,11 +47,11 @@ type LLMRequest struct {
 
 // LLMCaller identifies a planner session to the LLM gateway.
 type LLMCaller struct {
-	CustomerKey string
-	ProjectKey  string
-	SessionID   string
-	ActingFor   string // subject of the human
-	TicketKey   string // the ticket the call is for (metering), if any
+	OrganizationKey string
+	ProjectKey      string
+	SessionID       string
+	ActingFor       string // subject of the human
+	TicketKey       string // the ticket the call is for (metering), if any
 }
 
 // LLMResponse is a complete model response.
@@ -78,9 +78,9 @@ type PlannerTool interface {
 
 // ToolEnv is where a tool call happens.
 type ToolEnv struct {
-	CustomerKey string
-	ProjectKey  string
-	SessionID   string
+	OrganizationKey string
+	ProjectKey      string
+	SessionID       string
 }
 
 // Output types sent to watchers of a session.
@@ -172,7 +172,7 @@ func (pl *Planner) CreateSession(ctx context.Context, projectKey, title string) 
 	}
 	now := pl.Now()
 	s := planner.Session{ID: pl.NewID(), ProjectID: p.ID, Title: title, CreatedBy: id.Subject, CreatedAt: now, UpdatedAt: now}
-	e := event.Event{Customer: c.ID, Project: p.ID, EntityType: "planner_session", EntityID: s.ID,
+	e := event.Event{Organization: c.ID, Project: p.ID, EntityType: "planner_session", EntityID: s.ID,
 		Type: "planner.session_created", Actor: actorOf(id), OccurredAt: now, Payload: mustJSON(map[string]any{"title": title})}
 	if err := pl.Store.CreatePlannerSession(ctx, s, e); err != nil {
 		return SessionView{}, err
@@ -195,7 +195,7 @@ func (pl *Planner) QuestionChat(ctx context.Context, projectKey, questionID, tit
 	now := pl.Now()
 	s := planner.Session{ID: pl.NewID(), ProjectID: p.ID, Title: title, CreatedBy: id.Subject, CreatedAt: now,
 		UpdatedAt: now, QuestionID: questionID, Context: context}
-	e := event.Event{Customer: c.ID, Project: p.ID, EntityType: "planner_session", EntityID: s.ID,
+	e := event.Event{Organization: c.ID, Project: p.ID, EntityType: "planner_session", EntityID: s.ID,
 		Type: "planner.session_created", Actor: actorOf(id), OccurredAt: now,
 		Payload: mustJSON(map[string]any{"title": title, "question": questionID})}
 	if err := pl.Store.CreatePlannerSession(ctx, s, e); err != nil {
@@ -384,7 +384,7 @@ func (pl *Planner) endTurn(sessionID string) {
 
 // turn runs the conversation loop until the model stops calling tools,
 // MaxRounds tool rounds are done, or the turn is cancelled.
-func (pl *Planner) turn(ctx context.Context, s planner.Session, p tenancy.Project, c tenancy.Customer, human identity) {
+func (pl *Planner) turn(ctx context.Context, s planner.Session, p tenancy.Project, c tenancy.Organization, human identity) {
 	reason := "end_turn"
 	defer func() {
 		pl.endTurn(s.ID)
@@ -399,7 +399,7 @@ func (pl *Planner) turn(ctx context.Context, s planner.Session, p tenancy.Projec
 		pl.emit(PlannerOutput{Session: s.ID, Type: OutputError, Text: err.Error()})
 	}
 
-	system := DefaultPlannerInstructions + fmt.Sprintf("\n\nProject: %s (%s), customer %s.", p.Name, p.Key, c.Key)
+	system := DefaultPlannerInstructions + fmt.Sprintf("\n\nProject: %s (%s), organization %s.", p.Name, p.Key, c.Key)
 	if s.Context != "" {
 		system += "\n\n" + s.Context
 	}
@@ -417,7 +417,7 @@ func (pl *Planner) turn(ctx context.Context, s planner.Session, p tenancy.Projec
 		tools[t.Spec().Name] = t
 		specs = append(specs, t.Spec())
 	}
-	env := ToolEnv{CustomerKey: c.Key, ProjectKey: p.Key, SessionID: s.ID}
+	env := ToolEnv{OrganizationKey: c.Key, ProjectKey: p.Key, SessionID: s.ID}
 
 	for round := 0; ; round++ {
 		history, err := pl.Store.PlannerMessages(store, s.ID)
@@ -425,7 +425,7 @@ func (pl *Planner) turn(ctx context.Context, s planner.Session, p tenancy.Projec
 			fail(err)
 			return
 		}
-		caller := LLMCaller{CustomerKey: c.Key, ProjectKey: p.Key, SessionID: s.ID, ActingFor: human.Subject}
+		caller := LLMCaller{OrganizationKey: c.Key, ProjectKey: p.Key, SessionID: s.ID, ActingFor: human.Subject}
 		if pl.CompactAt > 0 && estimateTokens(s, history) > pl.CompactAt {
 			if err := pl.compact(ctx, &s, c, caller, history, actor); err != nil {
 				if ctx.Err() != nil {
@@ -545,7 +545,7 @@ func estimateTokens(s planner.Session, history []planner.Message) int {
 // compact summarizes the messages before the latest human message into
 // the session's summary. The current turn (from that message on) stays
 // verbatim, so tool calls and their results are never split.
-func (pl *Planner) compact(ctx context.Context, s *planner.Session, c tenancy.Customer, caller LLMCaller, history []planner.Message, actor event.Actor) error {
+func (pl *Planner) compact(ctx context.Context, s *planner.Session, c tenancy.Organization, caller LLMCaller, history []planner.Message, actor event.Actor) error {
 	msgs := after(history, s.SummaryUpTo)
 	cut := -1
 	for i := len(msgs) - 1; i >= 0; i-- {
@@ -580,7 +580,7 @@ func (pl *Planner) compact(ctx context.Context, s *planner.Session, c tenancy.Cu
 		return errors.New("the model returned an empty summary")
 	}
 	upTo := old[len(old)-1].Seq
-	e := event.Event{Customer: c.ID, Project: s.ProjectID, EntityType: "planner_session", EntityID: s.ID,
+	e := event.Event{Organization: c.ID, Project: s.ProjectID, EntityType: "planner_session", EntityID: s.ID,
 		Type: "planner.compacted", Actor: actor, OccurredAt: pl.Now(),
 		Payload: mustJSON(map[string]any{"up_to": upTo, "estimated_tokens": estimateTokens(*s, history)})}
 	if err := pl.Store.SetPlannerSummary(context.WithoutCancel(ctx), s.ID, summary.String(), upTo, e); err != nil {
@@ -626,9 +626,9 @@ func toolError(err error) string {
 	return "internal error"
 }
 
-func (pl *Planner) appendMessage(ctx context.Context, s planner.Session, c tenancy.Customer, m planner.Message, actor event.Actor) (planner.Message, error) {
+func (pl *Planner) appendMessage(ctx context.Context, s planner.Session, c tenancy.Organization, m planner.Message, actor event.Actor) (planner.Message, error) {
 	m.CreatedAt = pl.Now()
-	e := event.Event{Customer: c.ID, Project: s.ProjectID, EntityType: "planner_session", EntityID: s.ID,
+	e := event.Event{Organization: c.ID, Project: s.ProjectID, EntityType: "planner_session", EntityID: s.ID,
 		Type: "planner.message", Actor: actor, OccurredAt: m.CreatedAt, Payload: mustJSON(map[string]any{"role": m.Role})}
 	stored, err := pl.Store.AppendPlannerMessage(ctx, m, e)
 	if err != nil {
@@ -638,44 +638,44 @@ func (pl *Planner) appendMessage(ctx context.Context, s planner.Session, c tenan
 	return stored, nil
 }
 
-func (pl *Planner) authorizeProject(ctx context.Context, projectKey string, a Action) (identity, tenancy.Project, tenancy.Customer, error) {
+func (pl *Planner) authorizeProject(ctx context.Context, projectKey string, a Action) (identity, tenancy.Project, tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	p, err := pl.Tenancy.ProjectByKey(ctx, projectKey)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := pl.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := pl.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	if err := pl.Authz.Authorize(ctx, id, a, Scope{Customer: c.Key, Project: p.Key}); err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+	if err := pl.Authz.Authorize(ctx, id, a, Scope{Organization: c.Key, Project: p.Key}); err != nil {
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	return id, p, c, nil
 }
 
-func (pl *Planner) authorizeSession(ctx context.Context, sessionID string, a Action) (identity, planner.Session, tenancy.Project, tenancy.Customer, error) {
+func (pl *Planner) authorizeSession(ctx context.Context, sessionID string, a Action) (identity, planner.Session, tenancy.Project, tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return identity{}, planner.Session{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, planner.Session{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	s, err := pl.Store.PlannerSession(ctx, sessionID)
 	if err != nil {
-		return identity{}, planner.Session{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, planner.Session{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	p, err := pl.Tenancy.ProjectByID(ctx, s.ProjectID)
 	if err != nil {
-		return identity{}, planner.Session{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, planner.Session{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := pl.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := pl.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
-		return identity{}, planner.Session{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, planner.Session{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	if err := pl.Authz.Authorize(ctx, id, a, Scope{Customer: c.Key, Project: p.Key}); err != nil {
-		return identity{}, planner.Session{}, tenancy.Project{}, tenancy.Customer{}, err
+	if err := pl.Authz.Authorize(ctx, id, a, Scope{Organization: c.Key, Project: p.Key}); err != nil {
+		return identity{}, planner.Session{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	return id, s, p, c, nil
 }

@@ -69,7 +69,7 @@ func (t *Tracker) AddDependency(ctx context.Context, key string, dir Direction, 
 	}
 	keys := map[string]string{it.ID: it.Key, o.ID: o.Key}
 	e := event.Event{
-		Customer: c.ID, Project: p.ID, EntityType: "dependency", EntityID: d.ID, Type: "dependency.added",
+		Organization: c.ID, Project: p.ID, EntityType: "dependency", EntityID: d.ID, Type: "dependency.added",
 		Actor: actorOf(id), OccurredAt: d.CreatedAt,
 		Payload: mustJSON(map[string]any{"from": keys[d.FromID], "to": keys[d.ToID], "type": d.Type}),
 	}
@@ -108,7 +108,7 @@ func (t *Tracker) RemoveDependency(ctx context.Context, depID string) error {
 	if err != nil {
 		return err
 	}
-	if err := t.Authz.Authorize(ctx, id, ActTrackerWrite, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := t.Authz.Authorize(ctx, id, ActTrackerWrite, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return err
 	}
 	from, err := t.Items.ItemByID(ctx, d.FromID)
@@ -120,7 +120,7 @@ func (t *Tracker) RemoveDependency(ctx context.Context, depID string) error {
 		return err
 	}
 	e := event.Event{
-		Customer: c.ID, Project: p.ID, EntityType: "dependency", EntityID: d.ID, Type: "dependency.removed",
+		Organization: c.ID, Project: p.ID, EntityType: "dependency", EntityID: d.ID, Type: "dependency.removed",
 		Actor: actorOf(id), OccurredAt: t.Now(),
 		Payload: mustJSON(map[string]any{"from": from.Key, "to": to.Key, "type": d.Type}),
 	}
@@ -176,7 +176,7 @@ func (t *Tracker) Runnable(ctx context.Context, projectKey string) ([]ItemView, 
 	}
 	out := make([]ItemView, 0, len(items))
 	for _, it := range items {
-		out = append(out, ItemView{Item: it, ProjectKey: p.Key, CustomerKey: c.Key, EpicKey: keys[it.EpicID], MilestoneKey: keys[it.MilestoneID]})
+		out = append(out, ItemView{Item: it, ProjectKey: p.Key, OrganizationKey: c.Key, EpicKey: keys[it.EpicID], MilestoneKey: keys[it.MilestoneID]})
 	}
 	return out, nil
 }

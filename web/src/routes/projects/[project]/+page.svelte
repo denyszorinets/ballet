@@ -21,7 +21,10 @@
 	const containers = $derived(items.filter((i) => i.kind !== 'ticket'));
 	const canWrite = $derived(
 		!!project &&
-			!!session?.permissions.can('tracker.write', { customer: project.customer, project: key })
+			!!session?.permissions.can('tracker.write', {
+				organization: project.organization,
+				project: key
+			})
 	);
 
 	async function loadAll(s: Session, k: string) {
@@ -105,7 +108,8 @@
 	<div class="title">
 		<h1>{project.name}</h1>
 		<span class="mono muted">{project.key}</span>
-		<a href={resolve('/customers/[customer]', { customer: project.customer })}>{project.customer}</a
+		<a href={resolve('/organizations/[organization]', { organization: project.organization })}
+			>{project.organization}</a
 		>
 		<a href={resolve('/projects/[project]/planner', { project: project.key })}>Planner</a>
 		<a href={resolve('/projects/[project]/changesets', { project: project.key })}>Changesets</a>
@@ -115,7 +119,7 @@
 		<a href={resolve('/projects/[project]/skills', { project: project.key })}>Skills</a>
 		<a href={resolve('/projects/[project]/settings', { project: project.key })}>Settings</a>
 	</div>
-	<WorkControl project={project.key} customer={project.customer} />
+	<WorkControl project={project.key} organization={project.organization} />
 
 	{#if canWrite}
 		<form class="form" onsubmit={createTicket} aria-label="Add ticket">

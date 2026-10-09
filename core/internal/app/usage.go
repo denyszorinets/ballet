@@ -8,17 +8,17 @@ import (
 
 // UsageRecord is the LLM usage of one request (reported by the gateway).
 type UsageRecord struct {
-	OccurredAt   time.Time
-	CustomerID   string
-	ProjectID    string
-	Ticket       string // ticket key
-	Run          string
-	Model        string
-	Status       int
-	InputTokens  int64
-	OutputTokens int64
-	CacheRead    int64
-	CacheWrite   int64
+	OccurredAt     time.Time
+	OrganizationID string
+	ProjectID      string
+	Ticket         string // ticket key
+	Run            string
+	Model          string
+	Status         int
+	InputTokens    int64
+	OutputTokens   int64
+	CacheRead      int64
+	CacheWrite     int64
 }
 
 // UsageTotals aggregates usage.
@@ -48,27 +48,27 @@ type Usage struct {
 	Observe func(r UsageInput)
 }
 
-// UsageInput is a record as reported by the gateway, with customer and
+// UsageInput is a record as reported by the gateway, with organization and
 // project keys.
 type UsageInput struct {
 	OccurredAt                                       time.Time
-	Customer, Project, Ticket, Run, Model            string
+	Organization, Project, Ticket, Run, Model        string
 	Status                                           int
 	InputTokens, OutputTokens, CacheRead, CacheWrite int64
 }
 
 // Ingest stores records from the gateway (callers hold usage.write).
-// Records of unknown or mismatched customer/project are skipped and
+// Records of unknown or mismatched organization/project are skipped and
 // counted.
 func (u *Usage) Ingest(ctx context.Context, in []UsageInput) (stored, skipped int, err error) {
 	resolved := map[string]*usageScope{}
 	var out []UsageRecord
 	var kept []UsageInput
 	for _, r := range in {
-		key := r.Customer + "/" + r.Project
+		key := r.Organization + "/" + r.Project
 		id, ok := resolved[key]
 		if !ok {
-			id = u.resolve(ctx, r.Customer, r.Project)
+			id = u.resolve(ctx, r.Organization, r.Project)
 			resolved[key] = id
 		}
 		if id == nil {
@@ -77,7 +77,7 @@ func (u *Usage) Ingest(ctx context.Context, in []UsageInput) (stored, skipped in
 		}
 		kept = append(kept, r)
 		out = append(out, UsageRecord{
-			OccurredAt: r.OccurredAt, CustomerID: id.customer, ProjectID: id.project, Ticket: r.Ticket, Run: r.Run,
+			OccurredAt: r.OccurredAt, OrganizationID: id.organization, ProjectID: id.project, Ticket: r.Ticket, Run: r.Run,
 			Model: r.Model, Status: r.Status, InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
 			CacheRead: r.CacheRead, CacheWrite: r.CacheWrite,
 		})
@@ -96,18 +96,18 @@ func (u *Usage) Ingest(ctx context.Context, in []UsageInput) (stored, skipped in
 }
 
 // usageScope holds the IDs a usage record is attributed to.
-type usageScope struct{ customer, project string }
+type usageScope struct{ organization, project string }
 
-func (u *Usage) resolve(ctx context.Context, customerKey, projectKey string) *usageScope {
+func (u *Usage) resolve(ctx context.Context, organizationKey, projectKey string) *usageScope {
 	p, err := u.Tenancy.ProjectByKey(ctx, projectKey)
 	if err != nil {
 		return nil
 	}
-	c, err := u.Tenancy.CustomerByID(ctx, p.CustomerID)
-	if err != nil || c.Key != customerKey {
+	c, err := u.Tenancy.OrganizationByID(ctx, p.OrganizationID)
+	if err != nil || c.Key != organizationKey {
 		return nil
 	}
-	return &usageScope{customer: c.ID, project: p.ID}
+	return &usageScope{organization: c.ID, project: p.ID}
 }
 
 // UsageReport is a project's usage, grouped.
@@ -130,11 +130,11 @@ func (u *Usage) Report(ctx context.Context, projectKey, groupBy string, since ti
 	if err != nil {
 		return UsageReport{}, err
 	}
-	c, err := u.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := u.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return UsageReport{}, err
 	}
-	if err := u.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := u.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return UsageReport{}, err
 	}
 	groups, err := u.Store.AggregateUsage(ctx, p.ID, groupBy, since, ticket)

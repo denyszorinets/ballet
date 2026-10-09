@@ -19,7 +19,7 @@
 
 	let session = $state<Session>();
 	let info = $state<Schemas['PlannerTranscript']>();
-	let customer = $state<string>();
+	let organization = $state<string>();
 	let entries = $state<ChatEntry[]>([]);
 	let error = $state<string>();
 	let turnError = $state<string>();
@@ -34,7 +34,7 @@
 	let bottom = $state<HTMLElement>();
 
 	const canWrite = $derived(
-		!!info && !!session?.permissions.can('tracker.write', { customer, project: info.project })
+		!!info && !!session?.permissions.can('tracker.write', { organization, project: info.project })
 	);
 
 	async function reload(s: Session) {
@@ -48,11 +48,11 @@
 		info = data;
 		onload?.(data);
 		entries = chatEntries(data.messages);
-		if (!customer) {
+		if (!organization) {
 			const p = await s.api.GET('/api/v1/projects/{project}', {
 				params: { path: { project: data.project } }
 			});
-			customer = p.data?.customer;
+			organization = p.data?.organization;
 		}
 		requestAnimationFrame(() => bottom?.scrollIntoView({ block: 'end' }));
 	}

@@ -1,4 +1,4 @@
-// Package httpapi is Knowledge's REST API under /v1/customers/{customer}/
+// Package httpapi is Knowledge's REST API under /v1/organizations/{organization}/
 // knowledge/ — the paths of Core's /api/... without the /api prefix
 // (ADR-0022). Requests need a Core-issued token for audience "knowledge".
 package httpapi
@@ -57,11 +57,11 @@ type versionJSON struct {
 // Register mounts the API on mux.
 func Register(mux *http.ServeMux, v *runtoken.Verifier, s *app.Service) {
 	api := http.NewServeMux()
-	const base = "/v1/customers/{customer}/knowledge/entries"
+	const base = "/v1/organizations/{organization}/knowledge/entries"
 
 	api.HandleFunc("GET "+base, func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
-		list, err := s.List(r.Context(), r.PathValue("customer"), app.Filter{
+		list, err := s.List(r.Context(), r.PathValue("organization"), app.Filter{
 			Kind: domain.Kind(q.Get("kind")), Project: q.Get("project"), Item: q.Get("item"),
 		})
 		if err != nil {
@@ -89,7 +89,7 @@ func Register(mux *http.ServeMux, v *runtoken.Verifier, s *app.Service) {
 			writeError(w, err)
 			return
 		}
-		e, err := s.Create(r.Context(), r.PathValue("customer"), app.CreateInput{
+		e, err := s.Create(r.Context(), r.PathValue("organization"), app.CreateInput{
 			Kind: in.Kind, Title: in.Title, Body: in.Body, Projects: in.Projects, Items: in.Items,
 		})
 		if err != nil {
@@ -100,7 +100,7 @@ func Register(mux *http.ServeMux, v *runtoken.Verifier, s *app.Service) {
 	})
 
 	api.HandleFunc("GET "+base+"/{entry}", func(w http.ResponseWriter, r *http.Request) {
-		e, err := s.Get(r.Context(), r.PathValue("customer"), r.PathValue("entry"))
+		e, err := s.Get(r.Context(), r.PathValue("organization"), r.PathValue("entry"))
 		if err != nil {
 			writeError(w, err)
 			return
@@ -121,7 +121,7 @@ func Register(mux *http.ServeMux, v *runtoken.Verifier, s *app.Service) {
 			writeError(w, err)
 			return
 		}
-		e, err := s.Update(r.Context(), r.PathValue("customer"), r.PathValue("entry"), app.UpdateInput{
+		e, err := s.Update(r.Context(), r.PathValue("organization"), r.PathValue("entry"), app.UpdateInput{
 			Version: in.Version, Kind: in.Kind, Title: in.Title, Body: in.Body, Projects: in.Projects, Items: in.Items,
 		})
 		if err != nil {
@@ -132,7 +132,7 @@ func Register(mux *http.ServeMux, v *runtoken.Verifier, s *app.Service) {
 	})
 
 	api.HandleFunc("GET "+base+"/{entry}/versions", func(w http.ResponseWriter, r *http.Request) {
-		vs, err := s.Versions(r.Context(), r.PathValue("customer"), r.PathValue("entry"))
+		vs, err := s.Versions(r.Context(), r.PathValue("organization"), r.PathValue("entry"))
 		if err != nil {
 			writeError(w, err)
 			return
@@ -146,10 +146,10 @@ func Register(mux *http.ServeMux, v *runtoken.Verifier, s *app.Service) {
 		writeJSON(w, http.StatusOK, out)
 	})
 
-	api.HandleFunc("GET /v1/customers/{customer}/knowledge/search", func(w http.ResponseWriter, r *http.Request) {
+	api.HandleFunc("GET /v1/organizations/{organization}/knowledge/search", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		limit, _ := strconv.Atoi(q.Get("limit"))
-		hits, err := s.Search(r.Context(), r.PathValue("customer"), app.SearchQuery{
+		hits, err := s.Search(r.Context(), r.PathValue("organization"), app.SearchQuery{
 			Text: q.Get("q"), Kind: domain.Kind(q.Get("kind")), Project: q.Get("project"), Limit: limit,
 		})
 		if err != nil {

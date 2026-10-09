@@ -2,7 +2,7 @@
 	import { apiError, type Schemas } from '$lib/api/client';
 	import { getSession, type Session } from '$lib/session';
 
-	let { customer }: { customer: string } = $props();
+	let { organization }: { organization: string } = $props();
 
 	type Provider = 'anthropic' | 'openai';
 
@@ -15,9 +15,12 @@
 	let message = $state<string>();
 
 	async function load(s: Session) {
-		const { data, error: err } = await s.api.GET('/api/v1/customers/{customer}/credentials', {
-			params: { path: { customer } }
-		});
+		const { data, error: err } = await s.api.GET(
+			'/api/v1/organizations/{organization}/credentials',
+			{
+				params: { path: { organization } }
+			}
+		);
 		if (!data) {
 			error = apiError(err);
 			return;
@@ -26,7 +29,7 @@
 	}
 
 	$effect(() => {
-		void customer;
+		void organization;
 		getSession()
 			.then((s) => {
 				session = s;
@@ -40,9 +43,9 @@
 		if (!session) return;
 		error = message = undefined;
 		const { error: err, response } = await session.api.PUT(
-			'/api/v1/customers/{customer}/credentials/{provider}',
+			'/api/v1/organizations/{organization}/credentials/{provider}',
 			{
-				params: { path: { customer, provider } },
+				params: { path: { organization, provider } },
 				body: { api_key: apiKey, ...(baseURL ? { base_url: baseURL } : {}) }
 			}
 		);
@@ -56,10 +59,10 @@
 	}
 
 	async function remove(p: Provider) {
-		if (!session || !confirm(`Remove the ${p} key of ${customer}?`)) return;
+		if (!session || !confirm(`Remove the ${p} key of ${organization}?`)) return;
 		const { error: err, response } = await session.api.DELETE(
-			'/api/v1/customers/{customer}/credentials/{provider}',
-			{ params: { path: { customer, provider: p } } }
+			'/api/v1/organizations/{organization}/credentials/{provider}',
+			{ params: { path: { organization, provider: p } } }
 		);
 		if (!response.ok) {
 			error = apiError(err);
@@ -72,7 +75,7 @@
 <section aria-label="LLM credentials">
 	<h2>LLM credentials</h2>
 	<p class="muted">
-		Keys the LLM gateway uses for this customer's agent sessions and planner. They are stored
+		Keys the LLM gateway uses for this organization's agent sessions and planner. They are stored
 		encrypted and never shown again; projects may override them.
 	</p>
 	{#if items.length}

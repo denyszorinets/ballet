@@ -223,7 +223,7 @@ func (st *stack) must(method, path string, body, out any) {
 	require.True(st.t, code >= 200 && code < 300, "%s %s: %d", method, path, code)
 }
 
-// seed creates customer acme, project WEB with a repository and a
+// seed creates organization acme, project WEB with a repository and a
 // one-stage pipeline, and an Anthropic credential for the fake LLM.
 func (st *stack) seed(repo string) {
 	t := st.t
@@ -244,9 +244,9 @@ func (st *stack) seed(repo string) {
 	git("commit", "-qm", "init")
 	git("push", "-q", "origin", "HEAD:main")
 
-	st.must("POST", "/customers", map[string]any{"key": "acme", "name": "Acme"}, nil)
-	st.must("POST", "/customers/acme/projects", map[string]any{"key": "WEB", "name": "Web", "description": ""}, nil)
-	st.must("PUT", "/customers/acme/credentials/anthropic", map[string]any{"api_key": "sk-fake"}, nil)
+	st.must("POST", "/organizations", map[string]any{"key": "acme", "name": "Acme"}, nil)
+	st.must("POST", "/organizations/acme/projects", map[string]any{"key": "WEB", "name": "Web", "description": ""}, nil)
+	st.must("PUT", "/organizations/acme/credentials/anthropic", map[string]any{"api_key": "sk-fake"}, nil)
 	var ex struct {
 		Version int64 `json:"version"`
 	}
