@@ -34,3 +34,4 @@ Rejected, Deprecated, Superseded.
    0025-agent-fleet-runs-sessions-as-processes
    0026-interactive-sessions-park-when-idle
    0027-tenancy-platform-organization-project
+   0028-feature-map

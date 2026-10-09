@@ -30,23 +30,12 @@ What is stored
 Every entry records which project(s) it concerns, who wrote it (human or
 run), and when.
 
-Lineage graph
--------------
+Lineage
+-------
 
-Entries and tracker entities form a graph:
-
-.. code-block:: text
-
-   ticket ACME-42 ──implements──▶ doc "Invoice export"
-   ticket ACME-77 ──evolves─────▶ doc "Invoice export"
-   decision D-12  ──supersedes──▶ decision D-03
-   ACME-77        ──depends-on──▶ ACME-42
-   doc            ──mentions────▶ doc
-
-When a new business ticket arrives, an agent asks for its **lineage**:
-which earlier tickets, documents and decisions concern the same feature,
-how it evolved, and what it connects to. The answer is a bounded subgraph
-with summaries — the core of the onboarding bundle.
+How the product's features appeared, changed and branched is recorded in
+the :doc:`feature-map`, next to the tickets that change them. Knowledge
+entries link to tickets, and through them to features.
 
 Search
 ------

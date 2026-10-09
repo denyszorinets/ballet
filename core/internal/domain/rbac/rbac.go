@@ -131,7 +131,7 @@ func ParseScope(s string) (BindingScope, error) {
 	return BindingScope{}, fmt.Errorf("scope %q must be platform, organization:<key> or project:<key>", s)
 }
 
-// Target is the scope of a requested action. Empty fields mea platform
+// Target is the scope of a requested action. Empty fields mean platform
 // level; a project target carries its organization.
 type Target struct {
 	Organization string

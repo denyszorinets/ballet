@@ -448,6 +448,76 @@ Representation: ``{"id", "type", "item": {"key", "kind", "title", "state"}}``.
    Tickets in state ``ready`` whose blockers are all resolved (``done``
    or ``cancelled``) — what the scheduler may start.
 
+.. _reference-rest-features:
+
+Features
+--------
+
+The organization's feature map (:doc:`/concepts/feature-map`). Features
+are addressed by their key, ``F-<n>``, unique within the organization.
+
+Reading needs ``tracker.read`` on the organization; callers who can read
+only some projects see the features of those projects (and links between
+them). Writing needs ``tracker.write`` on the organization, or on every
+project of the feature. Every change appends a **revision**.
+
+Feature representation:
+
+.. code-block:: json
+
+   {"key": "F-3", "organization": "acme", "title": "Invoice export",
+    "description": "Exports invoices as CSV and PDF.", "status": "live",
+    "projects": ["API", "WEB"], "created_at": "…", "updated_at": "…",
+    "version": 4}
+
+``status`` is ``planned``, ``in_progress``, ``live``, ``changing``,
+``deprecated`` or ``removed``; ``version`` is the number of the latest
+revision.
+
+``GET /api/v1/organizations/{organization}/features[?project=&status=]`` → ``200`` list
+
+``POST /api/v1/organizations/{organization}/features`` → ``201``
+   ``{"title", "description"?, "status"?, "projects"?, "reason"?}``; the
+   status defaults to ``planned``. ``reason`` is recorded on the first
+   revision.
+
+``GET /api/v1/organizations/{organization}/features/{feature}`` → ``200``
+   The feature with ``links``: its current links from and to features
+   the caller can see.
+
+``PATCH /api/v1/organizations/{organization}/features/{feature}`` → ``200``
+   ``{"version", "title"?, "description"?, "status"?, "projects"?,
+   "reason"?}``. ``400`` when nothing changes; ``409`` on a stale
+   ``version``.
+
+``GET /api/v1/organizations/{organization}/features/{feature}/revisions`` → ``200`` list
+   Newest first: ``{"feature", "number", "title", "description", "status",
+   "projects", "author", "reason"?, "cause_kind"?, "cause_ref"?,
+   "review"?, "reviewed_by"?, "reviewed_at"?, "created_at"}`` — the full
+   state after each change. ``author`` is an actor (``human``,
+   ``service`` for agents and the planner); ``review`` is ``pending``,
+   ``confirmed`` or ``reverted`` for revisions that need review.
+
+``POST /api/v1/organizations/{organization}/feature-links`` → ``201``
+   ``{"from", "to", "type"}``, read "``from`` *type* ``to``":
+   ``derived_from``, ``split_from``, ``merged_into``, ``supersedes``,
+   ``depends_on`` or ``relates``. Returns ``{"id", "from", "to", "type",
+   "created_by", "created_at"}``. ``400`` for a link to the feature itself
+   or one that exists already.
+
+``DELETE /api/v1/organizations/{organization}/feature-links/{link}`` → ``204``
+   The link ends now; it stays in the map's history.
+
+``GET /api/v1/organizations/{organization}/feature-graph[?at=&project=]`` → ``200``
+   The map as it was at ``at`` (RFC 3339; default now): ``{"at",
+   "features": [{"key", "title", "status", "projects", "version",
+   "created_at", "updated_at"}], "links": [...], "changes": [{"at",
+   "feature", "kind", "summary"}]}``. Each feature appears in its latest
+   revision at that time; ``links`` are those valid then; ``changes``
+   lists every revision and every link added (``linked``) or removed
+   (``unlinked``), oldest first, for a time slider. With ``project``, only
+   features of that project at that time.
+
 .. _reference-rest-runs:
 
 Runs
