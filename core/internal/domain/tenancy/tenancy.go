@@ -14,12 +14,15 @@ import (
 
 // Organization is a client of the platform and the isolation boundary.
 type Organization struct {
-	ID        string
-	Key       string // immutable, e.g. "acme"; used in URLs and role binding scopes
-	Name      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	Version   int64
+	ID   string
+	Key  string // immutable, e.g. "acme"; used in URLs and role binding scopes
+	Name string
+	// FeaturePolicy says how agents may change the organization's
+	// features: "direct", "proposal" or "read_only" (ADR-0028).
+	FeaturePolicy string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	Version       int64
 }
 
 // Project is a product built for an organization.

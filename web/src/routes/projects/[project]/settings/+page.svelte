@@ -26,7 +26,8 @@
 		forge_api_url: '',
 		link_template: '',
 		answer_window_minutes: 0,
-		pool: ''
+		pool: '',
+		feature_policy: '' as '' | 'direct' | 'proposal' | 'read_only'
 	});
 	let token = $state('');
 	let tokenMessage = $state<string>();
@@ -52,7 +53,8 @@
 			forge_api_url: x.forge_api_url,
 			link_template: x.link_template,
 			answer_window_minutes: x.answer_window_minutes,
-			pool: x.pool
+			pool: x.pool,
+			feature_policy: x.feature_policy
 		};
 	}
 
@@ -215,6 +217,18 @@
 			<p class="muted small" id="answer-window-help">
 				How long a session waits for answers to its blocking questions before it parks and continues
 				later. 0: Ballet's default (15 minutes).
+			</p>
+			<label
+				>Feature changes by agents
+				<select bind:value={form.feature_policy} aria-describedby="feature-policy-help">
+					<option value="">As the organization</option>
+					<option value="direct">Apply, then review</option>
+					<option value="proposal">Propose for approval</option>
+					<option value="read_only">Not allowed</option>
+				</select>
+			</label>
+			<p class="muted small" id="feature-policy-help">
+				How this project's agents may change features on the feature map.
 			</p>
 			{#if canEdit}<button class="primary" type="submit">Save</button>{/if}
 		</fieldset>

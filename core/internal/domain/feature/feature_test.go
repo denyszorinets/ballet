@@ -85,3 +85,13 @@ func TestDeliveryStatus_FollowsLinkedTickets(t *testing.T) {
 		})
 	}
 }
+
+func TestPolicy_EffectiveAndValidate(t *testing.T) {
+	assert.Equal(t, feature.PolicyDirect, feature.EffectivePolicy("", ""), "default")
+	assert.Equal(t, feature.PolicyProposal, feature.EffectivePolicy(feature.PolicyProposal, ""), "organization")
+	assert.Equal(t, feature.PolicyReadOnly, feature.EffectivePolicy(feature.PolicyProposal, feature.PolicyReadOnly), "project overrides")
+	assert.NoError(t, feature.ValidatePolicy("", true))
+	assert.Error(t, feature.ValidatePolicy("", false), "organizations need a policy")
+	assert.NoError(t, feature.ValidatePolicy(feature.PolicyReadOnly, false))
+	assert.Error(t, feature.ValidatePolicy("sometimes", true))
+}

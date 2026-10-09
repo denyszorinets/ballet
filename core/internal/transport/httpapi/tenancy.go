@@ -9,16 +9,18 @@ import (
 )
 
 type organizationJSON struct {
-	ID        string    `json:"id"`
-	Key       string    `json:"key"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Version   int64     `json:"version"`
+	ID            string    `json:"id"`
+	Key           string    `json:"key"`
+	Name          string    `json:"name"`
+	FeaturePolicy string    `json:"feature_policy"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	Version       int64     `json:"version"`
 }
 
 func toOrganizationJSON(c tenancy.Organization) organizationJSON {
-	return organizationJSON{ID: c.ID, Key: c.Key, Name: c.Name, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Version: c.Version}
+	return organizationJSON{ID: c.ID, Key: c.Key, Name: c.Name, FeaturePolicy: c.FeaturePolicy,
+		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Version: c.Version}
 }
 
 type projectJSON struct {
@@ -85,15 +87,16 @@ func registerTenancy(mux *router, t *app.Tenancy) {
 
 	mux.handle("PATCH /api/v1/organizations/{organization}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
-			Name    string `json:"name"`
-			Version int64  `json:"version"`
+			Name          string `json:"name"`
+			FeaturePolicy string `json:"feature_policy"`
+			Version       int64  `json:"version"`
 		}
 		if err := decode(r, &in); err != nil {
 			writeError(w, err)
 			return
 		}
 		c, err := t.UpdateOrganization(r.Context(), app.UpdateOrganizationInput{
-			Key: r.PathValue("organization"), Name: in.Name, Version: in.Version,
+			Key: r.PathValue("organization"), Name: in.Name, FeaturePolicy: in.FeaturePolicy, Version: in.Version,
 		})
 		if err != nil {
 			writeError(w, err)

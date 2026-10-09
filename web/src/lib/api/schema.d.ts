@@ -603,6 +603,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations/{organization}/features/{feature}/revisions/{revision}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+                /** @description Feature key, e.g. F-12 */
+                feature: components["parameters"]["Feature"];
+                /** @description Revision number */
+                revision: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm or revert a revision waiting for review (humans only) */
+        post: operations["reviewFeatureRevision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization}/feature-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+            };
+            cookie?: never;
+        };
+        /** Revisions waiting for review, oldest first, with the state before each */
+        get: operations["listFeatureReviews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations/{organization}/feature-links": {
         parameters: {
             query?: never;
@@ -1586,6 +1630,7 @@ export interface components {
             id: string;
             key: string;
             name: string;
+            feature_policy: components["schemas"]["FeaturePolicy"];
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -1601,7 +1646,9 @@ export interface components {
             name: string;
         };
         UpdateOrganization: {
-            name: string;
+            /** @description Absent: unchanged */
+            name?: string;
+            feature_policy?: components["schemas"]["FeaturePolicy"];
             /** Format: int64 */
             version: number;
         };
@@ -1701,6 +1748,11 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        /**
+         * @description How agents may change features: direct (review afterwards), proposal (changeset to approve) or read_only
+         * @enum {string}
+         */
+        FeaturePolicy: "direct" | "proposal" | "read_only";
         /** @enum {string} */
         FeatureStatus: "planned" | "in_progress" | "live" | "changing" | "deprecated" | "removed";
         /** @enum {string} */
@@ -1785,6 +1837,36 @@ export interface components {
             reviewed_at?: string;
             /** Format: date-time */
             created_at: string;
+        };
+        ReviewFeatureRevision: {
+            /** @enum {string} */
+            action: "confirm" | "revert";
+            /** @description Recorded with the review; a revert's reason */
+            comment?: string;
+        };
+        FeatureReviewList: {
+            items: {
+                feature: string;
+                /** Format: int64 */
+                number: number;
+                title: string;
+                description: string;
+                status: components["schemas"]["FeatureStatus"];
+                projects: string[];
+                author: components["schemas"]["Actor"];
+                reason?: string;
+                cause_kind?: string;
+                cause_ref?: string;
+                /** @enum {string} */
+                review?: "pending" | "confirmed" | "reverted";
+                reviewed_by?: string;
+                /** Format: date-time */
+                reviewed_at?: string;
+                /** Format: date-time */
+                created_at: string;
+                feature_title: string;
+                previous?: components["schemas"]["FeatureRevision"];
+            }[];
         };
         FeatureRevisionList: {
             items: components["schemas"]["FeatureRevision"][];
@@ -1902,6 +1984,11 @@ export interface components {
             answer_window_minutes: number;
             /** @description Agent pool of the project's runs (agents labelled pool=<pool>); empty: any agent */
             pool: string;
+            /**
+             * @description Overrides the organization's feature policy; empty: inherit
+             * @enum {string}
+             */
+            feature_policy: "" | "direct" | "proposal" | "read_only";
             /** Format: date-time */
             updated_at?: string;
             /** Format: int64 */
@@ -1923,6 +2010,8 @@ export interface components {
             link_template?: string;
             answer_window_minutes?: number;
             pool?: string;
+            /** @enum {string} */
+            feature_policy?: "" | "direct" | "proposal" | "read_only";
             /**
              * Format: int64
              * @description The version read (0 the first time)
@@ -3881,6 +3970,62 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FeatureRevisionList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    reviewFeatureRevision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+                /** @description Feature key, e.g. F-12 */
+                feature: components["parameters"]["Feature"];
+                /** @description Revision number */
+                revision: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewFeatureRevision"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureRevision"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listFeatureReviews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureReviewList"];
                 };
             };
             default: components["responses"]["Error"];

@@ -3,9 +3,11 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
+	"github.com/denyszorinets/ballet/core/internal/domain/feature"
 	"github.com/denyszorinets/ballet/core/internal/domain/tenancy"
 )
 
@@ -53,7 +55,8 @@ func (t *Tenancy) CreateOrganization(ctx context.Context, in CreateOrganizationI
 		return tenancy.Organization{}, invalid(err)
 	}
 	now := t.Now()
-	c := tenancy.Organization{ID: t.NewID(), Key: in.Key, Name: in.Name, CreatedAt: now, UpdatedAt: now, Version: 1}
+	c := tenancy.Organization{ID: t.NewID(), Key: in.Key, Name: in.Name, FeaturePolicy: string(feature.PolicyDirect),
+		CreatedAt: now, UpdatedAt: now, Version: 1}
 	e := organizationEvent(c, "organization.created", actorOf(id), map[string]any{"key": c.Key, "name": c.Name})
 	if err := t.Store.CreateOrganization(ctx, c, e); err != nil {
 		return tenancy.Organization{}, err
@@ -94,12 +97,14 @@ func (t *Tenancy) ListOrganizations(ctx context.Context) ([]tenancy.Organization
 
 // UpdateOrganizationInput is the input of UpdateOrganization.
 type UpdateOrganizationInput struct {
-	Key     string
-	Name    string
-	Version int64 // version the caller last read
+	Key           string
+	Name          string // "": unchanged
+	FeaturePolicy string // "": unchanged
+	Version       int64  // version the caller last read
 }
 
-// UpdateOrganization renames an organization.
+// UpdateOrganization renames an organization or changes its feature
+// policy.
 func (t *Tenancy) UpdateOrganization(ctx context.Context, in UpdateOrganizationInput) (tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
@@ -108,15 +113,34 @@ func (t *Tenancy) UpdateOrganization(ctx context.Context, in UpdateOrganizationI
 	if err := t.Authz.Authorize(ctx, id, ActOrganizationUpdate, Scope{Organization: in.Key}); err != nil {
 		return tenancy.Organization{}, err
 	}
-	if err := tenancy.ValidateName(in.Name); err != nil {
-		return tenancy.Organization{}, invalid(err)
+	if in.Name == "" && in.FeaturePolicy == "" {
+		return tenancy.Organization{}, invalid(errors.New("give a name or a feature policy"))
+	}
+	changed := map[string]any{}
+	if in.Name != "" {
+		if err := tenancy.ValidateName(in.Name); err != nil {
+			return tenancy.Organization{}, invalid(err)
+		}
+		changed["name"] = in.Name
+	}
+	if in.FeaturePolicy != "" {
+		if err := feature.ValidatePolicy(feature.Policy(in.FeaturePolicy), false); err != nil {
+			return tenancy.Organization{}, invalid(err)
+		}
+		changed["feature_policy"] = in.FeaturePolicy
 	}
 	c, err := t.Store.OrganizationByKey(ctx, in.Key)
 	if err != nil {
 		return tenancy.Organization{}, err
 	}
-	c.Name, c.UpdatedAt, c.Version = in.Name, t.Now(), in.Version+1
-	e := organizationEvent(c, "organization.updated", actorOf(id), map[string]any{"name": c.Name})
+	if in.Name != "" {
+		c.Name = in.Name
+	}
+	if in.FeaturePolicy != "" {
+		c.FeaturePolicy = in.FeaturePolicy
+	}
+	c.UpdatedAt, c.Version = t.Now(), in.Version+1
+	e := organizationEvent(c, "organization.updated", actorOf(id), changed)
 	if err := t.Store.UpdateOrganization(ctx, c, in.Version, e); err != nil {
 		return tenancy.Organization{}, err
 	}

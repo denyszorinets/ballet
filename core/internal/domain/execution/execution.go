@@ -13,6 +13,8 @@ import (
 	"unicode"
 
 	"golang.org/x/text/unicode/norm"
+
+	"github.com/denyszorinets/ballet/core/internal/domain/feature"
 )
 
 // TokenEnv is the environment variable that carries the git token to a
@@ -42,9 +44,12 @@ type Settings struct {
 	// Pool is the agent pool the project's runs execute on: agents
 	// labelled pool=<Pool>, built from the project's devcontainer
 	// (ADR-0025); "": any agent.
-	Pool      string
-	UpdatedAt time.Time
-	Version   int64
+	Pool string
+	// FeaturePolicy overrides the organization's feature policy for the
+	// project's agents (ADR-0028); "": inherit.
+	FeaturePolicy string
+	UpdatedAt     time.Time
+	Version       int64
 }
 
 // DefaultBranchTemplate names ticket branches when a project sets none.
@@ -110,6 +115,9 @@ func (s Settings) Validate() error {
 	}
 	if s.Pool != "" && !poolRe.MatchString(s.Pool) {
 		errs = append(errs, fmt.Errorf("pool %q must be 1-63 lowercase letters, digits, ., _ or -", s.Pool))
+	}
+	if err := feature.ValidatePolicy(feature.Policy(s.FeaturePolicy), true); err != nil {
+		errs = append(errs, err)
 	}
 	if s.AnswerWindowMinutes < 0 || s.AnswerWindowMinutes > 24*60 {
 		errs = append(errs, errors.New("answer_window_minutes must be 0 (the default) to 1440"))

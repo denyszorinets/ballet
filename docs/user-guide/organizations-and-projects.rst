@@ -25,6 +25,10 @@ The organization page holds:
    Tokens per ticket and per day across the organization's projects.
 **LLM credentials**
    The model keys sessions and the planner use, stored encrypted.
+**Feature changes by agents**
+   How agents may change the organization's features: apply and review
+   afterwards, propose for approval, or not at all
+   (:ref:`concepts-feature-map-policy`).
 
 Projects
 --------
@@ -50,6 +54,7 @@ Project settings
   git (branches only);
 - the **answer window**: how long a session waits for answers before it
   parks (:doc:`sessions-and-questions`);
+- **feature changes by agents**, overriding the organization's policy;
 - the **git token**, the project's own **LLM credentials** (overriding
   the organization's) and **budget**.
 

@@ -299,8 +299,12 @@ Representation:
 
 .. code-block:: json
 
-   {"id": "0199…", "key": "acme", "name": "Acme", "created_at": "2026-10-01T03:40:00Z",
-    "updated_at": "2026-10-01T03:40:00Z", "version": 1}
+   {"id": "0199…", "key": "acme", "name": "Acme", "feature_policy": "direct",
+    "created_at": "2026-10-01T03:40:00Z", "updated_at": "2026-10-01T03:40:00Z", "version": 1}
+
+``feature_policy`` says how the organization's agents may change features
+(:ref:`concepts-feature-map-policy`): ``direct`` (default), ``proposal``
+or ``read_only``.
 
 ``POST /api/v1/organizations`` — ``{"key", "name"}`` → ``201``
    Key: 2–32 lowercase letters, digits, single hyphens; starts with a
@@ -310,7 +314,8 @@ Representation:
 
 ``GET /api/v1/organizations/{organization}`` → ``200``
 
-``PATCH /api/v1/organizations/{organization}`` — ``{"name", "version"}`` → ``200``
+``PATCH /api/v1/organizations/{organization}`` — ``{"name"?, "feature_policy"?, "version"}`` → ``200``
+   Changes what is given; at least one of ``name`` and ``feature_policy``.
 
 Projects
 --------
@@ -497,6 +502,18 @@ revision.
    state after each change. ``author`` is an actor (``human``,
    ``service`` for agents and the planner); ``review`` is ``pending``,
    ``confirmed`` or ``reverted`` for revisions that need review.
+
+``GET /api/v1/organizations/{organization}/feature-reviews`` → ``200`` list
+   Revisions waiting for review, oldest first: each revision with
+   ``feature_title`` and ``previous`` (the revision before it, absent for
+   a creation) to compare against.
+
+``POST /api/v1/organizations/{organization}/features/{feature}/revisions/{revision}/review`` → ``200``
+   ``{"action": "confirm"|"revert", "comment"?}``. Humans only. ``revert``
+   appends a revision restoring the state before (a reverted creation sets
+   the status to ``removed``), with the reason "Reverted revision *n*:
+   *comment*"; only the latest revision can be reverted (``409``
+   otherwise). ``409`` when the revision does not wait for review.
 
 ``POST /api/v1/organizations/{organization}/feature-links`` → ``201``
    ``{"from", "to", "type"}``, read "``from`` *type* ``to``":
@@ -708,6 +725,10 @@ before it parks (:ref:`reference-agents-park`).
 ``pool`` names the agent pool the project's runs execute on: agents
 labelled ``pool=<pool>`` (:doc:`/how-to/agent-pools`); empty: any agent.
 ``image`` is kept but not used by agents.
+
+``feature_policy`` overrides the organization's feature policy for this
+project's agents (``direct``, ``proposal``, ``read_only``); empty:
+inherit.
 
 .. _reference-rest-pull-requests:
 
