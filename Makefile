@@ -103,6 +103,10 @@ bundle: web-deps ## Build all binaries into bin/, with the web UI embedded in co
 run: bundle ## Build everything and run Ballet on http://localhost:8080 (Ctrl-C stops)
 	scripts/run.sh
 
+.PHONY: readme-media
+readme-media: bundle ## Re-record the README's GIFs and screenshots (fake model, Chrome) into docs/_static/readme
+	scripts/readme-media/record.sh
+
 ##@ Containers
 
 IMAGE_TARGETS := core gateway knowledge agent
