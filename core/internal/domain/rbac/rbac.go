@@ -48,7 +48,7 @@ type Role string
 
 // Roles.
 const (
-	RoleOrgAdmin      Role = "org-admin"
+	RolePlatformAdmin Role = "platform-admin"
 	RoleCustomerAdmin Role = "customer-admin"
 	RoleEngineer      Role = "engineer"
 	RoleApprover      Role = "approver"
@@ -56,12 +56,12 @@ const (
 )
 
 // AllRoles lists every role.
-var AllRoles = []Role{RoleOrgAdmin, RoleCustomerAdmin, RoleEngineer, RoleApprover, RoleViewer}
+var AllRoles = []Role{RolePlatformAdmin, RoleCustomerAdmin, RoleEngineer, RoleApprover, RoleViewer}
 
 var readActions = []Action{ActCustomerRead, ActProjectRead, ActTrackerRead, ActKnowledgeRead, ActSkillRead}
 
 var grants = map[Role][]Action{
-	RoleOrgAdmin: AllActions,
+	RolePlatformAdmin: AllActions,
 	RoleCustomerAdmin: {
 		ActCustomerRead, ActCustomerUpdate, ActProjectCreate, ActProjectRead, ActProjectUpdate,
 		ActRoleBindingManage, ActRoleBindingRead, ActTrackerRead, ActTrackerWrite, ActCredentialManage,
@@ -86,9 +86,9 @@ type ScopeKind string
 
 // Scope kinds.
 const (
-	ScopeOrganization ScopeKind = "organization"
-	ScopeCustomer     ScopeKind = "customer"
-	ScopeProject      ScopeKind = "project"
+	ScopePlatform ScopeKind = "platform"
+	ScopeCustomer ScopeKind = "customer"
+	ScopeProject  ScopeKind = "project"
 )
 
 // BindingScope is where a binding applies. Customer is set for customer and
@@ -99,7 +99,7 @@ type BindingScope struct {
 	Project  string
 }
 
-// String formats the scope as "organization", "customer:<key>" or
+// String formats the scope as "platform", "customer:<key>" or
 // "project:<key>".
 func (s BindingScope) String() string {
 	switch s.Kind {
@@ -108,19 +108,19 @@ func (s BindingScope) String() string {
 	case ScopeProject:
 		return "project:" + s.Project
 	default:
-		return string(ScopeOrganization)
+		return string(ScopePlatform)
 	}
 }
 
-// ParseScope parses "organization", "customer:<key>" or "project:<key>".
+// ParseScope parses "platform", "customer:<key>" or "project:<key>".
 // The customer of a project scope must be resolved by the caller.
 func ParseScope(s string) (BindingScope, error) {
-	if s == string(ScopeOrganization) {
-		return BindingScope{Kind: ScopeOrganization}, nil
+	if s == string(ScopePlatform) {
+		return BindingScope{Kind: ScopePlatform}, nil
 	}
 	kind, key, ok := strings.Cut(s, ":")
 	if !ok || key == "" {
-		return BindingScope{}, fmt.Errorf("scope %q must be organization, customer:<key> or project:<key>", s)
+		return BindingScope{}, fmt.Errorf("scope %q must be platform, customer:<key> or project:<key>", s)
 	}
 	switch ScopeKind(kind) {
 	case ScopeCustomer:
@@ -128,10 +128,10 @@ func ParseScope(s string) (BindingScope, error) {
 	case ScopeProject:
 		return BindingScope{Kind: ScopeProject, Project: key}, nil
 	}
-	return BindingScope{}, fmt.Errorf("scope %q must be organization, customer:<key> or project:<key>", s)
+	return BindingScope{}, fmt.Errorf("scope %q must be platform, customer:<key> or project:<key>", s)
 }
 
-// Target is the scope of a requested action. Empty fields mean organization
+// Target is the scope of a requested action. Empty fields mea platform
 // level; a project target carries its customer.
 type Target struct {
 	Customer string
@@ -141,7 +141,7 @@ type Target struct {
 // covers reports whether a binding at s applies to an action on t.
 func (s BindingScope) covers(t Target, a Action) bool {
 	switch s.Kind {
-	case ScopeOrganization:
+	case ScopePlatform:
 		return true
 	case ScopeCustomer:
 		return t.Customer == s.Customer
@@ -175,8 +175,8 @@ func (b Binding) Validate() error {
 	if !b.Role.Valid() {
 		errs = append(errs, fmt.Errorf("unknown role %q", b.Role))
 	}
-	if b.Role == RoleOrgAdmin && b.Scope.Kind != ScopeOrganization {
-		errs = append(errs, errors.New("org-admin can only be bound at organization scope"))
+	if b.Role == RolePlatformAdmin && b.Scope.Kind != ScopePlatform {
+		errs = append(errs, errors.New("platform-admin can only be bound at platform scope"))
 	}
 	if b.Role == RoleCustomerAdmin && b.Scope.Kind == ScopeProject {
 		errs = append(errs, errors.New("customer-admin cannot be bound at project scope"))
@@ -223,14 +223,14 @@ func Matching(bindings []Binding, claims map[string]any) []Binding {
 	return out
 }
 
-// ParseBootstrap parses "claim:value" into an org-admin binding.
+// ParseBootstrap parses "claim:value" into a platform-admin binding.
 func ParseBootstrap(s string) (Binding, error) {
 	claim, value, ok := strings.Cut(s, ":")
 	if !ok || claim == "" || value == "" {
 		return Binding{}, fmt.Errorf("bootstrap admin %q must be claim:value, e.g. groups:ballet-admins", s)
 	}
 	return Binding{
-		ID: "bootstrap:" + s, Claim: claim, Value: value, Role: RoleOrgAdmin,
-		Scope: BindingScope{Kind: ScopeOrganization}, Bootstrap: true,
+		ID: "bootstrap:" + s, Claim: claim, Value: value, Role: RolePlatformAdmin,
+		Scope: BindingScope{Kind: ScopePlatform}, Bootstrap: true,
 	}, nil
 }

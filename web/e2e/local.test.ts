@@ -8,7 +8,7 @@ test('without an identity provider the app needs no sign-in', async ({ page }) =
 	);
 	let auth = '';
 	await fakeCore(page, {
-		me: [{ role: 'org-admin', scope: 'organization' }],
+		me: [{ role: 'platform-admin', scope: 'platform' }],
 		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }]
 	});
 	page.on('request', (r) => {

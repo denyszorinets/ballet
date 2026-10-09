@@ -1,5 +1,5 @@
 // Package tenancy defines customers and projects (ADR-0004). A Ballet
-// installation is one organization; the customer is the isolation
+// installation is one platform; the customer is the isolation
 // boundary; projects belong to exactly one customer.
 package tenancy
 
@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 )
 
-// Customer is a client of the organization and the isolation boundary.
+// Customer is a client of the platform and the isolation boundary.
 type Customer struct {
 	ID        string
 	Key       string // immutable, e.g. "acme"; used in URLs and role binding scopes

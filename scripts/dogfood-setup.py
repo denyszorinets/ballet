@@ -7,7 +7,7 @@ Idempotent: run it again to update credentials, settings and skills.
 
 Environment:
   BALLET_URL          Core (default http://localhost:8080)
-  BALLET_TOKEN        bearer token of an organization admin; default: none
+  BALLET_TOKEN        bearer token of a platform admin; default: none
                       when Core runs without authentication, else the
                       development realm's alice (scripts/dev-token.sh)
   ANTHROPIC_API_KEY   key for the customer's agent sessions and planner

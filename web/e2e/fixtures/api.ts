@@ -165,7 +165,7 @@ export interface FakeItem {
 
 const ROLES = [
 	{
-		role: 'org-admin',
+		role: 'platform-admin',
 		actions: [
 			'project.update',
 			'credential.manage',
@@ -674,7 +674,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		}
 		if ((m = path.match(/^\/projects\/([^/]+)\/skills$/))) {
 			const project = core.projects.find((p) => p.key === m![1]);
-			const chain = ['organization', `customer:${project?.customer}`, `project:${m[1]}`];
+			const chain = ['platform', `customer:${project?.customer}`, `project:${m[1]}`];
 			const best: Record<string, FakeSkill> = {};
 			for (const sk of core.skills) {
 				const rank = chain.indexOf(sk.scope);
@@ -858,7 +858,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		if (path === '/pauses') return r.fulfill({ json: { items: core.pauses } });
 		if ((m = path.match(/^(?:\/projects\/([^/]+))?\/(pause|kill)$/))) {
 			const project = m[1];
-			const scope = project ? 'project' : 'organization';
+			const scope = project ? 'project' : 'platform';
 			const same = (p: FakeCore['pauses'][number]) => p.scope === scope && p.project === project;
 			if (method === 'DELETE') {
 				if (!core.pauses.some(same)) return err(r, 404, 'not_found', 'not paused');

@@ -1,6 +1,6 @@
 // Package skill defines agent skills (ADR-0010): named, versioned bundles
 // of instructions (a SKILL.md body plus supporting text files) at
-// organization, customer or project scope. Published versions are
+// platform, customer or project scope. Published versions are
 // immutable; the draft is what admins edit.
 package skill
 
@@ -19,9 +19,9 @@ type ScopeKind string
 
 // Scope kinds.
 const (
-	ScopeOrganization ScopeKind = "organization"
-	ScopeCustomer     ScopeKind = "customer"
-	ScopeProject      ScopeKind = "project"
+	ScopePlatform ScopeKind = "platform"
+	ScopeCustomer ScopeKind = "customer"
+	ScopeProject  ScopeKind = "project"
 )
 
 // Scope of a skill; Customer is set for customer and project scopes.
@@ -39,14 +39,14 @@ func (s Scope) String() string {
 	case ScopeProject:
 		return "project:" + s.Project
 	}
-	return string(ScopeOrganization)
+	return string(ScopePlatform)
 }
 
-// ParseScope parses "organization", "customer:<key>" or "project:<key>";
+// ParseScope parses "platform", "customer:<key>" or "project:<key>";
 // the customer of a project scope is resolved by the caller.
 func ParseScope(s string) (Scope, error) {
-	if s == string(ScopeOrganization) {
-		return Scope{Kind: ScopeOrganization}, nil
+	if s == string(ScopePlatform) {
+		return Scope{Kind: ScopePlatform}, nil
 	}
 	kind, key, ok := strings.Cut(s, ":")
 	if ok && key != "" {
@@ -57,7 +57,7 @@ func ParseScope(s string) (Scope, error) {
 			return Scope{Kind: ScopeProject, Project: key}, nil
 		}
 	}
-	return Scope{}, fmt.Errorf("scope %q must be organization, customer:<key> or project:<key>", s)
+	return Scope{}, fmt.Errorf("scope %q must be platform, customer:<key> or project:<key>", s)
 }
 
 // Content is what a version (or the draft) contains.

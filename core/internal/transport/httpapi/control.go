@@ -8,7 +8,7 @@ import (
 )
 
 type pauseJSON struct {
-	Scope    string    `json:"scope"` // "organization" or "project"
+	Scope    string    `json:"scope"` // "platform" or "project"
 	Project  string    `json:"project,omitempty"`
 	Reason   string    `json:"reason,omitempty"`
 	PausedBy string    `json:"paused_by"`
@@ -17,8 +17,8 @@ type pauseJSON struct {
 
 func toPauseJSON(v app.PauseView) pauseJSON {
 	out := pauseJSON{Scope: "project", Project: v.ProjectKey, Reason: v.Reason, PausedBy: v.PausedBy, PausedAt: v.PausedAt}
-	if v.Scope == app.PauseOrg {
-		out.Scope = "organization"
+	if v.Scope == app.PausePlatform {
+		out.Scope = "platform"
 	}
 	return out
 }
@@ -81,11 +81,11 @@ func registerControl(mux *router, ct *app.Control) {
 			}{toPauseJSON(v), n})
 		}
 	}
-	org := func(*http.Request) string { return "" }
+	platform := func(*http.Request) string { return "" }
 	proj := func(r *http.Request) string { return r.PathValue("project") }
-	mux.handle("PUT /api/v1/pause", pause(org))
-	mux.handle("DELETE /api/v1/pause", resume(org))
-	mux.handle("POST /api/v1/kill", kill(org))
+	mux.handle("PUT /api/v1/pause", pause(platform))
+	mux.handle("DELETE /api/v1/pause", resume(platform))
+	mux.handle("POST /api/v1/kill", kill(platform))
 	mux.handle("PUT /api/v1/projects/{project}/pause", pause(proj))
 	mux.handle("DELETE /api/v1/projects/{project}/pause", resume(proj))
 	mux.handle("POST /api/v1/projects/{project}/kill", kill(proj))

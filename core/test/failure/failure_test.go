@@ -122,7 +122,7 @@ func newStack(t *testing.T) *stack {
 	st.core = mk("core", nil,
 		"BALLET_CORE_SERVER_ADDR=:"+ports["core"],
 		"BALLET_CORE_OIDC_ISSUER_URL="+iss.URL,
-		"BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS=groups:ballet-admins",
+		"BALLET_CORE_RBAC_BOOTSTRAP_PLATFORM_ADMINS=groups:ballet-admins",
 		"BALLET_CORE_GATEWAY_URL="+url("gateway"),
 		"BALLET_CORE_KNOWLEDGE_URL="+url("knowledge"),
 		"BALLET_CORE_AGENTS_TRACKER_MCP_URL="+url("core")+"/mcp/tracker",

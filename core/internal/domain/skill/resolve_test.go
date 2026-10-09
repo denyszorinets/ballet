@@ -14,13 +14,13 @@ func sk(scope skill.ScopeKind, name string, latest int64) skill.Skill {
 
 func TestResolve(t *testing.T) {
 	skills := []skill.Skill{
-		sk(skill.ScopeOrganization, "code-review", 3),
+		sk(skill.ScopePlatform, "code-review", 3),
 		sk(skill.ScopeProject, "code-review", 1), // project override
-		sk(skill.ScopeOrganization, "gitflow", 5),
+		sk(skill.ScopePlatform, "gitflow", 5),
 		sk(skill.ScopeCustomer, "gitflow", 2), // customer override
-		sk(skill.ScopeOrganization, "docs", 4),
-		sk(skill.ScopeOrganization, "draft-only", 0), // never published
-		sk(skill.ScopeOrganization, "legacy", 2),
+		sk(skill.ScopePlatform, "docs", 4),
+		sk(skill.ScopePlatform, "draft-only", 0), // never published
+		sk(skill.ScopePlatform, "legacy", 2),
 	}
 	pins := []skill.Pin{
 		{Name: "docs", Version: 2},

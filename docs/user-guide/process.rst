@@ -36,10 +36,10 @@ approach, documentation duties, review checklists — in the format
 Claude Code uses. Ballet writes the project's skills into every session
 (:doc:`/concepts/skills`).
 
-- **Skills** in the header manages the skills of the organization or a
+- **Skills** in the header manages the skills of the platform or a
   customer: edit a draft, then **publish** it as the next immutable
   version. A customer's skills are private to it.
-- A project's **Skills** page shows its effective skills (organization,
+- A project's **Skills** page shows its effective skills (platform,
   customer and project scopes together). Each can follow the latest
   version, be **pinned** to a version, or be disabled for the project.
 

@@ -32,7 +32,7 @@ const (
 )
 
 // Scope is where an action applies: customer and project keys; empty
-// fields mean organization level.
+// fields mea platform level.
 type Scope = rbac.Target
 
 // Authorizer decides whether an identity may perform an action in a scope.

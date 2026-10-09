@@ -127,8 +127,8 @@ func TestRBAC_CustomerAdminManagesOnlyWithinCustomer(t *testing.T) {
 
 	_, err = env.bindings.Create(dave, app.CreateRoleBindingInput{Claim: "email", Value: "pm@acme.test", Role: "approver", Scope: "project:API"})
 	require.NoError(t, err)
-	_, err = env.bindings.Create(dave, app.CreateRoleBindingInput{Claim: "groups", Value: "acme-admins", Role: "org-admin", Scope: "organization"})
-	assert.ErrorIs(t, err, app.ErrForbidden, "cannot escalate to organization scope")
+	_, err = env.bindings.Create(dave, app.CreateRoleBindingInput{Claim: "groups", Value: "acme-admins", Role: "platform-admin", Scope: "platform"})
+	assert.ErrorIs(t, err, app.ErrForbidden, "cannot escalate to platform scope")
 	_, err = env.bindings.Create(dave, app.CreateRoleBindingInput{Claim: "groups", Value: "x", Role: "viewer", Scope: "customer:globex"})
 	assert.ErrorIs(t, err, app.ErrForbidden)
 
@@ -149,10 +149,10 @@ func TestRoleBindings_CreateValidatesAndResolvesScopes(t *testing.T) {
 	assert.Equal(t, "acme", b.Scope.Customer, "project scope records its customer")
 
 	for name, in := range map[string]app.CreateRoleBindingInput{
-		"bad scope":        {Claim: "groups", Value: "x", Role: "viewer", Scope: "team:x"},
-		"unknown role":     {Claim: "groups", Value: "x", Role: "root", Scope: "organization"},
-		"org-admin scoped": {Claim: "groups", Value: "x", Role: "org-admin", Scope: "customer:acme"},
-		"empty claim":      {Claim: "", Value: "x", Role: "viewer", Scope: "organization"},
+		"bad scope":             {Claim: "groups", Value: "x", Role: "viewer", Scope: "team:x"},
+		"unknown role":          {Claim: "groups", Value: "x", Role: "root", Scope: "platform"},
+		"platform-admin scoped": {Claim: "groups", Value: "x", Role: "platform-admin", Scope: "customer:acme"},
+		"empty claim":           {Claim: "", Value: "x", Role: "viewer", Scope: "platform"},
 	} {
 		_, err := env.bindings.Create(alice, in)
 		assert.ErrorIs(t, err, app.ErrInvalid, name)

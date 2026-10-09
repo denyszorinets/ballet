@@ -18,7 +18,7 @@ type SearchDoc struct {
 	Kind      string // "item" or "skill"
 	EntityID  string
 	Ref       string // item key or skill name
-	Customer  string // customer key; "" for organization skills
+	Customer  string // customer key; "" for platform skills
 	Project   string // project key; "" when not project-specific
 	Scope     string // skills: their scope
 	Title     string

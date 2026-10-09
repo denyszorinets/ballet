@@ -28,7 +28,7 @@
 	/** The version shown with its diff against the version before it. */
 	let selected = $state<Version>();
 
-	const scope = $derived(parseScope(skill?.scope ?? 'organization'));
+	const scope = $derived(parseScope(skill?.scope ?? 'platform'));
 	const canWrite = $derived(
 		!!session?.permissions.can('skill.write', scopeTarget(scope, projectCustomer))
 	);

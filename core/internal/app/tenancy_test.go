@@ -14,7 +14,7 @@ import (
 )
 
 // fakeAuthz allows exactly the (action, customer) pairs it was given; an
-// empty customer means organization level.
+// empty customer means platform level.
 type fakeAuthz map[app.Action][]string
 
 func (f fakeAuthz) Authorize(_ context.Context, _ auth.Identity, a app.Action, s app.Scope) error {

@@ -37,7 +37,7 @@ func TestControl_PausingAProjectStopsNewStagesUntilResumed(t *testing.T) {
 	_, err := ct.Pause(bob, "WEB", "")
 	assert.ErrorIs(t, err, app.ErrForbidden, "engineers do not manage runs")
 	_, err = ct.Pause(dave, "", "")
-	assert.ErrorIs(t, err, app.ErrForbidden, "only organization admins pause everything")
+	assert.ErrorIs(t, err, app.ErrForbidden, "only platform admins pause everything")
 	v, err := ct.Pause(dave, "WEB", "Release freeze.")
 	require.NoError(t, err)
 	assert.Equal(t, "WEB", v.ProjectKey)
@@ -64,7 +64,7 @@ func TestControl_PausingAProjectStopsNewStagesUntilResumed(t *testing.T) {
 	assert.Equal(t, tracker.StateInProgress, e.state(t, waiting.Key))
 	assert.ErrorIs(t, ct.Resume(dave, "WEB"), app.ErrNotFound, "not paused any more")
 
-	// The organization pause covers every project.
+	// The platform pause covers every project.
 	_, err = ct.Pause(alice, "", "Incident.")
 	require.NoError(t, err)
 	assert.True(t, ct.Paused(t.Context(), "anything"))

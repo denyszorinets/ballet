@@ -33,3 +33,4 @@ Rejected, Deprecated, Superseded.
    0024-authentication-off-by-default
    0025-agent-fleet-runs-sessions-as-processes
    0026-interactive-sessions-park-when-idle
+   0027-tenancy-platform-organization-project

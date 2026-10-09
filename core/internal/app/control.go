@@ -14,10 +14,10 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/domain/tenancy"
 )
 
-// PauseOrg is the scope of a pause of all autonomous work.
-const PauseOrg = "org"
+// PausePlatform is the scope of a pause of all autonomous work.
+const PausePlatform = "platform"
 
-// Pause stops autonomous work in a scope: PauseOrg or a project ID.
+// Pause stops autonomous work in a scope: PausePlatform or a project ID.
 type Pause struct {
 	Scope    string
 	Reason   string
@@ -34,7 +34,7 @@ type ControlStore interface {
 }
 
 // Control lets humans stop autonomous work at once: pausing a project or
-// the organization stops new stages (the scheduler starts no tickets, the
+// the platform stops new stages (the scheduler starts no tickets, the
 // dispatcher holds queued runs, flows wait before their next stage); the
 // kill switch also cancels the runs in progress. Resuming continues the
 // waiting flows; a stage whose run was cancelled runs again.
@@ -49,7 +49,7 @@ type Control struct {
 	Logger     *slog.Logger
 }
 
-// PauseView is a pause with its project's key ("" for the organization).
+// PauseView is a pause with its project's key ("" for the platform).
 type PauseView struct {
 	Pause
 	ProjectKey string
@@ -63,7 +63,7 @@ func (ct *Control) Paused(ctx context.Context, projectID string) bool {
 		ct.logger().WarnContext(ctx, "reading pauses failed; holding work", "error", err)
 		return true
 	}
-	return slices.ContainsFunc(pauses, func(p Pause) bool { return p.Scope == PauseOrg || p.Scope == projectID })
+	return slices.ContainsFunc(pauses, func(p Pause) bool { return p.Scope == PausePlatform || p.Scope == projectID })
 }
 
 // List returns the pauses the caller can see.
@@ -78,7 +78,7 @@ func (ct *Control) List(ctx context.Context) ([]PauseView, error) {
 	}
 	out := []PauseView{}
 	for _, p := range pauses {
-		if p.Scope == PauseOrg {
+		if p.Scope == PausePlatform {
 			out = append(out, PauseView{Pause: p})
 			continue
 		}
@@ -93,8 +93,8 @@ func (ct *Control) List(ctx context.Context) ([]PauseView, error) {
 	return out, nil
 }
 
-// Pause pauses a project (projectKey) or, with "", the organization.
-// Needs run.manage on the project, or at organization scope.
+// Pause pauses a project (projectKey) or, with "", the platform.
+// Needs run.manage on the project, or at platform scope.
 func (ct *Control) Pause(ctx context.Context, projectKey, reason string) (PauseView, error) {
 	return ct.pause(ctx, projectKey, reason, false)
 }
@@ -112,7 +112,7 @@ func (ct *Control) Kill(ctx context.Context, projectKey, reason string) (PauseVi
 	}
 	n := 0
 	for _, r := range runs {
-		if v.Scope != PauseOrg && r.ProjectID != v.Scope {
+		if v.Scope != PausePlatform && r.ProjectID != v.Scope {
 			continue
 		}
 		if _, err := ct.Dispatcher.cancel(ctx, r, event.Actor{Kind: event.ActorHuman, Subject: v.PausedBy}); err != nil {
@@ -144,7 +144,7 @@ func (ct *Control) pause(ctx context.Context, projectKey, reason string, kill bo
 	return PauseView{Pause: pause, ProjectKey: p.Key}, nil
 }
 
-// Resume ends a pause of a project (projectKey) or of the organization
+// Resume ends a pause of a project (projectKey) or of the platform
 // (""); the flows waiting for it continue.
 func (ct *Control) Resume(ctx context.Context, projectKey string) error {
 	id, scope, p, c, err := ct.authorize(ctx, projectKey)
@@ -172,7 +172,7 @@ func (ct *Control) authorize(ctx context.Context, projectKey string) (identity, 
 		if err := ct.Authz.Authorize(ctx, id, ActRunManage, Scope{}); err != nil {
 			return identity{}, "", tenancy.Project{}, tenancy.Customer{}, err
 		}
-		return id, PauseOrg, tenancy.Project{}, tenancy.Customer{}, nil
+		return id, PausePlatform, tenancy.Project{}, tenancy.Customer{}, nil
 	}
 	p, err := ct.Tenancy.ProjectByKey(ctx, projectKey)
 	if err != nil {
@@ -201,7 +201,7 @@ func (ct *Control) event(p tenancy.Project, c tenancy.Customer, typ string, acto
 	e := event.Event{Customer: c.ID, Project: p.ID, EntityType: "project", EntityID: p.ID, Type: typ, Actor: actor,
 		OccurredAt: ct.Now(), Payload: mustJSON(map[string]any{"reason": reason})}
 	if p.ID == "" {
-		e.EntityType, e.EntityID = "organization", PauseOrg
+		e.EntityType, e.EntityID = "platform", PausePlatform
 	}
 	return e
 }

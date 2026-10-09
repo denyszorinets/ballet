@@ -469,11 +469,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Pause all autonomous work (run.manage at organization scope) */
-        put: operations["pauseOrganization"];
+        /** Pause all autonomous work (run.manage at platform scope) */
+        put: operations["pausePlatform"];
         post?: never;
         /** Resume all autonomous work */
-        delete: operations["resumeOrganization"];
+        delete: operations["resumePlatform"];
         options?: never;
         head?: never;
         patch?: never;
@@ -489,7 +489,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** Kill switch — pause everything and cancel every run in progress */
-        post: operations["killOrganization"];
+        post: operations["killPlatform"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1343,7 +1343,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** The project's effective skills (organization → customer → project, pins applied) */
+        /** The project's effective skills (platform → customer → project, pins applied) */
         get: operations["resolveProjectSkills"];
         put?: never;
         post?: never;
@@ -1438,8 +1438,8 @@ export interface components {
             claim: string;
             value: string;
             /** @enum {string} */
-            role: "org-admin" | "customer-admin" | "engineer" | "approver" | "viewer";
-            /** @description organization, customer:<key> or project:<key> */
+            role: "platform-admin" | "customer-admin" | "engineer" | "approver" | "viewer";
+            /** @description platform, customer:<key> or project:<key> */
             scope: string;
             bootstrap: boolean;
             /** Format: date-time */
@@ -1761,7 +1761,7 @@ export interface components {
         };
         Pause: {
             /** @enum {string} */
-            scope: "organization" | "project";
+            scope: "platform" | "project";
             project?: string;
             reason?: string;
             paused_by: string;
@@ -3336,7 +3336,7 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    pauseOrganization: {
+    pausePlatform: {
         parameters: {
             query?: never;
             header?: never;
@@ -3361,7 +3361,7 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    resumeOrganization: {
+    resumePlatform: {
         parameters: {
             query?: never;
             header?: never;
@@ -3380,7 +3380,7 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    killOrganization: {
+    killPlatform: {
         parameters: {
             query?: never;
             header?: never;
@@ -4658,7 +4658,7 @@ export interface operations {
     listSkills: {
         parameters: {
             query: {
-                /** @description organization, customer:<key> or project:<key> */
+                /** @description platform, customer:<key> or project:<key> */
                 scope: string;
             };
             header?: never;

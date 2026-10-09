@@ -5,14 +5,14 @@ describe('scopes', () => {
 	it('parses and formats scope strings', () => {
 		expect(parseScope('customer:acme')).toEqual({ kind: 'customer', key: 'acme' });
 		expect(parseScope('project:WEB')).toEqual({ kind: 'project', key: 'WEB' });
-		expect(parseScope('organization')).toEqual({ kind: 'organization', key: '' });
-		expect(parseScope('customer:')).toEqual({ kind: 'organization', key: '' });
+		expect(parseScope('platform')).toEqual({ kind: 'platform', key: '' });
+		expect(parseScope('customer:')).toEqual({ kind: 'platform', key: '' });
 		expect(formatScope({ kind: 'project', key: 'WEB' })).toBe('project:WEB');
-		expect(formatScope({ kind: 'organization', key: '' })).toBe('organization');
+		expect(formatScope({ kind: 'platform', key: '' })).toBe('platform');
 	});
 
 	it('maps scopes to permission targets', () => {
-		expect(scopeTarget({ kind: 'organization', key: '' })).toEqual({});
+		expect(scopeTarget({ kind: 'platform', key: '' })).toEqual({});
 		expect(scopeTarget({ kind: 'customer', key: 'acme' })).toEqual({ customer: 'acme' });
 		expect(scopeTarget({ kind: 'project', key: 'WEB' }, 'acme')).toEqual({
 			customer: 'acme',

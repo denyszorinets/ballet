@@ -1,19 +1,19 @@
 import type { Target } from '$lib/permissions.svelte';
 
-/** A skill scope as Core writes it: organization, customer:<key> or project:<key>. */
+/** A skill scope as Core writes it: platform, customer:<key> or project:<key>. */
 export interface Scope {
-	kind: 'organization' | 'customer' | 'project';
+	kind: 'platform' | 'customer' | 'project';
 	key: string;
 }
 
 export function parseScope(s: string): Scope {
 	const [kind, key = ''] = s.split(':', 2);
 	if ((kind === 'customer' || kind === 'project') && key) return { kind, key };
-	return { kind: 'organization', key: '' };
+	return { kind: 'platform', key: '' };
 }
 
 export function formatScope(s: Scope): string {
-	return s.kind === 'organization' ? 'organization' : `${s.kind}:${s.key}`;
+	return s.kind === 'platform' ? 'platform' : `${s.kind}:${s.key}`;
 }
 
 /**

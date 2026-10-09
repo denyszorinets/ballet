@@ -2,9 +2,9 @@ import { expect, test } from '@playwright/test';
 import { fakeCore } from './fixtures/api';
 import { fakeOIDC } from './fixtures/oidc';
 
-test('an org admin creates and renames a customer and adds a project', async ({ page }) => {
+test('a platform admin creates and renames a customer and adds a project', async ({ page }) => {
 	await fakeOIDC(page);
-	await fakeCore(page, { me: [{ role: 'org-admin', scope: 'organization' }] });
+	await fakeCore(page, { me: [{ role: 'platform-admin', scope: 'platform' }] });
 	await page.goto('/');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
@@ -30,7 +30,7 @@ test('an org admin creates and renames a customer and adds a project', async ({ 
 test('API errors are shown on the form', async ({ page }) => {
 	await fakeOIDC(page);
 	await fakeCore(page, {
-		me: [{ role: 'org-admin', scope: 'organization' }],
+		me: [{ role: 'platform-admin', scope: 'platform' }],
 		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }]
 	});
 	await page.goto('/');
@@ -47,14 +47,14 @@ test('API errors are shown on the form', async ({ page }) => {
 test('access page lists, grants and removes role bindings', async ({ page }) => {
 	await fakeOIDC(page);
 	await fakeCore(page, {
-		me: [{ role: 'org-admin', scope: 'organization' }],
+		me: [{ role: 'platform-admin', scope: 'platform' }],
 		bindings: [
 			{
 				id: 'boot',
 				claim: 'groups',
 				value: 'ballet-admins',
-				role: 'org-admin',
-				scope: 'organization',
+				role: 'platform-admin',
+				scope: 'platform',
 				bootstrap: true
 			}
 		]
@@ -75,7 +75,7 @@ test('access page lists, grants and removes role bindings', async ({ page }) => 
 
 	await page.getByRole('button', { name: 'Remove viewer binding for acme-devs' }).click();
 	await expect(page.getByRole('cell', { name: 'project:WEB' })).toHaveCount(0);
-	await expect(page.getByRole('button', { name: /Remove org-admin/ })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: /Remove platform-admin/ })).toHaveCount(0);
 });
 
 test('viewers see no administration controls', async ({ page }) => {

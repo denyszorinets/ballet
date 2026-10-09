@@ -6,7 +6,7 @@ Tenancy
 
 .. code-block:: text
 
-   Organization            the shop operating Ballet
+   Platform                the Ballet installation and its operators
    └── Customer            hard isolation boundary; owns a knowledge space
        └── Project         one product; one or more git repositories
            ├── Milestone
@@ -14,10 +14,11 @@ Tenancy
            └── Ticket
                └── Run
 
-**Organization**
-   The single operator of a Ballet installation. Owns organization-wide
-   resources: the skill registry, agent pools, agent runtime definitions
-   and role bindings.
+**Platform**
+   The Ballet installation, run by its platform admins. Owns what is
+   installation wide: platform-scoped skills, agent pools, agent runtime
+   definitions, platform-scope role bindings and the global pause and
+   kill switch (:doc:`/architecture/decisions/0027-tenancy-platform-organization-project`).
 
 **Customer**
    Identified by an immutable key such as ``acme``. The isolation
@@ -112,7 +113,7 @@ Configuration entities
    which gates, and the default execution policy for new tickets.
 
 **Skill**
-   A versioned bundle of agent instructions, scoped to organization,
+   A versioned bundle of agent instructions, scoped to platform,
    customer or project (:doc:`skills`).
 
 **Agent Runtime**

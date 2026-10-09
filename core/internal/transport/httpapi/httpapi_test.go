@@ -425,7 +425,7 @@ func TestSkillAPI_Lifecycle(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
 
 	code, s := call(t, api, "POST", "/api/v1/skills", "alice",
-		`{"scope":"organization","name":"gitflow","description":"Branching rules","body":"# v1","files":{"scripts/x.sh":"echo"}}`)
+		`{"scope":"platform","name":"gitflow","description":"Branching rules","body":"# v1","files":{"scripts/x.sh":"echo"}}`)
 	require.Equal(t, http.StatusCreated, code, s)
 	id := s["id"].(string)
 	assert.EqualValues(t, 0, s["latest_version"])
@@ -440,7 +440,7 @@ func TestSkillAPI_Lifecycle(t *testing.T) {
 	require.Equal(t, http.StatusOK, code)
 	assert.Equal(t, "# v1", v["body"])
 
-	code, list := call(t, api, "GET", "/api/v1/skills?scope=organization", "alice", "")
+	code, list := call(t, api, "GET", "/api/v1/skills?scope=platform", "alice", "")
 	require.Equal(t, http.StatusOK, code)
 	assert.Len(t, list["items"], 1)
 	code, _ = call(t, api, "GET", "/api/v1/skills", "alice", "")
@@ -455,13 +455,13 @@ func TestSkillAPI_ResolutionAndPins(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
 	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
 	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
-	_, s := call(t, api, "POST", "/api/v1/skills", "alice", `{"scope":"organization","name":"gitflow","description":"d"}`)
+	_, s := call(t, api, "POST", "/api/v1/skills", "alice", `{"scope":"platform","name":"gitflow","description":"d"}`)
 	call(t, api, "POST", "/api/v1/skills/"+s["id"].(string)+"/publish", "alice", `{"version":1}`)
 
 	code, list := call(t, api, "GET", "/api/v1/projects/WEB/skills", "alice", "")
 	require.Equal(t, http.StatusOK, code, list)
 	require.Len(t, list["items"], 1)
-	assert.Equal(t, "organization", list["items"].([]any)[0].(map[string]any)["scope"])
+	assert.Equal(t, "platform", list["items"].([]any)[0].(map[string]any)["scope"])
 
 	code, body := call(t, api, "PUT", "/api/v1/projects/WEB/skills/gitflow/pin", "alice", `{"version":5}`)
 	require.Equal(t, http.StatusNoContent, code, body)

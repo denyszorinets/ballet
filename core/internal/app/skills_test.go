@@ -65,10 +65,10 @@ func TestSkills_ScopesAndAuthorization(t *testing.T) {
 	dave := user(t, "dave", "acme-admins")
 	bob := user(t, "bob", "acme-devs")
 
-	_, err := sk.CreateSkill(alice, "organization", "code-review", content("Review checklist", "# Review"))
+	_, err := sk.CreateSkill(alice, "platform", "code-review", content("Review checklist", "# Review"))
 	require.NoError(t, err)
-	_, err = sk.CreateSkill(dave, "organization", "x-skill", content("x", ""))
-	assert.ErrorIs(t, err, app.ErrForbidden, "customer admins cannot change organization process")
+	_, err = sk.CreateSkill(dave, "platform", "x-skill", content("x", ""))
+	assert.ErrorIs(t, err, app.ErrForbidden, "customer admins cannot change platform process")
 	proj, err := sk.CreateSkill(dave, "project:WEB", "code-review", content("Project override", "# WEB review"))
 	require.NoError(t, err, "same name at another scope is allowed")
 	assert.Equal(t, "acme", proj.Scope.Customer, "project scope records its customer")
@@ -90,13 +90,13 @@ func TestSkills_ScopesAndAuthorization(t *testing.T) {
 	assert.ErrorIs(t, err, app.ErrForbidden)
 
 	for name, in := range map[string]struct{ scope, name string }{
-		"bad name":  {"organization", "Bad Name"},
+		"bad name":  {"platform", "Bad Name"},
 		"bad scope": {"team:x", "x-y"},
 	} {
 		_, err := sk.CreateSkill(alice, in.scope, in.name, content("d", ""))
 		assert.ErrorIs(t, err, app.ErrInvalid, name)
 	}
-	_, err = sk.CreateSkill(alice, "organization", "evil", skill.Content{Description: "d", Files: map[string]string{"../x": ""}})
+	_, err = sk.CreateSkill(alice, "platform", "evil", skill.Content{Description: "d", Files: map[string]string{"../x": ""}})
 	assert.ErrorIs(t, err, app.ErrInvalid)
 	_, err = sk.CreateSkill(alice, "customer:nobody", "x-y", content("d", ""))
 	assert.ErrorIs(t, err, app.ErrNotFound)
@@ -117,10 +117,10 @@ func TestSkills_ResolveForProjectWithPins(t *testing.T) {
 		}
 		return s
 	}
-	publish(alice, "organization", "code-review", "org review", 2)
+	publish(alice, "platform", "code-review", "platform review", 2)
 	webReview := publish(dave, "project:WEB", "code-review", "web review", 1)
-	publish(alice, "organization", "gitflow", "flow", 3)
-	publish(alice, "organization", "unpublished", "x", 0)
+	publish(alice, "platform", "gitflow", "flow", 3)
+	publish(alice, "platform", "unpublished", "x", 0)
 	publish(dave, "project:APP", "app-only", "x", 1)
 
 	got, err := sk.Resolve(bob, "WEB")
@@ -171,7 +171,7 @@ func TestSkills_ProjectSkillBodyFollowsPins(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, body, "no planner skill")
 
-	s, err := sk.CreateSkill(alice, "organization", "planner", content("Planning", "v1 rules"))
+	s, err := sk.CreateSkill(alice, "platform", "planner", content("Planning", "v1 rules"))
 	require.NoError(t, err)
 	_, err = sk.Publish(alice, s.ID, s.Version)
 	require.NoError(t, err)

@@ -6,7 +6,7 @@ OpenID Connect provider; Ballet validates the provider's access tokens
 (:doc:`/architecture/decisions/0006-oidc-claims-rbac-and-scoped-run-tokens`).
 
 Authentication is **off by default**: without ``[oidc] issuer_url``
-everyone is the single local user, an organization admin, and Core only
+everyone is the single local user, a platform admin, and Core only
 listens on ``localhost`` (:ref:`reference-config-oidc`). Configure an
 issuer as below when several people, customers or roles share an
 installation.
@@ -63,12 +63,12 @@ Grant the first administrator
 
 Authentication alone grants nothing; access comes from role bindings
 (:doc:`/architecture/security`). Give the initial administrators
-``org-admin`` through configuration:
+``platform-admin`` through configuration:
 
 .. code-block:: toml
 
    [rbac]
-   bootstrap_org_admins = ["groups:ballet-admins"]
+   bootstrap_platform_admins = ["groups:ballet-admins"]
 
 They can then create customers, projects and role bindings in the web
 UI — **Customers** (create, rename, add projects) and **Access** (grant
@@ -93,7 +93,7 @@ The repository contains a ready Keycloak setup:
 
    make dev-keycloak    # Keycloak on http://localhost:8180, realm "ballet"
    BALLET_CORE_OIDC_ISSUER_URL=http://localhost:8180/realms/ballet \
-   BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS=groups:ballet-admins \
+   BALLET_CORE_RBAC_BOOTSTRAP_PLATFORM_ADMINS=groups:ballet-admins \
      go run ./core/cmd/core
    curl -H "Authorization: Bearer $(scripts/dev-token.sh bob)" localhost:8080/api/v1/me
 

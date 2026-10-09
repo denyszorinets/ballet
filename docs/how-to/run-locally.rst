@@ -8,12 +8,12 @@ One command builds and runs the whole system on your machine:
    make run
 
 Then open http://localhost:8080 — there is no sign-in: you are the local
-user, an organization admin, and Ballet only listens on ``localhost``.
+user, a platform admin, and Ballet only listens on ``localhost``.
 Press :kbd:`Ctrl-C` to stop everything.
 
 For several users, run ``BALLET_AUTH=oidc make run``: it starts the
 development Keycloak and you sign in as ``alice`` / ``alice``
-(organization admin of the development realm, see :doc:`configure-oidc`).
+(platform admin of the development realm, see :doc:`configure-oidc`).
 
 What it does
 ------------

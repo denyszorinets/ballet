@@ -36,7 +36,7 @@ func TestSearch_IndexesItemsAndSkillsAndFiltersByPermission(t *testing.T) {
 	web := mk("WEB", "Invoice export")
 	mk("APP", "Invoice export in the app")
 	mk("GLX", "Globex invoice export")
-	_, err := sk.CreateSkill(alice, "organization", "csv-exports", content("How to build CSV exports of invoices", "Use RFC 4180."))
+	_, err := sk.CreateSkill(alice, "platform", "csv-exports", content("How to build CSV exports of invoices", "Use RFC 4180."))
 	require.NoError(t, err)
 	_, err = sk.CreateSkill(alice, "customer:globex", "globex-invoices", content("Globex invoice rules", "invoice csv"))
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func TestSearch_IndexesItemsAndSkillsAndFiltersByPermission(t *testing.T) {
 	bob, err := search.Query(user(t, "bob", "acme-devs"), "invoice csv export", "", "", 0)
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"WEB-1", "APP-1"}, refs(bob),
-		"acme engineers see acme items only; organization and globex skills need skill.read there")
+		"acme engineers see acme items only; platform and globex skills need skill.read there")
 	assert.NotContains(t, refs(bob), "GLX-1")
 
 	carol, err := search.Query(user(t, "carol", "acme-viewers"), "invoice csv export", "", "", 0)

@@ -1,7 +1,7 @@
 Customers and projects
 ======================
 
-Ballet is built to run an AI development shop: one organization working
+Ballet is built to run an AI development shop: one platform working
 for several customers, each with several projects
 (:doc:`/concepts/domain-model`).
 
@@ -11,7 +11,7 @@ Customers
 A **customer** is the isolation boundary. Its projects share one
 knowledge base, LLM credentials and budgets; nothing — code, tickets,
 knowledge, keys — crosses to another customer. Create customers on the
-**Customers** page (organization admins). A customer's key, such as
+**Customers** page (platform admins). A customer's key, such as
 ``acme``, never changes; its name can.
 
 The customer page holds:

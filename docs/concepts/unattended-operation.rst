@@ -28,7 +28,7 @@ Stay within bounds
   per day (:ref:`concepts-unattended-budgets`).
 - **Concurrency limits** globally, per customer and per project.
 - **Iteration limits** on pipeline loops.
-- **Pause and kill switch** per project and for the whole organization
+- **Pause and kill switch** per project and for the whole platform
   (:ref:`concepts-unattended-pause`).
 
 .. _concepts-unattended-budgets:
@@ -67,7 +67,7 @@ Pause, resume and the kill switch
 
 Humans can stop autonomous work at once — for a single ticket (move it
 to *Paused*), for a project (project page) or for everything
-(organization admins, on the home page):
+(platform admins, on the home page):
 
 **Pause**
    No new stages start: the scheduler starts no tickets, queued runs are
@@ -82,8 +82,8 @@ to *Paused*), for a project (project page) or for everything
 **Resume**
    Ends the pause: waiting flows continue, held runs start.
 
-Pausing and resuming a project or the organization needs ``run.manage``
-on that scope (customer admins for their projects, organization admins
+Pausing and resuming a project or the platform needs ``run.manage``
+on that scope (customer admins for their projects, platform admins
 for everything). Every pause, kill and resume is recorded as an event
 (``control.paused``, ``control.killed``, ``control.resumed``).
 
