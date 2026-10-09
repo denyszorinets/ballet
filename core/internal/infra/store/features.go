@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
+	"time"
 
 	"github.com/denyszorinets/ballet/core/internal/app"
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
 	"github.com/denyszorinets/ballet/core/internal/domain/feature"
+	"github.com/denyszorinets/ballet/core/internal/domain/tracker"
 	"github.com/denyszorinets/ballet/kit/sqlstore"
 )
 
@@ -309,4 +312,90 @@ func (s *Store) RemoveFeatureLink(ctx context.Context, l feature.Link, e event.E
 			WHERE id = ? AND removed_at = ''`,
 			string(l.RemovedBy.Kind), l.RemovedBy.Subject, formatTime(l.RemovedAt), l.ID),
 		s.AppendEvent(e)))
+}
+
+// ticketFeatureStmts replaces the features a ticket changes.
+func ticketFeatureStmts(itemID string, featureIDs []string, at time.Time) []sqlstore.Stmt {
+	stmts := []sqlstore.Stmt{sqlstore.Exec(`DELETE FROM ticket_features WHERE item_id = ?`, itemID)}
+	for _, f := range featureIDs {
+		stmts = append(stmts, sqlstore.Exec(`INSERT INTO ticket_features (item_id, feature_id, created_at) VALUES (?, ?, ?)`,
+			itemID, f, formatTime(at)))
+	}
+	return stmts
+}
+
+// SetTicketFeatures replaces the features a ticket changes and records e.
+func (s *Store) SetTicketFeatures(ctx context.Context, itemID string, featureIDs []string, at time.Time, e event.Event) error {
+	return mapWriteErr("set ticket features", s.db.Batch(ctx, append(ticketFeatureStmts(itemID, featureIDs, at), s.AppendEvent(e))...))
+}
+
+// TicketFeatures returns the features a ticket changes, by number.
+func (s *Store) TicketFeatures(ctx context.Context, itemID string) ([]feature.Feature, error) {
+	rows, err := s.db.Query(ctx, `SELECT `+featureCols+` FROM features f
+		JOIN ticket_features tf ON tf.feature_id = f.id WHERE tf.item_id = ? ORDER BY f.number`, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("ticket features: %w", err)
+	}
+	defer rows.Close()
+	out := []feature.Feature{}
+	for rows.Next() {
+		f, err := scanFeature(rows)
+		if err != nil {
+			return nil, fmt.Errorf("ticket features: %w", err)
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// FeatureTickets returns the tickets that change a feature, by key.
+func (s *Store) FeatureTickets(ctx context.Context, featureID string) ([]tracker.Item, error) {
+	rows, err := s.db.Query(ctx, `SELECT `+prefixed("i.", itemCols)+` FROM items i
+		JOIN ticket_features tf ON tf.item_id = i.id WHERE tf.feature_id = ? ORDER BY i.project_id, i.number`, featureID)
+	if err != nil {
+		return nil, fmt.Errorf("feature tickets: %w", err)
+	}
+	defer rows.Close()
+	out := []tracker.Item{}
+	for rows.Next() {
+		it, err := scanItem(rows)
+		if err != nil {
+			return nil, fmt.Errorf("feature tickets: %w", err)
+		}
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// DeliveryStates returns, for every feature whose status follows its
+// tickets (planned, in progress, live, changing) and that has tickets, the
+// keys and states of those tickets.
+func (s *Store) DeliveryStates(ctx context.Context) ([]app.FeatureTicketState, error) {
+	rows, err := s.db.Query(ctx, `SELECT f.id, i.key, i.state FROM features f
+		JOIN ticket_features tf ON tf.feature_id = f.id JOIN items i ON i.id = tf.item_id
+		WHERE f.status IN ('planned', 'in_progress', 'live', 'changing') ORDER BY f.id, i.key`)
+	if err != nil {
+		return nil, fmt.Errorf("delivery states: %w", err)
+	}
+	defer rows.Close()
+	out := []app.FeatureTicketState{}
+	for rows.Next() {
+		var st app.FeatureTicketState
+		var state string
+		if err := rows.Scan(&st.FeatureID, &st.TicketKey, &state); err != nil {
+			return nil, fmt.Errorf("delivery states: %w", err)
+		}
+		st.State = tracker.State(state)
+		out = append(out, st)
+	}
+	return out, rows.Err()
+}
+
+// prefixed qualifies a comma-separated column list with prefix.
+func prefixed(prefix, cols string) string {
+	parts := strings.Split(cols, ",")
+	for i, p := range parts {
+		parts[i] = prefix + strings.TrimSpace(p)
+	}
+	return strings.Join(parts, ", ")
 }

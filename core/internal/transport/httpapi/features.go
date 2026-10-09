@@ -116,12 +116,22 @@ func registerFeatures(mux *router, fs *app.Features) {
 			writeError(w, err)
 			return
 		}
+		type ticketJSON struct {
+			Key     string `json:"key"`
+			Title   string `json:"title"`
+			State   string `json:"state"`
+			Project string `json:"project"`
+		}
 		out := struct {
 			featureJSON
-			Links []featureLinkJSON `json:"links"`
-		}{featureJSON: toFeatureJSON(d.FeatureView), Links: []featureLinkJSON{}}
+			Links   []featureLinkJSON `json:"links"`
+			Tickets []ticketJSON      `json:"tickets"`
+		}{featureJSON: toFeatureJSON(d.FeatureView), Links: []featureLinkJSON{}, Tickets: []ticketJSON{}}
 		for _, l := range d.Links {
 			out.Links = append(out.Links, toFeatureLinkJSON(l))
+		}
+		for _, t := range d.Tickets {
+			out.Tickets = append(out.Tickets, ticketJSON{Key: t.Key, Title: t.Title, State: string(t.State), Project: t.ProjectKey})
 		}
 		writeJSON(w, http.StatusOK, out)
 	}
@@ -256,6 +266,39 @@ func registerFeatures(mux *router, fs *app.Features) {
 		writeJSON(w, http.StatusOK, toRevisionJSON(rv))
 	}
 	mux.handle("GET /api/v1/organizations/{organization}/feature-reviews", reviews)
+
+	featureList := func(w http.ResponseWriter, views []app.FeatureView) {
+		out := struct {
+			Items []featureJSON `json:"items"`
+		}{Items: []featureJSON{}}
+		for _, v := range views {
+			out.Items = append(out.Items, toFeatureJSON(v))
+		}
+		writeJSON(w, http.StatusOK, out)
+	}
+	mux.handle("GET /api/v1/items/{item}/features", func(w http.ResponseWriter, r *http.Request) {
+		views, err := fs.TicketFeatures(r.Context(), r.PathValue("item"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		featureList(w, views)
+	})
+	mux.handle("PUT /api/v1/items/{item}/features", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Features []string `json:"features"`
+		}
+		if err := decode(r, &in); err != nil {
+			writeError(w, err)
+			return
+		}
+		views, err := fs.SetTicketFeatures(r.Context(), r.PathValue("item"), in.Features)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		featureList(w, views)
+	})
 	mux.handle("POST /api/v1/organizations/{organization}/features/{feature}/revisions/{revision}/review", review)
 }
 

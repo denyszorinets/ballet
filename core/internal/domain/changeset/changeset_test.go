@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/denyszorinets/ballet/core/internal/domain/changeset"
+	"github.com/denyszorinets/ballet/core/internal/domain/feature"
 	"github.com/denyszorinets/ballet/core/internal/domain/tracker"
 )
 
@@ -89,4 +90,49 @@ func TestIsRef(t *testing.T) {
 	assert.Equal(t, "login", ref)
 	_, ok = changeset.IsRef("WEB-1")
 	assert.False(t, ok)
+}
+
+func featurePlan() changeset.Changeset {
+	desc := "Exports invoices as CSV and PDF."
+	return changeset.Changeset{Title: "Invoice export", Ops: []changeset.Op{
+		{Kind: changeset.OpCreateFeature, Ref: "export", Feature: &changeset.CreateFeature{Title: "Invoice export", Projects: []string{"WEB"}}},
+		{Kind: changeset.OpUpdateFeature, FeatureUpdate: &changeset.UpdateFeature{Feature: "F-1", Description: &desc}},
+		{Kind: changeset.OpLinkFeatures, FeatureLink: &changeset.LinkFeatures{From: "$export", To: "F-1", Type: feature.LinkDerivedFrom}},
+		{Kind: changeset.OpCreateItem, Ref: "csv", Create: &changeset.CreateItem{Kind: tracker.KindTicket, Title: "CSV", Features: []string{"$export", "F-1"}}},
+		{Kind: changeset.OpUpdateItem, Update: &changeset.UpdateItem{Item: "WEB-3", Features: &[]string{"$export"}}},
+	}}
+}
+
+func TestValidate_FeatureOperations(t *testing.T) {
+	require.NoError(t, featurePlan().Validate())
+	cases := map[string]func(*changeset.Changeset){
+		"feature without title":     func(c *changeset.Changeset) { c.Ops[0].Feature.Title = "" },
+		"bad feature status":        func(c *changeset.Changeset) { c.Ops[0].Feature.Status = "shipped" },
+		"update needs a key":        func(c *changeset.Changeset) { c.Ops[1].FeatureUpdate.Feature = "$export" },
+		"update with no change":     func(c *changeset.Changeset) { c.Ops[1].FeatureUpdate.Description = nil },
+		"bad feature key":           func(c *changeset.Changeset) { c.Ops[1].FeatureUpdate.Feature = "WEB-1" },
+		"link type":                 func(c *changeset.Changeset) { c.Ops[2].FeatureLink.Type = "parent" },
+		"link to itself":            func(c *changeset.Changeset) { c.Ops[2].FeatureLink.To = "$export" },
+		"link to a ticket ref":      func(c *changeset.Changeset) { c.Ops[2].FeatureLink.To = "$csv" },
+		"ticket feature not a ref":  func(c *changeset.Changeset) { c.Ops[3].Create.Features = []string{"WEB-1"} },
+		"features on an epic":       func(c *changeset.Changeset) { c.Ops[3].Create.Kind = tracker.KindEpic },
+		"two payloads":              func(c *changeset.Changeset) { c.Ops[0].Create = &changeset.CreateItem{} },
+		"unknown feature reference": func(c *changeset.Changeset) { c.Ops[3].Create.Features = []string{"$nope"} },
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := featurePlan()
+			mutate(&c)
+			assert.Error(t, c.Validate())
+		})
+	}
+}
+
+func TestCheckApproval_TicketsNeedTheirNewFeatures(t *testing.T) {
+	c := featurePlan()
+	require.NoError(t, c.CheckApproval([]int{0, 3}))
+	require.NoError(t, c.CheckApproval([]int{1}))
+	assert.Error(t, c.CheckApproval([]int{3}), "the ticket needs the new feature")
+	assert.Error(t, c.CheckApproval([]int{2}), "the link needs the new feature")
+	assert.Error(t, c.CheckApproval([]int{4}), "the update needs the new feature")
 }

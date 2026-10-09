@@ -47,6 +47,17 @@ agent's assumption on a finished ticket.
 The planner may suggest how autonomously a ticket should run, but only a
 human sets a ticket's policy.
 
+Feature first
+-------------
+
+The planner plans from the **feature map** (:doc:`/concepts/feature-map`):
+it looks at the features the work touches, and its changesets create new
+features, rewrite the description of features that change — as they will
+be once the work is done — link new features to the ones they grew out
+of, and list on every ticket the features it changes. Approving the
+changeset applies all of it together. As the tickets start and finish,
+the features move to *in progress*, *changing* and *live* on their own.
+
 Good tickets
 ------------
 

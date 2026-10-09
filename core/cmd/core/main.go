@@ -337,7 +337,7 @@ func run() error {
 		Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 	}
 	skills := &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID}
-	features := &app.Features{Store: st, Tenancy: st, Execution: st, Authz: authz, Now: time.Now, NewID: store.NewID}
+	features := &app.Features{Store: st, Tenancy: st, Execution: st, Items: st, Authz: authz, Now: time.Now, NewID: store.NewID}
 	jobResults := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "ballet_jobs_total",
 		Help: "Durable jobs executed, by kind and result (done, retry, dead).",
@@ -352,14 +352,14 @@ func run() error {
 	svc.Metrics.MustRegister(compactions)
 	search := &app.Search{Store: st, Tenancy: st, Authz: authz, Embedder: embed.Hash{}}
 	knowledgeAccess := &app.KnowledgeAccess{Tenancy: st, Authz: authz}
-	changesets := &app.Changesets{Store: st, Tracker: tracker}
+	changesets := &app.Changesets{Store: st, Tracker: tracker, Features: features}
 	llm := &anthropic.Client{GatewayURL: cfg.Gateway.URL, Tokens: tokenIssuer}
 	knowledgeReader := &knowledge.Reader{URL: knowledgeURL, Tokens: tokenIssuer}
 	plannerSvc := &app.Planner{
 		Store: st, Tenancy: st, Authz: authz,
 		LLM: llm,
 		Tools: plannertools.All(plannertools.Deps{
-			Tracker: tracker, Changesets: changesets, Skills: skills, Search: search,
+			Tracker: tracker, Changesets: changesets, Skills: skills, Search: search, Features: features,
 			Knowledge: &knowledge.Client{URL: knowledgeURL, Access: knowledgeAccess, Tokens: tokenIssuer},
 		}),
 		Instructions: func(ctx context.Context, projectKey string) (string, error) {
@@ -433,6 +433,7 @@ func run() error {
 	runs.Questions, runs.AnswerWindow, runs.Logger = st, cfg.Agents.AnswerWindow, svc.Logger
 	questions.OnAnswered = runs.DeliverAnswer
 	go runs.ParkLoop(ctx, st, 30*time.Second)
+	go features.StatusLoop(ctx, 5*time.Second, svc.Logger)
 	agentTracker := &app.AgentTracker{Reports: st, RunStore: st, Runs: runs, Items: st, Tenancy: st, Authz: authz,
 		Changesets: changesets, Now: time.Now, NewID: store.NewID, OnQuestion: questions.Route, OnBlocking: runs.Hold}
 	trackermcp.Register(svc.Mux, runtoken.NewRingVerifier(tokenKeys, time.Now), agentTracker, "v1")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"sort"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
 	"github.com/denyszorinets/ballet/core/internal/domain/feature"
 	"github.com/denyszorinets/ballet/core/internal/domain/tenancy"
+	"github.com/denyszorinets/ballet/core/internal/domain/tracker"
 	"github.com/denyszorinets/ballet/kit/auth"
 )
 
@@ -42,6 +44,22 @@ type FeatureStore interface {
 	// ReviewRevision records the review of a pending revision; ErrConflict
 	// when it is no longer pending.
 	ReviewRevision(ctx context.Context, m ReviewMark, e event.Event) error
+
+	// SetTicketFeatures replaces the features a ticket changes.
+	SetTicketFeatures(ctx context.Context, itemID string, featureIDs []string, at time.Time, e event.Event) error
+	TicketFeatures(ctx context.Context, itemID string) ([]feature.Feature, error)
+	FeatureTickets(ctx context.Context, featureID string) ([]tracker.Item, error)
+	// DeliveryStates returns the ticket states of features whose status
+	// follows their tickets.
+	DeliveryStates(ctx context.Context) ([]FeatureTicketState, error)
+	FeatureByID(ctx context.Context, id string) (feature.Feature, error)
+}
+
+// FeatureTicketState is the state of one ticket changing a feature.
+type FeatureTicketState struct {
+	FeatureID string
+	TicketKey string
+	State     tracker.State
 }
 
 // FeatureWrite is a feature's new state, its revision and its event.
@@ -71,6 +89,7 @@ type Features struct {
 	Store     FeatureStore
 	Tenancy   TenancyStore
 	Execution ExecutionStore // projects' policy overrides; nil: the organization's policy
+	Items     ItemStore      // ticket links; nil: none
 	Authz     Authorizer
 	Now       func() time.Time
 	NewID     func() string
@@ -90,10 +109,20 @@ type FeatureLinkView struct {
 	ToKey   string
 }
 
-// FeatureDetail is a feature with its current links.
+// FeatureDetail is a feature with its current links and the tickets
+// that change it.
 type FeatureDetail struct {
 	FeatureView
-	Links []FeatureLinkView
+	Links   []FeatureLinkView
+	Tickets []FeatureTicket
+}
+
+// FeatureTicket is a ticket changing a feature.
+type FeatureTicket struct {
+	Key        string
+	Title      string
+	State      tracker.State
+	ProjectKey string
 }
 
 // RevisionView is a revision with its projects' keys.
@@ -264,7 +293,17 @@ func (fs *Features) Get(ctx context.Context, orgKey, key string) (FeatureDetail,
 	if err != nil {
 		return FeatureDetail{}, err
 	}
-	return FeatureDetail{FeatureView: s.view(f), Links: links}, nil
+	items, err := fs.Store.FeatureTickets(ctx, f.ID)
+	if err != nil {
+		return FeatureDetail{}, err
+	}
+	tickets := []FeatureTicket{}
+	for _, it := range items {
+		if s.all || s.readable[it.ProjectID] {
+			tickets = append(tickets, FeatureTicket{Key: it.Key, Title: it.Title, State: it.State, ProjectKey: s.projects[it.ProjectID].Key})
+		}
+	}
+	return FeatureDetail{FeatureView: s.view(f), Links: links, Tickets: tickets}, nil
 }
 
 // Revisions returns a feature's revisions, newest first.
@@ -427,10 +466,11 @@ func sameSet(a, b []string) bool {
 }
 
 // write builds the revision and event recording f's new state. Revisions
-// by anyone but a human wait for review.
+// by agents and the planner (service actors) wait for review; those by
+// humans and by Ballet itself do not.
 func (fs *Features) write(f feature.Feature, actor event.Actor, reason string, cause feature.Cause, typ string, payload map[string]any) FeatureWrite {
 	review := feature.ReviewNone
-	if actor.Kind != event.ActorHuman {
+	if actor.Kind == event.ActorService {
 		review = feature.ReviewPending
 	}
 	payload["key"], payload["version"] = f.Key, f.Version
@@ -846,4 +886,162 @@ func (fs *Features) Review(ctx context.Context, orgKey, key string, number int64
 	}
 	rev.Review, rev.ReviewedBy, rev.ReviewedAt = mark.Review, mark.By, mark.At
 	return s.revisionView(f, rev), nil
+}
+
+// TicketFeatures returns the features a ticket changes.
+func (fs *Features) TicketFeatures(ctx context.Context, itemKey string) ([]FeatureView, error) {
+	it, s, err := fs.ticket(ctx, itemKey, ActTrackerRead)
+	if err != nil {
+		return nil, err
+	}
+	fts, err := fs.Store.TicketFeatures(ctx, it.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]FeatureView, len(fts))
+	for i, f := range fts {
+		out[i] = s.view(f)
+	}
+	return out, nil
+}
+
+// SetTicketFeatures replaces the features a ticket changes; they must be
+// features of its organization.
+func (fs *Features) SetTicketFeatures(ctx context.Context, itemKey string, featureKeys []string) ([]FeatureView, error) {
+	it, s, err := fs.ticket(ctx, itemKey, ActTrackerWrite)
+	if err != nil {
+		return nil, err
+	}
+	if it.Kind != tracker.KindTicket {
+		return nil, invalid(fmt.Errorf("%s is a %s; only tickets change features", it.Key, it.Kind))
+	}
+	ids := []string{}
+	views := []FeatureView{}
+	for _, k := range featureKeys {
+		f, err := fs.load(ctx, s, k)
+		if errors.Is(err, ErrNotFound) {
+			return nil, invalid(fmt.Errorf("feature %s does not exist", k))
+		}
+		if err != nil {
+			return nil, err
+		}
+		if slices.Contains(ids, f.ID) {
+			return nil, invalid(fmt.Errorf("feature %s is listed twice", k))
+		}
+		ids = append(ids, f.ID)
+		views = append(views, s.view(f))
+	}
+	now := fs.Now()
+	e := event.Event{Organization: s.org.ID, Project: it.ProjectID, EntityType: "item", EntityID: it.ID,
+		Type: "item.features_set", Actor: actorIn(ctx, s.id), OccurredAt: now,
+		Payload: mustJSON(map[string]any{"features": featureKeys})}
+	if err := fs.Store.SetTicketFeatures(ctx, it.ID, ids, now, e); err != nil {
+		return nil, err
+	}
+	return views, nil
+}
+
+// ticket loads an item and authorizes a on its project.
+func (fs *Features) ticket(ctx context.Context, itemKey string, a Action) (tracker.Item, featureScope, error) {
+	if fs.Items == nil {
+		return tracker.Item{}, featureScope{}, fmt.Errorf("%w: ticket links are not available", ErrNotFound)
+	}
+	id, err := caller(ctx)
+	if err != nil {
+		return tracker.Item{}, featureScope{}, err
+	}
+	it, err := fs.Items.ItemByKey(ctx, itemKey)
+	if err != nil {
+		return tracker.Item{}, featureScope{}, err
+	}
+	p, err := fs.Tenancy.ProjectByID(ctx, it.ProjectID)
+	if err != nil {
+		return tracker.Item{}, featureScope{}, err
+	}
+	org, err := fs.Tenancy.OrganizationByID(ctx, p.OrganizationID)
+	if err != nil {
+		return tracker.Item{}, featureScope{}, err
+	}
+	if err := fs.Authz.Authorize(ctx, id, a, Scope{Organization: org.Key, Project: p.Key}); err != nil {
+		return tracker.Item{}, featureScope{}, err
+	}
+	s, err := fs.scope(ctx, org.Key)
+	return it, s, err
+}
+
+// ballet is the actor of changes Ballet makes on its own.
+var ballet = event.Actor{Kind: event.ActorSystem, Subject: "ballet"}
+
+// SyncStatus moves every feature whose tickets progressed to the status
+// they imply (feature.DeliveryStatus), recording a revision caused by the
+// tickets. It returns the number of features changed.
+func (fs *Features) SyncStatus(ctx context.Context) (int, error) {
+	states, err := fs.Store.DeliveryStates(ctx)
+	if err != nil {
+		return 0, err
+	}
+	byFeature := map[string][]FeatureTicketState{}
+	var order []string
+	for _, st := range states {
+		if _, ok := byFeature[st.FeatureID]; !ok {
+			order = append(order, st.FeatureID)
+		}
+		byFeature[st.FeatureID] = append(byFeature[st.FeatureID], st)
+	}
+	changed := 0
+	for _, id := range order {
+		f, err := fs.Store.FeatureByID(ctx, id)
+		if err != nil {
+			return changed, err
+		}
+		tickets := byFeature[id]
+		ss := make([]tracker.State, len(tickets))
+		for i, t := range tickets {
+			ss[i] = t.State
+		}
+		next := feature.DeliveryStatus(f.Status, ss)
+		if next == f.Status {
+			continue
+		}
+		var keys []string
+		for _, t := range tickets {
+			if (next == feature.StatusLive && t.State == tracker.StateDone) || (next != feature.StatusLive && !tracker.Resolved(t.State)) {
+				keys = append(keys, t.TicketKey)
+			}
+		}
+		reason := map[feature.Status]string{
+			feature.StatusInProgress: "Work started: ",
+			feature.StatusChanging:   "Being changed: ",
+			feature.StatusLive:       "Delivered: ",
+		}[next] + strings.Join(keys, ", ")
+		updated := f
+		updated.Status, updated.Version, updated.UpdatedAt = next, f.Version+1, fs.Now()
+		w := fs.write(updated, ballet, reason, feature.Cause{Kind: "ticket", Ref: strings.Join(keys, ",")},
+			"feature.updated", map[string]any{"status": next})
+		err = fs.Store.UpdateFeature(ctx, w, f.Version)
+		if errors.Is(err, ErrConflict) {
+			continue // changed meanwhile; the next pass sees it
+		}
+		if err != nil {
+			return changed, err
+		}
+		changed++
+	}
+	return changed, nil
+}
+
+// StatusLoop runs SyncStatus every interval until ctx ends.
+func (fs *Features) StatusLoop(ctx context.Context, interval time.Duration, logger *slog.Logger) {
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if _, err := fs.SyncStatus(ctx); err != nil && ctx.Err() == nil {
+				logger.ErrorContext(ctx, "sync feature status failed", "error", err)
+			}
+		}
+	}
 }

@@ -104,6 +104,27 @@ func (s *Store) DecideChangeset(ctx context.Context, cs changeset.Changeset, exp
 		stmts = append(stmts, sqlstore.ExecOne(`UPDATE projects SET graph_version = graph_version + 1
 			WHERE id = ? AND graph_version = ?`, a.ProjectID, a.GraphVersion))
 	}
+	if len(a.FeatureCreates) > 0 {
+		// The keys of created features were predicted from this value.
+		stmts = append(stmts, featureSequenceStmt(a.OrganizationID, a.NextFeatureNumber, len(a.FeatureCreates)))
+	}
+	for _, w := range a.FeatureCreates {
+		create, err := s.createFeatureStmts(w)
+		if err != nil {
+			return fmt.Errorf("decide changeset: %w", err)
+		}
+		stmts = append(stmts, create...)
+	}
+	for _, w := range a.FeatureUpdates {
+		update, err := s.updateFeatureStmts(w.FeatureWrite, w.ExpectedVersion)
+		if err != nil {
+			return fmt.Errorf("decide changeset: %w", err)
+		}
+		stmts = append(stmts, update...)
+	}
+	for _, w := range a.FeatureLinks {
+		stmts = append(stmts, addLinkStmt(w.Link), s.AppendEvent(w.Event))
+	}
 	for _, w := range a.Creates {
 		create, err := createItemStmts(w.Item)
 		if err != nil {
@@ -120,6 +141,9 @@ func (s *Store) DecideChangeset(ctx context.Context, cs changeset.Changeset, exp
 	}
 	for _, w := range a.Dependencies {
 		stmts = append(stmts, insertDepStmt(w.Dependency), s.AppendEvent(w.Event))
+	}
+	for _, w := range a.TicketFeatures {
+		stmts = append(stmts, ticketFeatureStmts(w.ItemID, w.FeatureIDs, w.At)...)
 	}
 	stmts = append(stmts, s.AppendEvent(e))
 	return mapWriteErr("decide changeset", s.db.Batch(ctx, stmts...))

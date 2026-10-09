@@ -94,3 +94,38 @@ func TestFeaturesAPI_PolicyAndReviews(t *testing.T) {
 	code, body = call(t, api, "POST", "/api/v1/organizations/acme/features/F-1/revisions/x/review", "alice", `{"action":"confirm"}`)
 	assert.Equal(t, http.StatusBadRequest, code, body)
 }
+
+func TestFeaturesAPI_TicketsChangeFeatures(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	for _, req := range [][2]string{
+		{"/api/v1/organizations", `{"key":"acme","name":"Acme"}`},
+		{"/api/v1/organizations/acme/projects", `{"key":"WEB","name":"Web"}`},
+		{"/api/v1/organizations/acme/features", `{"title":"Export"}`},
+		{"/api/v1/projects/WEB/items", `{"kind":"ticket","title":"CSV"}`},
+	} {
+		code, body := call(t, api, "POST", req[0], "alice", req[1])
+		require.Equal(t, http.StatusCreated, code, body)
+	}
+	code, body := call(t, api, "PUT", "/api/v1/items/WEB-1/features", "alice", `{"features":["F-1"]}`)
+	require.Equal(t, http.StatusOK, code, body)
+	assert.Len(t, body["items"], 1)
+	code, body = call(t, api, "GET", "/api/v1/items/WEB-1/features", "alice", "")
+	require.Equal(t, http.StatusOK, code, body)
+	assert.Len(t, body["items"], 1)
+	code, d := call(t, api, "GET", "/api/v1/organizations/acme/features/F-1", "alice", "")
+	require.Equal(t, http.StatusOK, code, d)
+	require.Len(t, d["tickets"], 1)
+	assert.Equal(t, "WEB-1", d["tickets"].([]any)[0].(map[string]any)["key"])
+
+	code, body = call(t, api, "PUT", "/api/v1/items/WEB-1/features", "alice", `{"features":["F-7"]}`)
+	assert.Equal(t, http.StatusBadRequest, code, body)
+
+	code, cs := call(t, api, "POST", "/api/v1/projects/WEB/changesets", "alice", `{"title":"Plan","operations":[
+		{"kind":"create_feature","ref":"sched","feature":{"title":"Scheduled export"}},
+		{"kind":"link_features","feature_link":{"from":"$sched","to":"F-1","type":"derived_from"}},
+		{"kind":"create_item","ref":"job","create":{"kind":"ticket","title":"Nightly job","features":["$sched"]}}]}`)
+	require.Equal(t, http.StatusCreated, code, cs)
+	code, applied := call(t, api, "POST", "/api/v1/changesets/"+cs["id"].(string)+"/apply", "alice", `{"operations":[0,1,2]}`)
+	require.Equal(t, http.StatusOK, code, applied)
+	assert.Equal(t, "F-2", applied["results"].([]any)[0].(map[string]any)["key"])
+}

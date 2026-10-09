@@ -82,6 +82,7 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 	tracker := &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID}
 	pl := &app.Planner{Store: st, Tenancy: st, Authz: authz, LLM: toolLLM{}, Model: "m", MaxTokens: 10,
 		Now: time.Now, NewID: store.NewID, Context: t.Context()}
+	features := &app.Features{Store: st, Tenancy: st, Execution: st, Items: st, Authz: authz, Now: time.Now, NewID: store.NewID}
 	mux := http.NewServeMux()
 	httpapi.Register(mux, httpapi.Deps{
 		Authenticate: authn,
@@ -94,8 +95,8 @@ func newAPIWithPlanner(t *testing.T, authn func(http.Handler) http.Handler, auth
 		Search:       &app.Search{Store: st, Tenancy: st, Authz: authz},
 		Credentials:  &app.Credentials{Store: st, Tenancy: st, Authz: authz, Box: box, Now: time.Now, NewID: store.NewID},
 		Tracker:      tracker,
-		Features:     &app.Features{Store: st, Tenancy: st, Execution: st, Authz: authz, Now: time.Now, NewID: store.NewID},
-		Changesets:   &app.Changesets{Store: st, Tracker: tracker},
+		Features:     features,
+		Changesets:   &app.Changesets{Store: st, Tracker: tracker, Features: features},
 		Planner:      pl,
 		Execution:    &app.Execution{Store: st, Tenancy: st, Authz: authz, Now: time.Now},
 		AgentTracker: &app.AgentTracker{Reports: st, RunStore: st, Items: st, Tenancy: st, Authz: authz,

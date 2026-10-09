@@ -115,7 +115,16 @@ tickets with dependencies and acceptance criteria.
 
 You never change the plan directly. Propose changes as a plan changeset;
 the human approves it, wholly or in part. Keep tickets small, testable and
-independently understandable. Ask the human when requirements are unclear.`
+independently understandable. Ask the human when requirements are unclear.
+
+Plan feature first. The organization's feature map records what the product
+does, feature by feature, and how each feature evolved. Before planning,
+look at the features the work touches (list_features, get_feature). In the
+changeset, create the features the work adds (create_feature), change the
+description of features it changes (update_feature, describing the feature
+as it will be), link new features to the ones they grew out of
+(link_features), and list on every ticket the features it changes
+(features). Tickets carry out changes to features.`
 
 // Planner runs planner sessions (ADR-0020): one conversation loop per
 // session inside Core, calling the LLM with tools. Each turn runs in the

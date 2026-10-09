@@ -44,8 +44,9 @@ func (f *fakeKnowledge) Do(ctx context.Context, organization string, write bool,
 }
 
 type env struct {
-	tools   map[string]app.PlannerTool
-	tracker *app.Tracker
+	tools    map[string]app.PlannerTool
+	features *app.Features
+	tracker  *app.Tracker
 	cs      *app.Changesets
 	skills  *app.Skills
 	kn      *fakeKnowledge
@@ -73,14 +74,15 @@ func setup(t *testing.T) env {
 		require.NoError(t, err)
 	}
 	tr := &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: r, Now: time.Now, NewID: store.NewID}
+	fs := &app.Features{Store: st, Tenancy: st, Items: st, Authz: r, Now: time.Now, NewID: store.NewID}
 	e := env{
-		tracker: tr, cs: &app.Changesets{Store: st, Tracker: tr},
+		tracker: tr, cs: &app.Changesets{Store: st, Tracker: tr, Features: fs}, features: fs,
 		skills: &app.Skills{Store: st, Tenancy: st, Authz: r, Now: time.Now, NewID: store.NewID},
 		kn:     &fakeKnowledge{}, tools: map[string]app.PlannerTool{},
 	}
 	for _, tl := range plannertools.All(plannertools.Deps{
 		Tracker: tr, Changesets: e.cs, Skills: e.skills, Knowledge: e.kn,
-		Search: &app.Search{Store: st, Tenancy: st, Authz: r},
+		Search: &app.Search{Store: st, Tenancy: st, Authz: r}, Features: fs,
 	}) {
 		e.tools[tl.Spec().Name] = tl
 	}
@@ -98,7 +100,7 @@ func (e env) call(t *testing.T, ctx context.Context, name, input string) (string
 
 func TestTools_SchemasAreValidJSON(t *testing.T) {
 	e := setup(t)
-	assert.Len(t, e.tools, 12)
+	assert.Len(t, e.tools, 14)
 	for name, tl := range e.tools {
 		var schema map[string]any
 		require.NoError(t, json.Unmarshal(tl.Spec().InputSchema, &schema), name)
@@ -203,4 +205,44 @@ func TestTools_SkillsAndKnowledge(t *testing.T) {
 
 	_, err = e.call(t, bob, "search_project", `{"query":"anything"}`)
 	require.NoError(t, err)
+}
+
+func TestTools_FeaturesAndFeatureFirstChangesets(t *testing.T) {
+	e := setup(t)
+	bob := user(t, "bob", "devs")
+	_, err := e.features.Create(bob, "acme", app.CreateFeatureInput{Title: "Invoice export", Description: "CSV.",
+		ProjectKeys: []string{"WEB"}, Reason: "Finance asked"})
+	require.NoError(t, err)
+	_, err = e.features.Create(bob, "acme", app.CreateFeatureInput{Title: "Elsewhere"})
+	require.NoError(t, err)
+
+	out, err := e.call(t, bob, "list_features", `{}`)
+	require.NoError(t, err)
+	assert.JSONEq(t, `[{"key":"F-1","title":"Invoice export","status":"planned","projects":["WEB"]}]`, out, "this project's")
+	out, err = e.call(t, bob, "list_features", `{"all_projects":true}`)
+	require.NoError(t, err)
+	assert.Contains(t, out, "Elsewhere")
+
+	out, err = e.call(t, bob, "propose_changeset", `{"title":"PDF export","operations":[
+		{"kind":"update_feature","feature_update":{"feature":"F-1","description":"CSV and PDF."}},
+		{"kind":"create_feature","ref":"pdf","feature":{"title":"PDF rendering"}},
+		{"kind":"link_features","feature_link":{"from":"$pdf","to":"F-1","type":"derived_from"}},
+		{"kind":"create_item","ref":"t","create":{"kind":"ticket","title":"Render PDF","features":["F-1","$pdf"]}}]}`)
+	require.NoError(t, err)
+	var proposed map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &proposed))
+	_, err = e.cs.Apply(bob, proposed["changeset"].(string), []int{0, 1, 2, 3})
+	require.NoError(t, err)
+
+	out, err = e.call(t, bob, "get_feature", `{"key":"F-1"}`)
+	require.NoError(t, err)
+	var f map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &f))
+	assert.Equal(t, "CSV and PDF.", f["description"])
+	assert.Len(t, f["tickets"], 1)
+	assert.Len(t, f["links"], 1)
+	history := f["history"].([]any)
+	require.Len(t, history, 2)
+	assert.Equal(t, "Changeset “PDF export”", history[0].(map[string]any)["reason"])
+	assert.Equal(t, "Finance asked", history[1].(map[string]any)["reason"])
 }

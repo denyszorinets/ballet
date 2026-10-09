@@ -96,7 +96,9 @@
 						<span class:muted={cs.status === 'applied' && !cs.approved.includes(i)}
 							>{describe(op, cs.operations)}</span
 						>
-						{#if result?.key}
+						{#if result?.key && op.kind.endsWith('feature')}
+							<span class="mono">{result.key}</span>
+						{:else if result?.key}
 							<a class="mono" href={resolve('/items/[item]', { item: result.key })}>{result.key}</a>
 						{:else if cs.status === 'applied' && !cs.approved.includes(i)}
 							<span class="muted small">not applied</span>
