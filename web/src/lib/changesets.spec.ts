@@ -26,4 +26,29 @@ group('changeset operations', () => {
 		expect(describe(ops[2], ops)).toBe('“Login” (new) blocks WEB-7');
 		expect(describe(ops[3], ops)).toBe('Update WEB-7 (title): title → “Profile”');
 	});
+
+	it('describes feature operations and tracks their refs', () => {
+		const fops: Operation[] = [
+			{ kind: 'create_feature', ref: 'pdf', feature: { title: 'PDF export', projects: ['WEB'] } },
+			{
+				kind: 'update_feature',
+				feature_update: { feature: 'F-1', description: 'x', status: 'changing' }
+			},
+			{ kind: 'link_features', feature_link: { from: '$pdf', to: 'F-1', type: 'derived_from' } },
+			{
+				kind: 'create_item',
+				ref: 't',
+				create: { kind: 'ticket', title: 'Render', features: ['$pdf', 'F-1'] }
+			}
+		];
+		expect(requirements(fops)).toEqual([[], [], [0], [0]]);
+		expect(describe(fops[0], fops)).toBe('Create feature “PDF export” in WEB');
+		expect(describe(fops[1], fops)).toBe(
+			'Update feature F-1 (description, status): status → changing'
+		);
+		expect(describe(fops[2], fops)).toBe('“PDF export” (new) derived from F-1');
+		expect(describe(fops[3], fops)).toBe(
+			'Create ticket “Render”, changing “PDF export” (new), F-1'
+		);
+	});
 });

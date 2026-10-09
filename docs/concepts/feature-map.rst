@@ -78,9 +78,8 @@ Tickets derive from features
 
 .. note::
 
-   Planning features in changesets, ticket links and automatic status
-   arrive with :issue:`193`, and agents' tools with :issue:`194`. Until
-   then features and links are edited through the REST API.
+   Agents' own feature tools arrive with :issue:`194`; until then they
+   read and change features through the planner's changesets.
 
 Planning starts from features: the planner proposes the change to a
 feature and the tickets that carry it out, together in one changeset.

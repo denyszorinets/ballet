@@ -29,8 +29,9 @@ type Deps struct {
 	Tracker    *app.Tracker
 	Changesets *app.Changesets
 	Skills     *app.Skills
-	Search     *app.Search // nil: no search_project tool
-	Knowledge  Knowledge   // nil: no knowledge tools
+	Search     *app.Search   // nil: no search_project tool
+	Knowledge  Knowledge     // nil: no knowledge tools
+	Features   *app.Features // nil: no feature tools
 }
 
 // tool adapts a typed function to app.PlannerTool.
@@ -72,6 +73,9 @@ func All(d Deps) []app.PlannerTool {
 	}
 	if d.Search != nil {
 		tools = append(tools, searchProject(d))
+	}
+	if d.Features != nil {
+		tools = append(tools, listFeatures(d), getFeature(d))
 	}
 	if d.Knowledge != nil {
 		tools = append(tools, searchKnowledge(d), getKnowledge(d), createKnowledge(d), updateKnowledge(d))
@@ -215,25 +219,42 @@ const changesetSchema = `{"type":"object","required":["title","operations"],"pro
 	"title":{"type":"string","description":"short name of the change"},
 	"summary":{"type":"string","description":"Markdown: why these changes"},
 	"operations":{"type":"array","items":{"type":"object","required":["kind"],"properties":{
-		"kind":{"type":"string","enum":["create_item","update_item","add_dependency"]},
-		"ref":{"type":"string","description":"create_item: a name (lowercase, digits, - or _) later operations use as \"$name\""},
+		"kind":{"type":"string","enum":["create_item","update_item","add_dependency","create_feature","update_feature","link_features"]},
+		"ref":{"type":"string","description":"create_item, create_feature: a name (lowercase, digits, - or _) later operations use as \"$name\""},
 		"create":{"type":"object","required":["kind","title"],"properties":{
 			"kind":{"type":"string","enum":["milestone","epic","ticket"]},
 			"title":{"type":"string"},"description":{"type":"string"},
 			"type":{"type":"string","enum":["feature","bug","tech_debt","docs","spike"]},
 			"acceptance_criteria":{"type":"array","items":{"type":"string"}},
 			"epic":{"type":"string","description":"tickets: epic key or $ref"},
-			"milestone":{"type":"string","description":"tickets and epics: milestone key or $ref"}}},
+			"milestone":{"type":"string","description":"tickets and epics: milestone key or $ref"},
+			"features":{"type":"array","items":{"type":"string"},"description":"tickets: the features the ticket changes, as keys (F-3) or $refs of create_feature operations"}}},
 		"update":{"type":"object","required":["item"],"properties":{
 			"item":{"type":"string","description":"key of an existing item"},
 			"title":{"type":"string"},"description":{"type":"string"},
 			"type":{"type":"string","enum":["feature","bug","tech_debt","docs","spike"]},
 			"acceptance_criteria":{"type":"array","items":{"type":"string"}},
-			"epic":{"type":"string"},"milestone":{"type":"string"}}},
+			"epic":{"type":"string"},"milestone":{"type":"string"},
+			"features":{"type":"array","items":{"type":"string"},"description":"tickets: replaces the features it changes"}}},
 		"dependency":{"type":"object","required":["from","to","type"],"properties":{
 			"from":{"type":"string","description":"item key or $ref"},
 			"to":{"type":"string","description":"item key or $ref"},
-			"type":{"type":"string","enum":["blocks","relates"],"description":"blocks: from must be done before to starts"}}}}}}}}`
+			"type":{"type":"string","enum":["blocks","relates"],"description":"blocks: from must be done before to starts"}}},
+		"feature":{"type":"object","required":["title"],"description":"create_feature: a product capability on the organization's feature map","properties":{
+			"title":{"type":"string"},
+			"description":{"type":"string","description":"Markdown: what the feature does, as delivered"},
+			"status":{"type":"string","enum":["planned","in_progress","live","changing","deprecated","removed"]},
+			"projects":{"type":"array","items":{"type":"string"},"description":"project keys; default this project"}}},
+		"feature_update":{"type":"object","required":["feature"],"properties":{
+			"feature":{"type":"string","description":"key of an existing feature, e.g. F-3"},
+			"title":{"type":"string"},"description":{"type":"string","description":"the full new description"},
+			"status":{"type":"string","enum":["planned","in_progress","live","changing","deprecated","removed"]},
+			"projects":{"type":"array","items":{"type":"string"}}}},
+		"feature_link":{"type":"object","required":["from","to","type"],"properties":{
+			"from":{"type":"string","description":"feature key or $ref"},
+			"to":{"type":"string","description":"feature key or $ref"},
+			"type":{"type":"string","enum":["derived_from","split_from","merged_into","supersedes","depends_on","relates"],
+				"description":"read \"from <type> to\", e.g. a new feature derived_from the one it grew out of"}}}}}}}}`
 
 func proposeChangeset(d Deps) app.PlannerTool {
 	type in struct {

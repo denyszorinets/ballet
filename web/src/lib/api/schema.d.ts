@@ -689,6 +689,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/{item}/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        /** The features a ticket changes */
+        get: operations["listTicketFeatures"];
+        /** Replace the features a ticket changes (tracker.write on its project) */
+        put: operations["setTicketFeatures"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations/{organization}/feature-graph": {
         parameters: {
             query?: never;
@@ -1795,6 +1816,13 @@ export interface components {
             version: number;
             /** @description Current links from and to the feature */
             links: components["schemas"]["FeatureLink"][];
+            /** @description Tickets that change the feature */
+            tickets: {
+                key: string;
+                title: string;
+                state: components["schemas"]["ItemState"];
+                project: string;
+            }[];
         };
         CreateFeature: {
             title: string;
@@ -2508,6 +2536,8 @@ export interface components {
             policy?: components["schemas"]["Policy"];
             epic?: components["schemas"]["ItemReference"];
             milestone?: components["schemas"]["ItemReference"];
+            /** @description Tickets: the features the ticket changes, as keys (F-3) or $refs of create_feature operations */
+            features?: string[];
         };
         ChangesetUpdateItem: {
             /** @description Key of an existing item */
@@ -2521,6 +2551,8 @@ export interface components {
             epic?: string;
             /** @description Item reference; "" removes the milestone */
             milestone?: string;
+            /** @description Tickets: replaces the features the ticket changes */
+            features?: string[];
         };
         ChangesetDependency: {
             from: components["schemas"]["ItemReference"];
@@ -2534,18 +2566,45 @@ export interface components {
         /** @description Exactly the payload matching kind is set. */
         ChangesetOperation: {
             /** @enum {string} */
-            kind: "create_item" | "update_item" | "add_dependency";
-            /** @description create_item: name later operations use as $ref */
+            kind: "create_item" | "update_item" | "add_dependency" | "create_feature" | "update_feature" | "link_features";
+            /** @description create_item, create_feature: name later operations use as $ref */
             ref?: string;
             create?: components["schemas"]["ChangesetCreateItem"];
             update?: components["schemas"]["ChangesetUpdateItem"];
             dependency?: components["schemas"]["ChangesetDependency"];
+            feature?: components["schemas"]["ChangesetCreateFeature"];
+            feature_update?: components["schemas"]["ChangesetUpdateFeature"];
+            feature_link?: components["schemas"]["ChangesetLinkFeatures"];
+        };
+        ChangesetCreateFeature: {
+            title: string;
+            description?: string;
+            status?: components["schemas"]["FeatureStatus"];
+            /** @description Project keys; default the changeset's project */
+            projects?: string[];
+        };
+        ChangesetUpdateFeature: {
+            /** @description Key of an existing feature */
+            feature: string;
+            title?: string;
+            description?: string;
+            status?: components["schemas"]["FeatureStatus"];
+            projects?: string[];
+        };
+        ChangesetLinkFeatures: {
+            /** @description Feature key or $ref */
+            from: string;
+            /** @description Feature key or $ref */
+            to: string;
+            type: components["schemas"]["FeatureLinkType"];
         };
         ChangesetResult: {
-            /** @description Created or updated item */
+            /** @description Created or updated item or feature */
             key?: string;
             /** @description Added dependency ID */
             dependency?: string;
+            /** @description Added feature link ID */
+            feature_link?: string;
         };
         Changeset: {
             id: string;
@@ -4079,6 +4138,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listTicketFeatures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setTicketFeatures: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Item key, e.g. WEB-42 */
+                item: components["parameters"]["Item"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Feature keys */
+                    features: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FeatureList"];
+                };
             };
             default: components["responses"]["Error"];
         };

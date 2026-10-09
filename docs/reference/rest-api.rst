@@ -487,8 +487,9 @@ revision.
    revision.
 
 ``GET /api/v1/organizations/{organization}/features/{feature}`` → ``200``
-   The feature with ``links``: its current links from and to features
-   the caller can see.
+   The feature with ``links`` — its current links from and to features
+   the caller can see — and ``tickets``: ``{"key", "title", "state",
+   "project"}`` of the tickets that change it.
 
 ``PATCH /api/v1/organizations/{organization}/features/{feature}`` → ``200``
    ``{"version", "title"?, "description"?, "status"?, "projects"?,
@@ -524,6 +525,21 @@ revision.
 
 ``DELETE /api/v1/organizations/{organization}/feature-links/{link}`` → ``204``
    The link ends now; it stays in the map's history.
+
+``GET /api/v1/items/{item}/features`` → ``200`` list
+   The features a ticket changes.
+
+``PUT /api/v1/items/{item}/features`` — ``{"features": ["F-3"]}`` → ``200`` list
+   Replaces them (``tracker.write`` on the ticket's project). Only
+   tickets change features.
+
+**Status follows tickets.** Every few seconds Core moves features whose
+tickets progressed: ``planned`` → ``in_progress`` when one starts
+(``in_progress``, ``waiting_for_answer`` or ``paused``), ``live`` →
+``changing`` when work on a live feature starts, and to ``live`` when
+every ticket is resolved and at least one is done. Each move is a
+revision by ``ballet`` (a system actor, no review) naming the tickets.
+``deprecated`` and ``removed`` features are left alone.
 
 ``GET /api/v1/organizations/{organization}/feature-graph[?at=&project=]`` → ``200``
    The map as it was at ``at`` (RFC 3339; default now): ``{"at",
@@ -824,6 +840,28 @@ changeset. ``create`` takes the fields of a new item
 (:ref:`reference-rest-items`); ``update`` changes only the fields it
 lists (``""`` for ``epic`` or ``milestone`` removes the relation).
 
+Operations on the organization's feature map (:ref:`reference-rest-features`):
+
+.. code-block:: json
+
+   {"kind": "create_feature", "ref": "pdf",
+    "feature": {"title": "PDF export", "description": "…", "projects": ["WEB"]}}
+
+   {"kind": "update_feature",
+    "feature_update": {"feature": "F-3", "description": "Exports as CSV and PDF."}}
+
+   {"kind": "link_features",
+    "feature_link": {"from": "$pdf", "to": "F-3", "type": "derived_from"}}
+
+A ticket lists the features it changes in ``features`` (on
+``create_item``, or replacing them on ``update_item``). Feature
+references are feature keys or ``$`` followed by the ``ref`` of an
+earlier ``create_feature``. ``create_feature`` defaults ``projects`` to
+the changeset's project and ``status`` to ``planned``. Applying a
+feature operation needs ``tracker.write`` on the feature's projects;
+each recorded revision has the reason "Changeset “*title*”" and the
+changeset as its cause.
+
 ``POST /api/v1/projects/{project}/changesets`` — ``{"title", "summary"?, "operations"}`` → ``201``
    Validates every operation against the current project as if all were
    approved (fields, references, relation kinds, no duplicate or cyclic
@@ -838,8 +876,9 @@ lists (``""`` for ``epic`` or ``milestone`` removes the relation).
    "proposed_by", "created_at", "decided_by"?, "decided_at"?, "approved",
    "results", "version"}``. Once applied, ``approved`` lists the applied
    operations (0-based) and ``results`` has one entry per operation:
-   ``{"key"}`` for created or updated items, ``{"dependency"}`` for added
-   dependencies, ``{}`` for operations that were not approved.
+   ``{"key"}`` for created or updated items and features,
+   ``{"dependency"}`` for added dependencies, ``{"feature_link"}`` for
+   added feature links, ``{}`` for operations that were not approved.
 
 ``POST /api/v1/changesets/{changeset}/apply`` — ``{"operations": [0, 1, 4]}`` → ``200``
    Applies exactly the listed operations in one atomic write and marks

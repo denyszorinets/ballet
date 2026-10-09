@@ -57,9 +57,19 @@ Tools
      - The project's changesets, optionally by ``status``
      - ``tracker.read``
    * - ``propose_changeset``
-     - Propose create / update / dependency operations for the human to
+     - Propose create / update / dependency operations, and feature
+       operations (``create_feature``, ``update_feature``,
+       ``link_features``, ``features`` on tickets), for the human to
        approve
      - ``tracker.write``
+   * - ``list_features``
+     - The organization's features (this project's by default;
+       ``all_projects``, ``status``)
+     - ``tracker.read``
+   * - ``get_feature``
+     - A feature's description, links, tickets and its latest ten
+       revisions with reasons
+     - ``tracker.read``
    * - ``list_skills``
      - The project's effective skills (name, scope, version)
      - ``skill.read``

@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/denyszorinets/ballet/core/internal/domain/changeset"
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
+	"github.com/denyszorinets/ballet/core/internal/domain/feature"
 	"github.com/denyszorinets/ballet/core/internal/domain/tenancy"
 	"github.com/denyszorinets/ballet/core/internal/domain/tracker"
 	"github.com/denyszorinets/ballet/kit/auth"
@@ -37,6 +40,35 @@ type ChangesetApplication struct {
 	Creates        []ItemWrite
 	Updates        []ItemWrite
 	Dependencies   []DependencyWrite
+
+	// The feature map (ADR-0028): created features take their keys from
+	// the organization's feature sequence, guarded at NextFeatureNumber;
+	// updated features are guarded by their versions.
+	OrganizationID    string
+	NextFeatureNumber int64
+	FeatureCreates    []FeatureWrite
+	FeatureUpdates    []FeatureUpdateWrite
+	FeatureLinks      []FeatureLinkWrite
+	TicketFeatures    []TicketFeaturesWrite // after Creates
+}
+
+// FeatureUpdateWrite is an updated feature, guarded by its version.
+type FeatureUpdateWrite struct {
+	FeatureWrite
+	ExpectedVersion int64
+}
+
+// FeatureLinkWrite is an added feature link with its event.
+type FeatureLinkWrite struct {
+	Link  feature.Link
+	Event event.Event
+}
+
+// TicketFeaturesWrite replaces the features a ticket changes.
+type TicketFeaturesWrite struct {
+	ItemID     string
+	FeatureIDs []string
+	At         time.Time
 }
 
 // ItemWrite is a created or updated item with its event.
@@ -56,8 +88,9 @@ type DependencyWrite struct {
 // tracker.write on the project; applying additionally needs a human
 // caller: the planner proposes, only humans approve.
 type Changesets struct {
-	Store   ChangesetStore
-	Tracker *Tracker
+	Store    ChangesetStore
+	Tracker  *Tracker
+	Features *Features // nil: feature operations are refused
 }
 
 // ChangesetView is a changeset with its project's key.
@@ -239,8 +272,12 @@ func (cs *Changesets) build(ctx context.Context, ch changeset.Changeset, approve
 	if err != nil {
 		return ChangesetApplication{}, nil, err
 	}
-	a := ChangesetApplication{ProjectID: p.ID, NextItemNumber: next, GraphVersion: graphVersion}
+	a := ChangesetApplication{ProjectID: p.ID, NextItemNumber: next, GraphVersion: graphVersion, OrganizationID: c.ID}
 	results := make([]changeset.Result, len(ch.Ops))
+	fb, err := cs.featureBuild(ctx, ch, c, p, id)
+	if err != nil {
+		return ChangesetApplication{}, nil, err
+	}
 	created := map[string]tracker.Item{} // by ref
 	updated := map[string]bool{}         // item IDs
 	actor := actorOf(id)
@@ -290,6 +327,10 @@ func (cs *Changesets) build(ctx context.Context, ch changeset.Changeset, approve
 			if errors.As(err, &se) {
 				return ChangesetApplication{}, nil, se.error
 			}
+			if errors.Is(err, ErrInvalid) { // keep one "invalid argument" prefix
+				return ChangesetApplication{}, nil, fmt.Errorf("%w: operation %d: %s", ErrInvalid, i+1,
+					strings.TrimPrefix(err.Error(), ErrInvalid.Error()+": "))
+			}
 			return ChangesetApplication{}, nil, fmt.Errorf("%w: operation %d: %w", ErrInvalid, i+1, err)
 		}
 		switch op.Kind {
@@ -317,6 +358,13 @@ func (cs *Changesets) build(ctx context.Context, ch changeset.Changeset, approve
 			}
 			if err := it.Validate(); err != nil {
 				return fail(err)
+			}
+			if len(in.Features) > 0 {
+				ids, err := fb.ids(in.Features)
+				if err != nil {
+					return fail(err)
+				}
+				a.TicketFeatures = append(a.TicketFeatures, TicketFeaturesWrite{ItemID: it.ID, FeatureIDs: ids, At: now})
 			}
 			next++
 			created[op.Ref] = it
@@ -363,6 +411,17 @@ func (cs *Changesets) build(ctx context.Context, ch changeset.Changeset, approve
 				}
 				changed["milestone"] = *in.Milestone
 			}
+			if in.Features != nil {
+				if it.Kind != tracker.KindTicket {
+					return fail(fmt.Errorf("%s is a %s; only tickets change features", it.Key, it.Kind))
+				}
+				ids, err := fb.ids(*in.Features)
+				if err != nil {
+					return fail(err)
+				}
+				a.TicketFeatures = append(a.TicketFeatures, TicketFeaturesWrite{ItemID: it.ID, FeatureIDs: ids, At: now})
+				changed["features"] = *in.Features
+			}
 			if err := it.Validate(); err != nil {
 				return fail(err)
 			}
@@ -400,8 +459,14 @@ func (cs *Changesets) build(ctx context.Context, ch changeset.Changeset, approve
 				Actor: actor, OccurredAt: now,
 				Payload: mustJSON(map[string]any{"from": keys[d.FromID], "to": keys[d.ToID], "type": d.Type, "changeset": ch.ID}),
 			}})
+
+		case changeset.OpCreateFeature, changeset.OpUpdateFeature, changeset.OpLinkFeatures:
+			if err := fb.apply(ctx, op, &a, &results[i]); err != nil {
+				return fail(err)
+			}
 		}
 	}
+	a.NextFeatureNumber = fb.first
 	return a, results, nil
 }
 

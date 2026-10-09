@@ -517,6 +517,32 @@ paths:
         "204": { description: Removed }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/items/{item}/features:
+    parameters: [{ $ref: "#/components/parameters/Item" }]
+    get:
+      operationId: listTicketFeatures
+      tags: [features]
+      summary: The features a ticket changes
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FeatureList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      operationId: setTicketFeatures
+      tags: [features]
+      summary: Replace the features a ticket changes (tracker.write on its project)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [features]
+              properties: { features: { type: array, items: { type: string }, description: Feature keys } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FeatureList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/organizations/{organization}/feature-graph:
     parameters: [{ $ref: "#/components/parameters/Organization" }]
     get:
@@ -1388,7 +1414,7 @@ components:
     FeatureDetail:
       type: object
       additionalProperties: false
-      required: [key, organization, title, description, status, projects, created_at, updated_at, version, links]
+      required: [key, organization, title, description, status, projects, created_at, updated_at, version, links, tickets]
       properties:
         key: { type: string }
         organization: { type: string }
@@ -1400,6 +1426,18 @@ components:
         updated_at: { type: string, format: date-time }
         version: { type: integer, format: int64 }
         links: { type: array, items: { $ref: "#/components/schemas/FeatureLink" }, description: Current links from and to the feature }
+        tickets:
+          type: array
+          description: Tickets that change the feature
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, title, state, project]
+            properties:
+              key: { type: string }
+              title: { type: string }
+              state: { $ref: "#/components/schemas/ItemState" }
+              project: { type: string }
     CreateFeature:
       type: object
       additionalProperties: false
@@ -2095,6 +2133,7 @@ components:
         policy: { $ref: "#/components/schemas/Policy" }
         epic: { $ref: "#/components/schemas/ItemReference" }
         milestone: { $ref: "#/components/schemas/ItemReference" }
+        features: { type: array, items: { type: string }, description: "Tickets: the features the ticket changes, as keys (F-3) or $refs of create_feature operations" }
     ChangesetUpdateItem:
       type: object
       additionalProperties: false
@@ -2108,6 +2147,7 @@ components:
         policy: { $ref: "#/components/schemas/Policy" }
         epic: { type: string, description: 'Item reference; "" removes the epic' }
         milestone: { type: string, description: 'Item reference; "" removes the milestone' }
+        features: { type: array, items: { type: string }, description: "Tickets: replaces the features the ticket changes" }
     ChangesetDependency:
       type: object
       additionalProperties: false
@@ -2122,17 +2162,48 @@ components:
       required: [kind]
       description: Exactly the payload matching kind is set.
       properties:
-        kind: { type: string, enum: [create_item, update_item, add_dependency] }
-        ref: { type: string, description: "create_item: name later operations use as $ref" }
+        kind: { type: string, enum: [create_item, update_item, add_dependency, create_feature, update_feature, link_features] }
+        ref: { type: string, description: "create_item, create_feature: name later operations use as $ref" }
         create: { $ref: "#/components/schemas/ChangesetCreateItem" }
         update: { $ref: "#/components/schemas/ChangesetUpdateItem" }
         dependency: { $ref: "#/components/schemas/ChangesetDependency" }
+        feature: { $ref: "#/components/schemas/ChangesetCreateFeature" }
+        feature_update: { $ref: "#/components/schemas/ChangesetUpdateFeature" }
+        feature_link: { $ref: "#/components/schemas/ChangesetLinkFeatures" }
+    ChangesetCreateFeature:
+      type: object
+      additionalProperties: false
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/FeatureStatus" }
+        projects: { type: array, items: { type: string }, description: "Project keys; default the changeset's project" }
+    ChangesetUpdateFeature:
+      type: object
+      additionalProperties: false
+      required: [feature]
+      properties:
+        feature: { type: string, description: Key of an existing feature }
+        title: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/FeatureStatus" }
+        projects: { type: array, items: { type: string } }
+    ChangesetLinkFeatures:
+      type: object
+      additionalProperties: false
+      required: [from, to, type]
+      properties:
+        from: { type: string, description: "Feature key or $ref" }
+        to: { type: string, description: "Feature key or $ref" }
+        type: { $ref: "#/components/schemas/FeatureLinkType" }
     ChangesetResult:
       type: object
       additionalProperties: false
       properties:
-        key: { type: string, description: Created or updated item }
+        key: { type: string, description: Created or updated item or feature }
         dependency: { type: string, description: Added dependency ID }
+        feature_link: { type: string, description: Added feature link ID }
     Changeset:
       type: object
       additionalProperties: false
