@@ -54,20 +54,18 @@ test('admins pause, resume and kill a project', async ({ page }) => {
 
 test('engineers see the state but no controls', async ({ page }) => {
 	await open(page, [{ role: 'engineer', scope: 'customer:acme' }], '/projects/WEB', {
-		pauses: [
-			{ scope: 'organization', paused_by: 'user-alice', paused_at: new Date().toISOString() }
-		]
+		pauses: [{ scope: 'platform', paused_by: 'user-alice', paused_at: new Date().toISOString() }]
 	});
 	const control = page.getByRole('region', { name: 'Autonomous work' });
 	await expect(control.getByRole('status')).toContainText('all autonomous work is paused');
 	await expect(control.getByRole('button')).toHaveCount(0);
 });
 
-test('organization admins pause everything from the home page', async ({ page }) => {
-	const core = await open(page, [{ role: 'org-admin', scope: 'organization' }], '/');
+test('platform admins pause everything from the home page', async ({ page }) => {
+	const core = await open(page, [{ role: 'platform-admin', scope: 'platform' }], '/');
 	const control = page.getByRole('region', { name: 'Autonomous work' });
-	await expect(control).toContainText('the organization is running');
+	await expect(control).toContainText('the platform is running');
 	await control.getByRole('button', { name: 'Pause' }).click();
 	await expect(control.getByRole('status')).toContainText('Paused');
-	expect(core.pauses[0].scope).toBe('organization');
+	expect(core.pauses[0].scope).toBe('platform');
 });

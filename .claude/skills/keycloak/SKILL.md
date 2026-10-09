@@ -40,7 +40,7 @@ fail issuer validation.
 
 | User | Password | Groups | Intended role |
 |---|---|---|---|
-| alice | alice | ballet-admins | organization admin |
+| alice | alice | ballet-admins | platform admin |
 | bob | bob | acme-devs | engineer for customer "acme" |
 | carol | carol | acme-viewers | viewer for customer "acme" |
 
@@ -60,12 +60,12 @@ TOKEN=$(scripts/dev-token.sh bob)
 curl -H "Authorization: Bearer $TOKEN" localhost:8080/api/v1/me
 ```
 
-Run Core against it (alice becomes org-admin through the bootstrap
+Run Core against it (alice becomes platform-admin through the bootstrap
 binding; bob and carol need role bindings created by alice):
 
 ```bash
 BALLET_CORE_OIDC_ISSUER_URL=http://localhost:8180/realms/ballet \
-BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS=groups:ballet-admins \
+BALLET_CORE_RBAC_BOOTSTRAP_PLATFORM_ADMINS=groups:ballet-admins \
   go run ./core/cmd/core
 ```
 

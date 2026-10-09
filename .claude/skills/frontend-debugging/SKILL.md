@@ -36,7 +36,7 @@ the background (see the keycloak skill):
 ```bash
 nohup scripts/dev-keycloak.sh > /tmp/keycloak.log 2>&1 &
 BALLET_CORE_OIDC_ISSUER_URL=http://localhost:8180/realms/ballet \
-BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS=groups:ballet-admins \
+BALLET_CORE_RBAC_BOOTSTRAP_PLATFORM_ADMINS=groups:ballet-admins \
   go run ./core/cmd/core &                  # Core on :8080
 cd web && bun run dev --host localhost --port 5173 &
 ```
@@ -44,7 +44,7 @@ cd web && bun run dev --host localhost --port 5173 &
 Open **http://localhost:5173** (not 127.0.0.1 — the redirect URI is
 registered for localhost). Vite proxies `/api`, `/rpc` (WebSocket),
 `/config.json` and `/healthz` to Core (see `web/vite.config.ts`). Sign
-in as alice/alice (org admin), bob/bob or carol/carol.
+in as alice/alice (platform admin), bob/bob or carol/carol.
 
 ## Look at the UI (Playwright MCP)
 

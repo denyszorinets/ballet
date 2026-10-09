@@ -23,14 +23,14 @@ func bind(role rbac.Role, scope rbac.BindingScope) rbac.Binding {
 }
 
 var (
-	org     = rbac.BindingScope{Kind: rbac.ScopeOrganization}
-	acme    = rbac.BindingScope{Kind: rbac.ScopeCustomer, Customer: "acme"}
-	acmeWeb = rbac.BindingScope{Kind: rbac.ScopeProject, Customer: "acme", Project: "WEB"}
+	platform = rbac.BindingScope{Kind: rbac.ScopePlatform}
+	acme     = rbac.BindingScope{Kind: rbac.ScopeCustomer, Customer: "acme"}
+	acmeWeb  = rbac.BindingScope{Kind: rbac.ScopeProject, Customer: "acme", Project: "WEB"}
 )
 
 // expected[role] lists the actions each role grants; everything else is denied.
 var expected = map[rbac.Role][]rbac.Action{
-	rbac.RoleOrgAdmin: rbac.AllActions,
+	rbac.RolePlatformAdmin: rbac.AllActions,
 	rbac.RoleCustomerAdmin: {
 		rbac.ActCustomerRead, rbac.ActCustomerUpdate, rbac.ActProjectCreate, rbac.ActProjectRead,
 		rbac.ActProjectUpdate, rbac.ActRoleBindingManage, rbac.ActRoleBindingRead,
@@ -65,12 +65,12 @@ func TestAllowed_ScopeCoverage(t *testing.T) {
 		target  rbac.Target
 		want    bool
 	}{
-		{"org binding covers org-level action", bind(rbac.RoleOrgAdmin, org), rbac.ActCustomerCreate, rbac.Target{}, true},
-		{"org binding covers any project", bind(rbac.RoleOrgAdmin, org), rbac.ActProjectUpdate, rbac.Target{Customer: "x", Project: "Y"}, true},
+		{"platform binding covers platform-level action", bind(rbac.RolePlatformAdmin, platform), rbac.ActCustomerCreate, rbac.Target{}, true},
+		{"platform binding covers any project", bind(rbac.RolePlatformAdmin, platform), rbac.ActProjectUpdate, rbac.Target{Customer: "x", Project: "Y"}, true},
 		{"customer binding covers its customer", bind(rbac.RoleViewer, acme), rbac.ActCustomerRead, rbac.Target{Customer: "acme"}, true},
 		{"customer binding covers its projects", bind(rbac.RoleViewer, acme), rbac.ActProjectRead, rbac.Target{Customer: "acme", Project: "WEB"}, true},
 		{"customer binding does not cover other customer", bind(rbac.RoleViewer, acme), rbac.ActCustomerRead, rbac.Target{Customer: "globex"}, false},
-		{"customer binding does not cover org level", bind(rbac.RoleCustomerAdmin, acme), rbac.ActCustomerCreate, rbac.Target{}, false},
+		{"customer binding does not cover platform level", bind(rbac.RoleCustomerAdmin, acme), rbac.ActCustomerCreate, rbac.Target{}, false},
 		{"project binding covers its project", bind(rbac.RoleViewer, acmeWeb), rbac.ActProjectRead, rbac.Target{Customer: "acme", Project: "WEB"}, true},
 		{"project binding sees parent customer", bind(rbac.RoleViewer, acmeWeb), rbac.ActCustomerRead, rbac.Target{Customer: "acme"}, true},
 		{"project binding does not cover sibling project", bind(rbac.RoleViewer, acmeWeb), rbac.ActProjectRead, rbac.Target{Customer: "acme", Project: "APP"}, false},
@@ -86,7 +86,7 @@ func TestAllowed_ScopeCoverage(t *testing.T) {
 }
 
 func TestAllowed_RequiresMatchingClaim(t *testing.T) {
-	b := bind(rbac.RoleOrgAdmin, org)
+	b := bind(rbac.RolePlatformAdmin, platform)
 
 	assert.False(t, rbac.Allowed([]rbac.Binding{b}, groups("other"), rbac.ActCustomerRead, rbac.Target{Customer: "acme"}))
 	assert.False(t, rbac.Allowed([]rbac.Binding{b}, map[string]any{}, rbac.ActCustomerRead, rbac.Target{Customer: "acme"}))
@@ -102,17 +102,17 @@ func TestBinding_Matches(t *testing.T) {
 }
 
 func TestBinding_Validate(t *testing.T) {
-	assert.NoError(t, bind(rbac.RoleOrgAdmin, org).Validate())
+	assert.NoError(t, bind(rbac.RolePlatformAdmin, platform).Validate())
 	assert.NoError(t, bind(rbac.RoleEngineer, acmeWeb).Validate())
-	assert.Error(t, bind(rbac.RoleOrgAdmin, acme).Validate(), "org-admin only at organization scope")
+	assert.Error(t, bind(rbac.RolePlatformAdmin, acme).Validate(), "platform-admin only at platform scope")
 	assert.Error(t, bind(rbac.RoleCustomerAdmin, acmeWeb).Validate())
-	assert.Error(t, bind("superuser", org).Validate())
-	assert.Error(t, rbac.Binding{Claim: "", Value: "x", Role: rbac.RoleViewer, Scope: org}.Validate())
+	assert.Error(t, bind("superuser", platform).Validate())
+	assert.Error(t, rbac.Binding{Claim: "", Value: "x", Role: rbac.RoleViewer, Scope: platform}.Validate())
 }
 
 func TestParseScope(t *testing.T) {
 	for in, want := range map[string]rbac.BindingScope{
-		"organization":  org,
+		"platform":      platform,
 		"customer:acme": {Kind: rbac.ScopeCustomer, Customer: "acme"},
 		"project:WEB":   {Kind: rbac.ScopeProject, Project: "WEB"},
 	} {
@@ -130,7 +130,7 @@ func TestParseScope(t *testing.T) {
 func TestParseBootstrap(t *testing.T) {
 	b, err := rbac.ParseBootstrap("groups:ballet-admins")
 	require.NoError(t, err)
-	assert.Equal(t, rbac.RoleOrgAdmin, b.Role)
+	assert.Equal(t, rbac.RolePlatformAdmin, b.Role)
 	assert.True(t, b.Bootstrap)
 	assert.True(t, b.Matches(groups("ballet-admins")))
 

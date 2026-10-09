@@ -98,7 +98,7 @@ URL of the OIDC issuer; its discovery document must be at
 service does not start if the issuer is unreachable.
 
 **Empty (the default): no authentication.** Every caller — the web UI,
-REST and realtime clients — is the same *local user*, an organization
+REST and realtime clients — is the same *local user*, a platform
 admin (subject ``local``), and Core listens on ``localhost`` only unless
 ``[server] addr`` names a host. This suits one person on their own
 machine; set an issuer for several users, tenants and role-based access
@@ -139,10 +139,10 @@ migrations are applied at startup. Back it up together with
 ``[rbac]`` (core)
 -----------------
 
-``bootstrap_org_admins``
-~~~~~~~~~~~~~~~~~~~~~~~~
+``bootstrap_platform_admins``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Claim matchers granted ``org-admin`` at organization scope, independent
+Claim matchers granted ``platform-admin`` at platform scope, independent
 of stored role bindings (:doc:`/architecture/security`). Each entry is
 ``claim:value``; the claim must equal the value or, for list claims,
 contain it. Without any entry, only stored bindings grant access — a
@@ -151,7 +151,7 @@ fresh installation is then unusable, so Core logs a warning.
 :Type: list of strings
 :Default: ``[]``
 :Example: ``["groups:ballet-admins"]``
-:Environment: ``BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS`` (comma-separated)
+:Environment: ``BALLET_CORE_RBAC_BOOTSTRAP_PLATFORM_ADMINS`` (comma-separated)
 
 .. _reference-config-tokens:
 

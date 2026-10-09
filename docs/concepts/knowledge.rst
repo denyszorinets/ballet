@@ -13,7 +13,7 @@ customer's projects. Knowledge never crosses between customers: every
 request is bound to a single customer by the caller's identity, and the
 service refuses anything else.
 
-Organization-wide engineering knowledge (standards, practices) is *not*
+Platform-wide engineering knowledge (standards, practices) is *not*
 stored in customer spaces; it is distributed as :doc:`skills`.
 
 What is stored

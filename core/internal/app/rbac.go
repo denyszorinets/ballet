@@ -98,11 +98,11 @@ type CreateRoleBindingInput struct {
 	Claim string
 	Value string
 	Role  string
-	Scope string // "organization", "customer:<key>" or "project:<key>"
+	Scope string // "platform", "customer:<key>" or "project:<key>"
 }
 
 // Create adds a binding. The caller needs role_binding.manage at the
-// binding's scope; organization-scope bindings therefore need an org-admin.
+// binding's scope; platform-scope bindings therefore need a platform-admin.
 func (rb *RoleBindings) Create(ctx context.Context, in CreateRoleBindingInput) (rbac.Binding, error) {
 	id, err := caller(ctx)
 	if err != nil {
@@ -164,7 +164,7 @@ func (rb *RoleBindings) Delete(ctx context.Context, bindingID string) error {
 
 // resolve checks that the scope's customer/project exist, fills in the
 // customer of a project scope, and returns the customer's ID ("" for
-// organization scope).
+// platform scope).
 func (rb *RoleBindings) resolve(ctx context.Context, s *rbac.BindingScope) (string, error) {
 	switch s.Kind {
 	case rbac.ScopeCustomer:

@@ -4,7 +4,7 @@ import { fakeOIDC } from './fixtures/oidc';
 
 const gitflow: FakeSkill = {
 	id: 's1',
-	scope: 'organization',
+	scope: 'platform',
 	name: 'gitflow',
 	description: 'Branching rules',
 	body: '# Gitflow\n\nBranch from develop.',
@@ -41,10 +41,10 @@ async function open(page: Page, me: { role: string; scope: string }[], path: str
 	return core;
 }
 
-const orgAdmin = [{ role: 'org-admin', scope: 'organization' }];
+const platformAdmin = [{ role: 'platform-admin', scope: 'platform' }];
 
 test('skills are listed per scope and created', async ({ page }) => {
-	await open(page, orgAdmin, '/skills');
+	await open(page, platformAdmin, '/skills');
 
 	await expect(page.getByRole('link', { name: 'gitflow' })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'code-review' })).toHaveCount(0);
@@ -73,7 +73,7 @@ test('a customer engineer sees their customer scope and cannot edit', async ({ p
 });
 
 test('editing, publishing and comparing versions', async ({ page }) => {
-	const core = await open(page, orgAdmin, '/skills/s1');
+	const core = await open(page, platformAdmin, '/skills/s1');
 
 	await expect(page.getByTestId('latest')).toHaveText('v2');
 	await expect(page.getByText('Unpublished changes')).toHaveCount(0);
@@ -126,7 +126,7 @@ test('project skills: pin a version, disable and re-enable', async ({ page }) =>
 	await page.getByRole('main').getByRole('link', { name: 'Skills' }).click();
 
 	const row = (name: string) => page.getByRole('row').filter({ hasText: name });
-	await expect(row('gitflow')).toContainText('organization');
+	await expect(row('gitflow')).toContainText('platform');
 	await expect(row('code-review')).toContainText('customer:acme');
 
 	await page.getByLabel('Version of gitflow').selectOption('v1');

@@ -21,10 +21,10 @@ type Resolved struct {
 	Problem string // non-empty: the skill cannot be used as configured
 }
 
-var specificity = map[ScopeKind]int{ScopeOrganization: 0, ScopeCustomer: 1, ScopeProject: 2}
+var specificity = map[ScopeKind]int{ScopePlatform: 0, ScopeCustomer: 1, ScopeProject: 2}
 
 // Resolve computes a project's effective skills from the skills of its
-// scope chain (organization, its customer, the project) and its pins: the
+// scope chain (platform, its customer, the project) and its pins: the
 // most specific scope wins per name; unpublished skills are skipped;
 // disabled pins remove a skill; version pins must name an existing
 // version (otherwise Problem is set and Version is 0).

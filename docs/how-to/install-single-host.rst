@@ -58,8 +58,8 @@ installation-specific ones and takes these from the environment or an
    its demo users (``alice`` / ``alice``): ``BALLET_OIDC_ISSUER_URL=http://localhost:8180/realms/ballet
    docker compose -f deploy/compose.yaml --profile keycloak up -d``.
 
-``BALLET_ORG_ADMINS``
-   Claim matchers that are organization admins, e.g.
+``BALLET_PLATFORM_ADMINS``
+   Claim matchers that are platform admins, e.g.
    ``groups:ballet-admins``.
 
 ``BALLET_ANTHROPIC_URL``

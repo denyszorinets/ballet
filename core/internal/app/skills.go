@@ -40,7 +40,7 @@ type Skills struct {
 func skillTarget(s skill.Scope) Scope { return Scope{Customer: s.Customer, Project: s.Project} }
 
 // resolveScope parses a scope, checks it exists, fills in a project's
-// customer and returns the customer's ID ("" for organization scope).
+// customer and returns the customer's ID ("" for platform scope).
 func (sk *Skills) resolveScope(ctx context.Context, raw string) (skill.Scope, string, error) {
 	sc, err := skill.ParseScope(raw)
 	if err != nil {
@@ -234,14 +234,14 @@ func (sk *Skills) projectScope(ctx context.Context, projectKey string) (string, 
 		return "", "", nil, err
 	}
 	chain := []skill.Scope{
-		{Kind: skill.ScopeOrganization},
+		{Kind: skill.ScopePlatform},
 		{Kind: skill.ScopeCustomer, Customer: c.Key},
 		{Kind: skill.ScopeProject, Customer: c.Key, Project: p.Key},
 	}
 	return p.ID, c.ID, chain, nil
 }
 
-// Resolve returns a project's effective skills (organization → customer →
+// Resolve returns a project's effective skills (platform → customer →
 // project, pins applied). Requires skill.read on the project.
 func (sk *Skills) Resolve(ctx context.Context, projectKey string) ([]skill.Resolved, error) {
 	projectID, _, chain, err := sk.projectScope(ctx, projectKey)
@@ -332,7 +332,7 @@ func (sk *Skills) ProjectSkillBody(ctx context.Context, projectKey, name string)
 			continue
 		}
 		// Resolve authorized the caller for the project's skills, including
-		// those of the organization and customer it inherits.
+		// those of the platform and customer it inherits.
 		v, err := sk.Store.SkillVersion(ctx, r.Skill.ID, r.Version)
 		if err != nil {
 			return "", err

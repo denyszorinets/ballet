@@ -353,9 +353,9 @@ paths:
 
   /api/v1/pause:
     put:
-      operationId: pauseOrganization
+      operationId: pausePlatform
       tags: [runs]
-      summary: Pause all autonomous work (run.manage at organization scope)
+      summary: Pause all autonomous work (run.manage at platform scope)
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/PauseInput" } } }
@@ -363,7 +363,7 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Pause" } } } }
         default: { $ref: "#/components/responses/Error" }
     delete:
-      operationId: resumeOrganization
+      operationId: resumePlatform
       tags: [runs]
       summary: Resume all autonomous work
       responses:
@@ -372,7 +372,7 @@ paths:
 
   /api/v1/kill:
     post:
-      operationId: killOrganization
+      operationId: killPlatform
       tags: [runs]
       summary: Kill switch — pause everything and cancel every run in progress
       requestBody:
@@ -902,7 +902,7 @@ paths:
       tags: [skills]
       summary: Skills defined at exactly one scope
       parameters:
-        - { name: scope, in: query, required: true, schema: { type: string }, description: "organization, customer:<key> or project:<key>" }
+        - { name: scope, in: query, required: true, schema: { type: string }, description: "platform, customer:<key> or project:<key>" }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/SkillList" } } } }
         default: { $ref: "#/components/responses/Error" }
@@ -972,7 +972,7 @@ paths:
     get:
       operationId: resolveProjectSkills
       tags: [skills]
-      summary: The project's effective skills (organization → customer → project, pins applied)
+      summary: The project's effective skills (platform → customer → project, pins applied)
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ResolvedSkillList" } } } }
         default: { $ref: "#/components/responses/Error" }
@@ -1084,8 +1084,8 @@ components:
         id: { type: string }
         claim: { type: string }
         value: { type: string }
-        role: { type: string, enum: [org-admin, customer-admin, engineer, approver, viewer] }
-        scope: { type: string, description: "organization, customer:<key> or project:<key>" }
+        role: { type: string, enum: [platform-admin, customer-admin, engineer, approver, viewer] }
+        scope: { type: string, description: "platform, customer:<key> or project:<key>" }
         bootstrap: { type: boolean }
         created_at: { type: string, format: date-time }
     RoleBindingList:
@@ -1422,7 +1422,7 @@ components:
       additionalProperties: false
       required: [scope, paused_by, paused_at]
       properties:
-        scope: { type: string, enum: [organization, project] }
+        scope: { type: string, enum: [platform, project] }
         project: { type: string }
         reason: { type: string }
         paused_by: { type: string }

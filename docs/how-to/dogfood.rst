@@ -57,7 +57,7 @@ Other settings: ``BALLET_FORGE`` (``github`` or ``git``),
 ``ISSUES_TOKEN`` and ``ISSUES_REPO`` (where ``--import-issues`` reads),
 ``BALLET_POOL`` (``ballet`` to send the runs to the dogfooding pool;
 default: any agent), ``BALLET_URL`` (default ``http://localhost:8080``),
-``BALLET_TOKEN`` (an organization admin's bearer token; not needed
+``BALLET_TOKEN`` (a platform admin's bearer token; not needed
 without authentication, else default: the development realm's
 ``alice``), ``BALLET_REPO``.
 

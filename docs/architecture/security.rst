@@ -33,7 +33,7 @@ scope.
 .. code-block:: text
 
    claim groups contains "acme-devs"  →  engineer        @ customer:acme
-   claim groups contains "ballet-ops" →  org-admin       @ organization
+   claim groups contains "ballet-ops" →  platform-admin       @ platform
    claim email = "pm@acme.example"    →  approver        @ project:ACME
 
 A binding matches when the token claim equals the value, or — for list
@@ -48,9 +48,9 @@ arrive):
    * - Role
      - Grants
      - Bindable at
-   * - ``org-admin``
+   * - ``platform-admin``
      - Every action, including creating customers
-     - organization only
+     - platform only
    * - ``customer-admin``
      - Read and update the customer; create, read, update its projects;
        manage and read role bindings within the customer; read and write
@@ -70,19 +70,19 @@ arrive):
 
 Scope semantics:
 
-- An organization binding applies everywhere.
+- A platform binding applies everywhere.
 - A customer binding applies to the customer and all its projects.
 - A project binding applies to that project, and lets the holder *see*
   (read) the project's customer — nothing else of it.
-- Organization-level actions (creating customers, organization-scope
-  bindings) require an organization binding, so a customer admin cannot
+- Platform-level actions (creating customers, platform-scope
+  bindings) require a platform binding, so a customer admin cannot
   escalate.
 
 Evaluation is deny-by-default in Core's application layer; list
 endpoints return only what the caller may read. Workload identities (run
 tokens) are never authorized through role bindings.
 
-**Bootstrap.** ``[rbac] bootstrap_org_admins`` grants ``org-admin`` to
+**Bootstrap.** ``[rbac] bootstrap_platform_admins`` grants ``platform-admin`` to
 claim matchers from configuration (e.g. ``groups:ballet-admins``), so a
 fresh installation has an administrator. Bootstrap bindings are listed
 but cannot be deleted through the API.

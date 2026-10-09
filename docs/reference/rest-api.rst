@@ -18,7 +18,7 @@ Authentication
    token>`` (:doc:`/how-to/configure-oidc`); otherwise ``401``.
 
 Authorization
-   Every operation is authorized for the caller at organization,
+   Every operation is authorized for the caller at platform,
    customer or project scope; denied operations return ``403``. List
    endpoints return only the items the caller may read.
 
@@ -95,15 +95,15 @@ Binding representation:
    {"id": "0199…", "claim": "groups", "value": "acme-devs", "role": "engineer",
     "scope": "customer:acme", "bootstrap": false, "created_at": "…"}
 
-``scope`` is ``organization``, ``customer:<key>`` or ``project:<key>``.
+``scope`` is ``platform``, ``customer:<key>`` or ``project:<key>``.
 
 ``GET /api/v1/role-bindings`` → ``200`` list
    Bindings the caller may read (``role_binding.read`` at the binding's
-   customer, or organization), bootstrap bindings first.
+   customer, or platform), bootstrap bindings first.
 
 ``POST /api/v1/role-bindings`` — ``{"claim", "value", "role", "scope"}`` → ``201``
-   Requires ``role_binding.manage`` at the scope. ``org-admin`` only at
-   ``organization``; ``customer-admin`` not at project scope. The
+   Requires ``role_binding.manage`` at the scope. ``platform-admin`` only at
+   ``platform``; ``customer-admin`` not at project scope. The
    customer/project must exist (``404``); duplicates are ``409``.
 
 ``DELETE /api/v1/role-bindings/{id}`` → ``204``
@@ -118,7 +118,7 @@ Provider API keys used by the LLM gateway
 (:doc:`/architecture/decisions/0011-llm-gateway-for-credentials-and-metering`)
 and the token runs use for the project repository.
 A customer has a default per provider; a project may override it.
-Permission: ``credential.manage`` (customer admins, org admins).
+Permission: ``credential.manage`` (customer admins, platform admins).
 
 Representation — the key itself is **never returned**:
 
@@ -150,7 +150,7 @@ The customer's knowledge space, stored by the Knowledge service and
 reached through Core
 (:doc:`/architecture/decisions/0022-humans-reach-knowledge-through-core`).
 Permissions: ``knowledge.read`` (all roles), ``knowledge.write``
-(engineers, customer admins, org admins), at the customer.
+(engineers, customer admins, platform admins), at the customer.
 
 Representation:
 
@@ -210,7 +210,7 @@ Agent skills (:doc:`/concepts/skills`,
 :doc:`/architecture/decisions/0010-central-skill-registry`). A skill is
 identified by its scope and name and has an editable **draft** and
 immutable **published versions**. Permissions: ``skill.read`` (all
-roles), ``skill.write`` (org admins anywhere; customer admins within
+roles), ``skill.write`` (platform admins anywhere; customer admins within
 their customer and its projects).
 
 Skill representation (the draft):
@@ -222,7 +222,7 @@ Skill representation (the draft):
     "files": {"scripts/check.sh": "…"}, "latest_version": 2,
     "created_at": "…", "updated_at": "…", "version": 5}
 
-``scope`` is ``organization``, ``customer:<key>`` or ``project:<key>``;
+``scope`` is ``platform``, ``customer:<key>`` or ``project:<key>``;
 names are 2–64 lowercase letters, digits and single hyphens and unique
 per scope; ``files`` are supporting text files (clean relative paths,
 not ``SKILL.md``; at most 50 files, 1 MiB in total).
@@ -245,7 +245,7 @@ not ``SKILL.md``; at most 50 files, 1 MiB in total).
 
 ``GET /api/v1/projects/{project}/skills`` → ``200``
    The project's **effective skills**: published skills of the
-   organization, the project's customer and the project, the most
+   platform, the project's customer and the project, the most
    specific scope winning per name, with the project's pins applied:
 
    .. code-block:: json
@@ -279,7 +279,7 @@ Search
    description, body). Results are filtered by permission: items need
    ``tracker.read`` on their project, skills ``skill.read`` on their
    scope. Filters: ``kind`` (``item`` or ``skill``), ``project`` (its
-   items plus the skills of its organization → customer → project
+   items plus the skills of its platform → customer → project
    chain), ``limit`` (default 20, max 50).
 
    .. code-block:: json
@@ -304,7 +304,7 @@ Representation:
 
 ``POST /api/v1/customers`` — ``{"key", "name"}`` → ``201``
    Key: 2–32 lowercase letters, digits, single hyphens; starts with a
-   letter; immutable. Organization-level permission.
+   letter; immutable. Platform-level permission.
 
 ``GET /api/v1/customers`` → ``200`` list
 
@@ -462,7 +462,7 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
 ``POST /api/v1/items/{item}/runs`` — ``{"stage", "spec": {"command", "env"?, "image"?, "workdir"?, "timeout_seconds"?, "files"?}}`` or ``{"stage", "agent": {"adapter": "claude-code"|"opencode", "prompt", "timeout_seconds"?}}`` → ``201``
    Queues a run of a ticket by hand: a command (``spec``) or a coding
    agent session (``agent``, :ref:`reference-agents-runs`). Needs
-   ``run.manage`` on the project (organization and customer admins).
+   ``run.manage`` on the project (platform and customer admins).
    ``400`` for non-tickets, both or neither of ``spec`` and ``agent``, an
    unknown adapter, an empty command or prompt, a stage not matching
    ``[a-z][a-z0-9_-]{0,31}`` or invalid environment variable names.
@@ -583,8 +583,8 @@ Pause and kill switch
 See :ref:`concepts-unattended-pause`.
 
 ``GET /api/v1/pauses`` → ``200``
-   ``{"items": [{"scope": "organization"|"project", "project"?,
-   "reason"?, "paused_by", "paused_at"}]}`` — the organization pause and
+   ``{"items": [{"scope": "platform"|"project", "project"?,
+   "reason"?, "paused_by", "paused_at"}]}`` — the platform pause and
    the pauses of projects the caller can read.
 
 ``PUT /api/v1/projects/{project}/pause`` — ``{"reason"?}`` → ``200`` the pause
@@ -599,8 +599,8 @@ See :ref:`concepts-unattended-pause`.
    counts them.
 
 ``PUT /api/v1/pause``, ``DELETE /api/v1/pause``, ``POST /api/v1/kill``
-   The same for the whole organization; need ``run.manage`` at
-   organization scope.
+   The same for the whole platform; need ``run.manage`` at
+   platform scope.
 
 .. _reference-rest-execution:
 

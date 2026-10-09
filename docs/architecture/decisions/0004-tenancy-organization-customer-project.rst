@@ -1,7 +1,7 @@
 ADR-0004: Tenancy Model — Organization, Customer, Project
 =========================================================
 
-:Status: Accepted
+:Status: Superseded by :doc:`0027-tenancy-platform-organization-project`
 :Date: 2026-10-01
 
 Context

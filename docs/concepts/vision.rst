@@ -89,7 +89,7 @@ What Ballet is not
 Operating model
 ---------------
 
-Ballet is designed to run an **AI development shop**: one organization
+Ballet is designed to run an **AI development shop**: one platform
 serving many customers, each with several projects. Customer data —
 especially knowledge — is strictly isolated per customer
 (:doc:`domain-model`, :doc:`/architecture/security`).

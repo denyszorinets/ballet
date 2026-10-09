@@ -4,7 +4,7 @@
 # (`make run` does both). Ctrl-C stops everything.
 #
 # By default there is no authentication: you are the local user, an
-# organization admin, and Core listens on localhost only. BALLET_AUTH=oidc
+# platform admin, and Core listens on localhost only. BALLET_AUTH=oidc
 # signs in through the development Keycloak instead (started unless one
 # answers on :8180); BALLET_CORE_OIDC_ISSUER_URL uses another issuer.
 #
@@ -73,8 +73,8 @@ fi
 
 if [[ -n $ISSUER ]]; then
   export BALLET_CORE_OIDC_ISSUER_URL=$ISSUER
-  export BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS=${BALLET_CORE_RBAC_BOOTSTRAP_ORG_ADMINS:-groups:ballet-admins}
-  SIGN_IN="Sign in as alice / alice (organization admin of the development realm)."
+  export BALLET_CORE_RBAC_BOOTSTRAP_PLATFORM_ADMINS=${BALLET_CORE_RBAC_BOOTSTRAP_PLATFORM_ADMINS:-groups:ballet-admins}
+  SIGN_IN="Sign in as alice / alice (platform admin of the development realm)."
 else
   SIGN_IN="No sign-in: you are the local user (BALLET_AUTH=oidc for multiple users)."
 fi

@@ -6,7 +6,7 @@
 		project,
 		customer
 	}: {
-		/** The project; absent: the whole organization. */
+		/** The project; absent: the whole platform. */
 		project?: string;
 		customer?: string;
 	} = $props();
@@ -14,7 +14,7 @@
 	let session = $state<Session>();
 	let pause = $state<Schemas['Pause']>();
 	/** A pause of everything, shown on project pages too. */
-	let orgPause = $state<Schemas['Pause']>();
+	let platformPause = $state<Schemas['Pause']>();
 	let reason = $state('');
 	let error = $state<string>();
 	let notice = $state<string>();
@@ -23,7 +23,7 @@
 	const canManage = $derived(
 		!!session?.permissions.can('run.manage', project ? { customer, project } : {})
 	);
-	const scopeName = $derived(project ? `project ${project}` : 'the organization');
+	const scopeName = $derived(project ? `project ${project}` : 'the platform');
 
 	async function load(s: Session) {
 		const { data, error: err } = await s.api.GET('/api/v1/pauses');
@@ -31,8 +31,8 @@
 			error = apiError(err);
 			return;
 		}
-		orgPause = data.items.find((p) => p.scope === 'organization');
-		pause = project ? data.items.find((p) => p.project === project) : orgPause;
+		platformPause = data.items.find((p) => p.scope === 'platform');
+		pause = project ? data.items.find((p) => p.project === project) : platformPause;
 	}
 
 	$effect(() => {
@@ -92,7 +92,7 @@
 				>(by {pause.paused_by}, {new Date(pause.paused_at).toLocaleString()})</span
 			>
 		</p>
-	{:else if project && orgPause}
+	{:else if project && platformPause}
 		<p role="status"><strong>Paused</strong> — all autonomous work is paused.</p>
 	{:else}
 		<p class="muted small" role="status">Autonomous work in {scopeName} is running.</p>

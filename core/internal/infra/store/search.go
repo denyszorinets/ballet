@@ -88,7 +88,7 @@ func (s *Store) SearchDocs(ctx context.Context, q app.DocQuery) ([]app.DocHit, e
 	}
 	if q.Project != "" {
 		// The project's own documents plus skills of its chain.
-		where = append(where, "(d.project_key = ? OR (d.kind = 'skill' AND (d.scope = 'organization' OR d.scope = ?)))")
+		where = append(where, "(d.project_key = ? OR (d.kind = 'skill' AND (d.scope = 'platform' OR d.scope = ?)))")
 		args = append(args, q.Project, "customer:"+q.Customer)
 	}
 	filter := strings.Join(where, " AND ")

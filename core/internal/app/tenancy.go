@@ -40,7 +40,7 @@ type CreateCustomerInput struct {
 	Name string
 }
 
-// CreateCustomer creates a customer. Organization-level action.
+// CreateCustomer creates a customer. Platform-level action.
 func (t *Tenancy) CreateCustomer(ctx context.Context, in CreateCustomerInput) (tenancy.Customer, error) {
 	id, err := caller(ctx)
 	if err != nil {

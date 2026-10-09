@@ -152,17 +152,17 @@ type webConfig struct {
 
 // rbacConfig configures authorization.
 type rbacConfig struct {
-	// BootstrapOrgAdmins are "claim:value" matchers granted org-admin
+	// BootstrapPlatformAdmins are "claim:value" matchers granted platform-admin
 	// regardless of stored bindings, e.g. "groups:ballet-admins".
-	BootstrapOrgAdmins []string `toml:"bootstrap_org_admins"`
+	BootstrapPlatformAdmins []string `toml:"bootstrap_platform_admins"`
 }
 
 func (c rbacConfig) bindings() ([]rbac.Binding, error) {
 	var out []rbac.Binding
-	for _, s := range c.BootstrapOrgAdmins {
+	for _, s := range c.BootstrapPlatformAdmins {
 		b, err := rbac.ParseBootstrap(s)
 		if err != nil {
-			return nil, fmt.Errorf("rbac.bootstrap_org_admins: %w", err)
+			return nil, fmt.Errorf("rbac.bootstrap_platform_admins: %w", err)
 		}
 		out = append(out, b)
 	}
@@ -271,7 +271,7 @@ func run() error {
 	}
 	if localMode {
 		svc.Logger.Warn("authentication is disabled (no oidc.issuer_url): every caller is the local user, an "+
-			"organization admin; set oidc.issuer_url for multiple users", "addr", cfg.Server.Addr)
+			"platform admin; set oidc.issuer_url for multiple users", "addr", cfg.Server.Addr)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -319,7 +319,7 @@ func run() error {
 		admin, _ := rbac.ParseBootstrap("sub:" + local.Subject)
 		bootstrap = append(bootstrap, admin)
 	} else if len(bootstrap) == 0 {
-		svc.Logger.WarnContext(ctx, "no rbac.bootstrap_org_admins configured; only stored role bindings grant access")
+		svc.Logger.WarnContext(ctx, "no rbac.bootstrap_platform_admins configured; only stored role bindings grant access")
 	}
 	authz := &app.RBAC{Store: st, Bootstrap: bootstrap}
 	knowledgeURL, err := url.Parse(cfg.Knowledge.URL)

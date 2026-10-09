@@ -6,7 +6,7 @@ Core
 
 The system of record for everything except knowledge.
 
-- Tenancy: organization, customers, projects, process profiles.
+- Tenancy: platform, customers, projects, process profiles.
 - Tracker: milestones, epics, tickets, dependencies (DAG validation),
   plan changesets, pull request records, gates.
 - Scheduler: ready queue, concurrency limits, Gantt forecast.

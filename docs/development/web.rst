@@ -51,7 +51,7 @@ Pages
    * - Route
      - Purpose
    * - ``/``
-     - Customers the user can see; new customer (org admins)
+     - Customers the user can see; new customer (platform admins)
    * - ``/customers/{customer}``
      - Customer: rename, projects, new project
    * - ``/projects/{project}``
@@ -72,7 +72,7 @@ Pages
      - Entry: rendered Markdown, links to projects and items, edit
        (Markdown with preview), version history
    * - ``/skills?scope=…``
-     - Skills of one scope (``organization``, ``customer:<key>``,
+     - Skills of one scope (``platform``, ``customer:<key>``,
        ``project:<key>``); new skill
    * - ``/skills/{skill}``
      - Skill: draft editor (description, ``SKILL.md``, files), publish,

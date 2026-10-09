@@ -39,7 +39,7 @@ func TestContent_Validate(t *testing.T) {
 
 func TestParseScope(t *testing.T) {
 	for in, want := range map[string]skill.Scope{
-		"organization":  {Kind: skill.ScopeOrganization},
+		"platform":      {Kind: skill.ScopePlatform},
 		"customer:acme": {Kind: skill.ScopeCustomer, Customer: "acme"},
 		"project:WEB":   {Kind: skill.ScopeProject, Project: "WEB"},
 	} {

@@ -152,8 +152,8 @@ Budgets
    (:ref:`concepts-unattended-budgets`). A stage whose run failed while
    over budget waits too, instead of failing.
 
-Project and organization pauses
-   While the project or organization is paused, a flow waits before
+Project and platform pauses
+   While the project or platform is paused, a flow waits before
    entering its next stage or merging (``waiting: pause``); a stage
    cancelled by the kill switch runs again after the resume
    (:ref:`concepts-unattended-pause`).
