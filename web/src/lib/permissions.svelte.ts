@@ -1,8 +1,8 @@
 import type { ApiClient, Schemas } from '$lib/api/client';
 
-/** Where an action applies: customer and project keys; empty = platform. */
+/** Where an action applies: organization and project keys; empty = platform. */
 export interface Target {
-	customer?: string;
+	organization?: string;
 	project?: string;
 }
 
@@ -23,7 +23,7 @@ export function can(
 		if (!roleActions[b.role]?.includes(action)) return false;
 		if (b.scope === 'platform') return true;
 		const [kind, key] = b.scope.split(':', 2);
-		if (kind === 'customer') return target.customer === key;
+		if (kind === 'organization') return target.organization === key;
 		if (kind === 'project') return target.project === key;
 		return false;
 	});

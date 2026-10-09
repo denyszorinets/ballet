@@ -4,6 +4,13 @@ ADR-0024: Authentication Off by Default for a Single Local User
 :Status: Accepted
 :Date: 2026-10-04
 
+.. note::
+
+   Since :doc:`0027-tenancy-platform-organization-project`, customers are
+   called **organizations** and the installation-wide level formerly
+   called the organization is the **platform**; this record keeps the
+   terms of its time.
+
 Context
 -------
 

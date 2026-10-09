@@ -34,7 +34,7 @@ func TestReporter_CountsMetricsAndRetriesDelivery(t *testing.T) {
 	core := &fakeCore{fail: true}
 	reg := prometheus.NewRegistry()
 	r := usage.NewReporter(core, reg, 0, slog.New(slog.DiscardHandler))
-	rec := usage.Record{Customer: "acme", Project: "WEB", Ticket: "WEB-1", Model: "m", Status: 200, InputTokens: 10, OutputTokens: 4}
+	rec := usage.Record{Organization: "acme", Project: "WEB", Ticket: "WEB-1", Model: "m", Status: 200, InputTokens: 10, OutputTokens: 4}
 
 	r.Sink(rec)
 	r.Sink(rec)

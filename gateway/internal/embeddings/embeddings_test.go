@@ -23,8 +23,8 @@ import (
 
 type creds map[string]core.Credential
 
-func (c creds) ResolveCredential(_ context.Context, customer, _, provider string) (core.Credential, error) {
-	if cr, ok := c[customer+"/"+provider]; ok {
+func (c creds) ResolveCredential(_ context.Context, organization, _, provider string) (core.Credential, error) {
+	if cr, ok := c[organization+"/"+provider]; ok {
 		return cr, nil
 	}
 	return core.Credential{}, core.ErrNoCredential
@@ -53,14 +53,14 @@ func TestEmbeddings(t *testing.T) {
 	}
 	service := issue(runtoken.Claims{Kind: runtoken.KindService, Subject: "service:knowledge", Audience: []string{"gateway"},
 		Capabilities: []string{runtoken.CapLLMEmbed}})
-	run := issue(runtoken.Claims{Kind: runtoken.KindRun, Subject: "run:1", Audience: []string{"gateway"}, Customer: "acme",
+	run := issue(runtoken.Claims{Kind: runtoken.KindRun, Subject: "run:1", Audience: []string{"gateway"}, Organization: "acme",
 		Project: "WEB", Ticket: "WEB-1", Capabilities: []string{runtoken.CapLLMInvoke}})
 
-	call := func(tok, customer, body string) (int, map[string]any) {
+	call := func(tok, organization, body string) (int, map[string]any) {
 		req := httptest.NewRequest(http.MethodPost, "/v1/embeddings", stringsReader(body))
 		req.Header.Set("Authorization", "Bearer "+tok)
-		if customer != "" {
-			req.Header.Set(embed.HeaderCustomer, customer)
+		if organization != "" {
+			req.Header.Set(embed.HeaderOrganization, organization)
 		}
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -79,7 +79,7 @@ func TestEmbeddings(t *testing.T) {
 	assert.Equal(t, "text-embedding-3-small", out["model"])
 
 	code, _ = call(service, "", `{"input":"x"}`)
-	assert.Equal(t, http.StatusBadRequest, code, "service tokens must name the customer")
+	assert.Equal(t, http.StatusBadRequest, code, "service tokens must name the organization")
 	code, _ = call(service, "globex", `{"model":"text-embedding-3-small","input":"x"}`)
 	assert.Equal(t, http.StatusForbidden, code, "no openai credential")
 	code, _ = call("bogus", "acme", `{"input":"x"}`)
@@ -90,7 +90,7 @@ func TestEmbeddings(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	require.Len(t, records, 2)
-	assert.Equal(t, "acme", records[0].Customer)
+	assert.Equal(t, "acme", records[0].Organization)
 	assert.Equal(t, int64(3), records[0].InputTokens, "hash model counts words")
 	assert.Equal(t, "WEB-1", records[1].Ticket)
 	assert.Equal(t, int64(4), records[1].InputTokens, "provider-reported tokens")

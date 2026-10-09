@@ -8,7 +8,7 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/domain/tenancy"
 )
 
-type customerJSON struct {
+type organizationJSON struct {
 	ID        string    `json:"id"`
 	Key       string    `json:"key"`
 	Name      string    `json:"name"`
@@ -17,24 +17,24 @@ type customerJSON struct {
 	Version   int64     `json:"version"`
 }
 
-func toCustomerJSON(c tenancy.Customer) customerJSON {
-	return customerJSON{ID: c.ID, Key: c.Key, Name: c.Name, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Version: c.Version}
+func toOrganizationJSON(c tenancy.Organization) organizationJSON {
+	return organizationJSON{ID: c.ID, Key: c.Key, Name: c.Name, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Version: c.Version}
 }
 
 type projectJSON struct {
-	ID          string    `json:"id"`
-	Key         string    `json:"key"`
-	Customer    string    `json:"customer"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Version     int64     `json:"version"`
+	ID           string    `json:"id"`
+	Key          string    `json:"key"`
+	Organization string    `json:"organization"`
+	Name         string    `json:"name"`
+	Description  string    `json:"description"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Version      int64     `json:"version"`
 }
 
 func toProjectJSON(p app.ProjectView) projectJSON {
 	return projectJSON{
-		ID: p.ID, Key: p.Key, Customer: p.CustomerKey, Name: p.Name, Description: p.Description,
+		ID: p.ID, Key: p.Key, Organization: p.OrganizationKey, Name: p.Name, Description: p.Description,
 		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, Version: p.Version,
 	}
 }
@@ -44,7 +44,7 @@ type listJSON[T any] struct {
 }
 
 func registerTenancy(mux *router, t *app.Tenancy) {
-	mux.handle("POST /api/v1/customers", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("POST /api/v1/organizations", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Key  string `json:"key"`
 			Name string `json:"name"`
@@ -53,37 +53,37 @@ func registerTenancy(mux *router, t *app.Tenancy) {
 			writeError(w, err)
 			return
 		}
-		c, err := t.CreateCustomer(r.Context(), app.CreateCustomerInput{Key: in.Key, Name: in.Name})
+		c, err := t.CreateOrganization(r.Context(), app.CreateOrganizationInput{Key: in.Key, Name: in.Name})
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, toCustomerJSON(c))
+		writeJSON(w, http.StatusCreated, toOrganizationJSON(c))
 	})
 
-	mux.handle("GET /api/v1/customers", func(w http.ResponseWriter, r *http.Request) {
-		cs, err := t.ListCustomers(r.Context())
+	mux.handle("GET /api/v1/organizations", func(w http.ResponseWriter, r *http.Request) {
+		cs, err := t.ListOrganizations(r.Context())
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		out := listJSON[customerJSON]{Items: make([]customerJSON, 0, len(cs))}
+		out := listJSON[organizationJSON]{Items: make([]organizationJSON, 0, len(cs))}
 		for _, c := range cs {
-			out.Items = append(out.Items, toCustomerJSON(c))
+			out.Items = append(out.Items, toOrganizationJSON(c))
 		}
 		writeJSON(w, http.StatusOK, out)
 	})
 
-	mux.handle("GET /api/v1/customers/{customer}", func(w http.ResponseWriter, r *http.Request) {
-		c, err := t.GetCustomer(r.Context(), r.PathValue("customer"))
+	mux.handle("GET /api/v1/organizations/{organization}", func(w http.ResponseWriter, r *http.Request) {
+		c, err := t.GetOrganization(r.Context(), r.PathValue("organization"))
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toCustomerJSON(c))
+		writeJSON(w, http.StatusOK, toOrganizationJSON(c))
 	})
 
-	mux.handle("PATCH /api/v1/customers/{customer}", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("PATCH /api/v1/organizations/{organization}", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Name    string `json:"name"`
 			Version int64  `json:"version"`
@@ -92,17 +92,17 @@ func registerTenancy(mux *router, t *app.Tenancy) {
 			writeError(w, err)
 			return
 		}
-		c, err := t.UpdateCustomer(r.Context(), app.UpdateCustomerInput{
-			Key: r.PathValue("customer"), Name: in.Name, Version: in.Version,
+		c, err := t.UpdateOrganization(r.Context(), app.UpdateOrganizationInput{
+			Key: r.PathValue("organization"), Name: in.Name, Version: in.Version,
 		})
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, toCustomerJSON(c))
+		writeJSON(w, http.StatusOK, toOrganizationJSON(c))
 	})
 
-	mux.handle("POST /api/v1/customers/{customer}/projects", func(w http.ResponseWriter, r *http.Request) {
+	mux.handle("POST /api/v1/organizations/{organization}/projects", func(w http.ResponseWriter, r *http.Request) {
 		var in struct {
 			Key         string `json:"key"`
 			Name        string `json:"name"`
@@ -112,19 +112,19 @@ func registerTenancy(mux *router, t *app.Tenancy) {
 			writeError(w, err)
 			return
 		}
-		customer := r.PathValue("customer")
+		organization := r.PathValue("organization")
 		p, err := t.CreateProject(r.Context(), app.CreateProjectInput{
-			CustomerKey: customer, Key: in.Key, Name: in.Name, Description: in.Description,
+			OrganizationKey: organization, Key: in.Key, Name: in.Name, Description: in.Description,
 		})
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusCreated, toProjectJSON(app.ProjectView{Project: p, CustomerKey: customer}))
+		writeJSON(w, http.StatusCreated, toProjectJSON(app.ProjectView{Project: p, OrganizationKey: organization}))
 	})
 
-	mux.handle("GET /api/v1/customers/{customer}/projects", func(w http.ResponseWriter, r *http.Request) {
-		ps, err := t.ListProjects(r.Context(), r.PathValue("customer"))
+	mux.handle("GET /api/v1/organizations/{organization}/projects", func(w http.ResponseWriter, r *http.Request) {
+		ps, err := t.ListProjects(r.Context(), r.PathValue("organization"))
 		if err != nil {
 			writeError(w, err)
 			return

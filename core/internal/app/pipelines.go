@@ -47,21 +47,21 @@ type PipelineView struct {
 	ProjectKey string
 }
 
-func (ps *Pipelines) project(ctx context.Context, projectKey string, a Action) (identity, tenancy.Project, tenancy.Customer, error) {
+func (ps *Pipelines) project(ctx context.Context, projectKey string, a Action) (identity, tenancy.Project, tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	p, err := ps.Tenancy.ProjectByKey(ctx, projectKey)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := ps.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := ps.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	if err := ps.Authz.Authorize(ctx, id, a, Scope{Customer: c.Key, Project: p.Key}); err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+	if err := ps.Authz.Authorize(ctx, id, a, Scope{Organization: c.Key, Project: p.Key}); err != nil {
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	return id, p, c, nil
 }
@@ -140,7 +140,7 @@ func (ps *Pipelines) Save(ctx context.Context, projectKey, name string, def pipe
 		return PipelineView{}, invalid(err)
 	}
 	v := PipelineVersion{ProjectID: p.ID, Name: name, Version: after + 1, Definition: def, CreatedBy: id.Subject, CreatedAt: ps.Now()}
-	e := event.Event{Customer: c.ID, Project: p.ID, EntityType: "project", EntityID: p.ID, Type: "project.pipeline_saved",
+	e := event.Event{Organization: c.ID, Project: p.ID, EntityType: "project", EntityID: p.ID, Type: "project.pipeline_saved",
 		Actor: actorIn(ctx, id), OccurredAt: v.CreatedAt, Payload: mustJSON(map[string]any{"name": name, "version": v.Version})}
 	if err := ps.Store.SavePipelineVersion(ctx, v, e); err != nil {
 		if errors.Is(err, ErrConflict) {

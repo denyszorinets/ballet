@@ -40,8 +40,8 @@ Set up the project
 The script (:repo:`scripts/dogfood-setup.py`) is idempotent; run it again
 after changing skills or settings. It
 
-- creates customer ``ballet`` and project ``BAL``;
-- stores the Anthropic key (customer) and the git token (project);
+- creates organization ``ballet`` and project ``BAL``;
+- stores the Anthropic key (organization) and the git token (project);
 - configures execution: this repository, branches
   ``feature/{ticket}_{slug}`` from ``develop`` (GitFlow), the GitHub
   forge;

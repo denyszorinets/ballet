@@ -9,7 +9,7 @@
 
 	type Version = Schemas['KnowledgeVersion'];
 
-	const customer = $derived(page.params.customer ?? '');
+	const organization = $derived(page.params.organization ?? '');
 	const id = $derived(page.params.entry ?? '');
 
 	let session = $state<Session>();
@@ -21,13 +21,13 @@
 	/** A past version shown instead of the current body. */
 	let viewing = $state<Version>();
 
-	const canWrite = $derived(!!session?.permissions.can('knowledge.write', { customer }));
+	const canWrite = $derived(!!session?.permissions.can('knowledge.write', { organization }));
 
 	async function load(s: Session) {
-		const path = { params: { path: { customer, entry: id } } };
+		const path = { params: { path: { organization, entry: id } } };
 		const [e, v] = await Promise.all([
-			s.api.GET('/api/v1/customers/{customer}/knowledge/entries/{entry}', path),
-			s.api.GET('/api/v1/customers/{customer}/knowledge/entries/{entry}/versions', path)
+			s.api.GET('/api/v1/organizations/{organization}/knowledge/entries/{entry}', path),
+			s.api.GET('/api/v1/organizations/{organization}/knowledge/entries/{entry}/versions', path)
 		]);
 		if (!e.data) {
 			error = apiError(e.error);
@@ -51,8 +51,8 @@
 		if (!session || !entry) return;
 		saveError = undefined;
 		const { data, error: err } = await session.api.PATCH(
-			'/api/v1/customers/{customer}/knowledge/entries/{entry}',
-			{ params: { path: { customer, entry: id } }, body: { ...d, version: entry.version } }
+			'/api/v1/organizations/{organization}/knowledge/entries/{entry}',
+			{ params: { path: { organization, entry: id } }, body: { ...d, version: entry.version } }
 		);
 		if (!data) {
 			saveError = apiError(err);
@@ -67,7 +67,7 @@
 <svelte:head><title>{entry?.title ?? 'Knowledge'} · Ballet</title></svelte:head>
 
 <p>
-	<a href={resolve('/customers/[customer]/knowledge', { customer })}>← Knowledge</a>
+	<a href={resolve('/organizations/[organization]/knowledge', { organization })}>← Knowledge</a>
 </p>
 
 {#if error}

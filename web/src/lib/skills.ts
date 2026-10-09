@@ -1,14 +1,14 @@
 import type { Target } from '$lib/permissions.svelte';
 
-/** A skill scope as Core writes it: platform, customer:<key> or project:<key>. */
+/** A skill scope as Core writes it: platform, organization:<key> or project:<key>. */
 export interface Scope {
-	kind: 'platform' | 'customer' | 'project';
+	kind: 'platform' | 'organization' | 'project';
 	key: string;
 }
 
 export function parseScope(s: string): Scope {
 	const [kind, key = ''] = s.split(':', 2);
-	if ((kind === 'customer' || kind === 'project') && key) return { kind, key };
+	if ((kind === 'organization' || kind === 'project') && key) return { kind, key };
 	return { kind: 'platform', key: '' };
 }
 
@@ -18,11 +18,11 @@ export function formatScope(s: Scope): string {
 
 /**
  * The permission target for a scope. A project scope also needs its
- * customer, because customer-wide bindings cover the customer's projects.
+ * organization, because organization-wide bindings cover the organization's projects.
  */
-export function scopeTarget(s: Scope, projectCustomer?: string): Target {
-	if (s.kind === 'customer') return { customer: s.key };
-	if (s.kind === 'project') return { customer: projectCustomer, project: s.key };
+export function scopeTarget(s: Scope, projectOrganization?: string): Target {
+	if (s.kind === 'organization') return { organization: s.key };
+	if (s.kind === 'project') return { organization: projectOrganization, project: s.key };
 	return {};
 }
 

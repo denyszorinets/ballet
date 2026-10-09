@@ -5,15 +5,15 @@
 	import { getSession, type Session } from '$lib/session';
 
 	let session = $state<Session>();
-	let customers = $state<Schemas['Customer'][]>();
+	let organizations = $state<Schemas['Organization'][]>();
 	let error = $state<string>();
 	let form = $state({ key: '', name: '' });
 	let formError = $state<string>();
 	let saving = $state(false);
 
 	async function load(s: Session) {
-		const { data, error: err } = await s.api.GET('/api/v1/customers');
-		if (data) customers = data.items;
+		const { data, error: err } = await s.api.GET('/api/v1/organizations');
+		if (data) organizations = data.items;
 		else error = apiError(err);
 	}
 
@@ -31,7 +31,7 @@
 		if (!session) return;
 		saving = true;
 		formError = undefined;
-		const { error: err } = await session.api.POST('/api/v1/customers', { body: form });
+		const { error: err } = await session.api.POST('/api/v1/organizations', { body: form });
 		saving = false;
 		if (err) {
 			formError = apiError(err);
@@ -42,15 +42,15 @@
 	}
 </script>
 
-<svelte:head><title>Customers · Ballet</title></svelte:head>
+<svelte:head><title>Organizations · Ballet</title></svelte:head>
 
-<h1>Customers</h1>
+<h1>Organizations</h1>
 {#if session?.permissions.can('run.manage')}
 	<WorkControl />
 {/if}
 
-{#if session?.permissions.can('customer.create')}
-	<form class="form card" onsubmit={create} aria-label="New customer">
+{#if session?.permissions.can('organization.create')}
+	<form class="form card" onsubmit={create} aria-label="New organization">
 		<label
 			>Key <input
 				bind:value={form.key}
@@ -60,22 +60,25 @@
 			/></label
 		>
 		<label>Name <input bind:value={form.name} required placeholder="Acme Corporation" /></label>
-		<button class="primary" type="submit" disabled={saving}>Create customer</button>
+		<button class="primary" type="submit" disabled={saving}>Create organization</button>
 		{#if formError}<p class="error" role="alert">{formError}</p>{/if}
 	</form>
 {/if}
 
 {#if error}
 	<p class="error" role="alert">{error}</p>
-{:else if !customers}
+{:else if !organizations}
 	<p class="muted">Loading…</p>
-{:else if customers.length === 0}
-	<p class="muted">There are no customers you can see yet.</p>
+{:else if organizations.length === 0}
+	<p class="muted">There are no organizations you can see yet.</p>
 {:else}
 	<ul class="list">
-		{#each customers as c (c.id)}
+		{#each organizations as c (c.id)}
 			<li>
-				<a class="card row" href={resolve('/customers/[customer]', { customer: c.key })}>
+				<a
+					class="card row"
+					href={resolve('/organizations/[organization]', { organization: c.key })}
+				>
 					<span class="mono muted key">{c.key}</span>
 					<span>{c.name}</span>
 				</a>

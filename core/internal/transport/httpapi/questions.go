@@ -42,7 +42,7 @@ func registerQuestions(mux *router, qs *app.Questions) {
 		out := listJSON[inboxJSON]{Items: make([]inboxJSON, 0, len(list))}
 		for _, e := range list {
 			out.Items = append(out.Items, inboxJSON{questionJSON: toQuestionJSON(e.Question, e.TicketKey),
-				Customer: e.CustomerKey, Project: e.ProjectKey, TicketTitle: e.TicketTitle, TicketState: e.TicketState,
+				Organization: e.OrganizationKey, Project: e.ProjectKey, TicketTitle: e.TicketTitle, TicketState: e.TicketState,
 				BlockedBehind: e.BlockedBehind, Chat: e.Chat})
 		}
 		writeJSON(w, http.StatusOK, out)
@@ -51,7 +51,7 @@ func registerQuestions(mux *router, qs *app.Questions) {
 
 type inboxJSON struct {
 	questionJSON
-	Customer      string        `json:"customer"`
+	Organization  string        `json:"organization"`
 	Project       string        `json:"project"`
 	TicketTitle   string        `json:"ticket_title"`
 	TicketState   tracker.State `json:"ticket_state"`

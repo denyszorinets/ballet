@@ -71,48 +71,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/customers": {
+    "/api/v1/organizations": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["listCustomers"];
+        get: operations["listOrganizations"];
         put?: never;
-        post: operations["createCustomer"];
+        post: operations["createOrganization"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/customers/{customer}": {
+    "/api/v1/organizations/{organization}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
-        get: operations["getCustomer"];
+        get: operations["getOrganization"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch: operations["updateCustomer"];
+        patch: operations["updateOrganization"];
         trace?: never;
     };
-    "/api/v1/customers/{customer}/projects": {
+    "/api/v1/organizations/{organization}/projects": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
@@ -537,20 +537,20 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/customers/{customer}/budget": {
+    "/api/v1/organizations/{organization}/budget": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
-        /** The customer's token budgets and today's use (customer.read) */
-        get: operations["getCustomerBudget"];
-        /** Set the customer's token budgets (customer.update) */
-        put: operations["setCustomerBudget"];
+        /** The organization's token budgets and today's use (organization.read) */
+        get: operations["getOrganizationBudget"];
+        /** Set the organization's token budgets (organization.update) */
+        put: operations["setOrganizationBudget"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1073,17 +1073,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/customers/{customer}/credentials": {
+    "/api/v1/organizations/{organization}/credentials": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
-        /** Customer defaults and project overrides, without secrets */
+        /** Organization defaults and project overrides, without secrets */
         get: operations["listCredentials"];
         put?: never;
         post?: never;
@@ -1093,21 +1093,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/customers/{customer}/credentials/{provider}": {
+    "/api/v1/organizations/{organization}/credentials/{provider}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
                 provider: components["parameters"]["Provider"];
             };
             cookie?: never;
         };
         get?: never;
-        put: operations["setCustomerCredential"];
+        put: operations["setOrganizationCredential"];
         post?: never;
-        delete: operations["deleteCustomerCredential"];
+        delete: operations["deleteOrganizationCredential"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1156,17 +1156,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/customers/{customer}/knowledge/entries": {
+    "/api/v1/organizations/{organization}/knowledge/entries": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
-        /** Entries of the customer's knowledge space (served by Knowledge through Core) */
+        /** Entries of the organization's knowledge space (served by Knowledge through Core) */
         get: operations["listKnowledgeEntries"];
         put?: never;
         post: operations["createKnowledgeEntry"];
@@ -1176,17 +1176,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/customers/{customer}/knowledge/search": {
+    "/api/v1/organizations/{organization}/knowledge/search": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
-        /** Hybrid full-text and semantic search in the customer's knowledge space */
+        /** Hybrid full-text and semantic search in the organization's knowledge space */
         get: operations["searchKnowledge"];
         put?: never;
         post?: never;
@@ -1196,13 +1196,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/customers/{customer}/knowledge/entries/{entry}": {
+    "/api/v1/organizations/{organization}/knowledge/entries/{entry}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
                 /** @description Knowledge entry ID */
                 entry: components["parameters"]["Entry"];
             };
@@ -1217,13 +1217,13 @@ export interface paths {
         patch: operations["updateKnowledgeEntry"];
         trace?: never;
     };
-    "/api/v1/customers/{customer}/knowledge/entries/{entry}/versions": {
+    "/api/v1/organizations/{organization}/knowledge/entries/{entry}/versions": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
                 /** @description Knowledge entry ID */
                 entry: components["parameters"]["Entry"];
             };
@@ -1343,7 +1343,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** The project's effective skills (platform → customer → project, pins applied) */
+        /** The project's effective skills (platform → organization → project, pins applied) */
         get: operations["resolveProjectSkills"];
         put?: never;
         post?: never;
@@ -1438,8 +1438,8 @@ export interface components {
             claim: string;
             value: string;
             /** @enum {string} */
-            role: "platform-admin" | "customer-admin" | "engineer" | "approver" | "viewer";
-            /** @description platform, customer:<key> or project:<key> */
+            role: "platform-admin" | "organization-admin" | "engineer" | "approver" | "viewer";
+            /** @description platform, organization:<key> or project:<key> */
             scope: string;
             bootstrap: boolean;
             /** Format: date-time */
@@ -1454,7 +1454,7 @@ export interface components {
             role: string;
             scope: string;
         };
-        Customer: {
+        Organization: {
             id: string;
             key: string;
             name: string;
@@ -1465,14 +1465,14 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
-        CustomerList: {
-            items: components["schemas"]["Customer"][];
+        OrganizationList: {
+            items: components["schemas"]["Organization"][];
         };
-        CreateCustomer: {
+        CreateOrganization: {
             key: string;
             name: string;
         };
-        UpdateCustomer: {
+        UpdateOrganization: {
             name: string;
             /** Format: int64 */
             version: number;
@@ -1480,8 +1480,8 @@ export interface components {
         Project: {
             id: string;
             key: string;
-            /** @description Customer key */
-            customer: string;
+            /** @description Organization key */
+            organization: string;
             name: string;
             description: string;
             /** Format: date-time */
@@ -1747,7 +1747,7 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             answered_at?: string;
-            customer: string;
+            organization: string;
             project: string;
             ticket_title: string;
             ticket_state: components["schemas"]["ItemState"];
@@ -2233,7 +2233,7 @@ export interface components {
         Credential: {
             /** @enum {string} */
             provider: "anthropic" | "openai" | "git";
-            /** @description Project key of an override; absent for the customer default */
+            /** @description Project key of an override; absent for the organization default */
             project?: string;
             base_url: string;
             /** @description Identifies the key without revealing it */
@@ -2437,7 +2437,7 @@ export interface components {
             ref: string;
             title: string;
             snippet: string;
-            customer?: string;
+            organization?: string;
             project?: string;
             /** @description Skills only */
             scope?: string;
@@ -2459,8 +2459,8 @@ export interface components {
         };
     };
     parameters: {
-        /** @description Customer key */
-        Customer: string;
+        /** @description Organization key */
+        Organization: string;
         /** @description Project key */
         Project: string;
         /** @description Skill ID */
@@ -2592,7 +2592,7 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    listCustomers: {
+    listOrganizations: {
         parameters: {
             query?: never;
             header?: never;
@@ -2607,13 +2607,13 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CustomerList"];
+                    "application/json": components["schemas"]["OrganizationList"];
                 };
             };
             default: components["responses"]["Error"];
         };
     };
-    createCustomer: {
+    createOrganization: {
         parameters: {
             query?: never;
             header?: never;
@@ -2622,7 +2622,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateCustomer"];
+                "application/json": components["schemas"]["CreateOrganization"];
             };
         };
         responses: {
@@ -2632,19 +2632,19 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Customer"];
+                    "application/json": components["schemas"]["Organization"];
                 };
             };
             default: components["responses"]["Error"];
         };
     };
-    getCustomer: {
+    getOrganization: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
@@ -2656,25 +2656,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Customer"];
+                    "application/json": components["schemas"]["Organization"];
                 };
             };
             default: components["responses"]["Error"];
         };
     };
-    updateCustomer: {
+    updateOrganization: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UpdateCustomer"];
+                "application/json": components["schemas"]["UpdateOrganization"];
             };
         };
         responses: {
@@ -2684,7 +2684,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Customer"];
+                    "application/json": components["schemas"]["Organization"];
                 };
             };
             default: components["responses"]["Error"];
@@ -2695,8 +2695,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
@@ -2719,8 +2719,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
@@ -3483,13 +3483,13 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    getCustomerBudget: {
+    getOrganizationBudget: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
@@ -3507,13 +3507,13 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    setCustomerBudget: {
+    setOrganizationBudget: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
@@ -4334,8 +4334,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
@@ -4353,13 +4353,13 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    setCustomerCredential: {
+    setOrganizationCredential: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
                 provider: components["parameters"]["Provider"];
             };
             cookie?: never;
@@ -4382,13 +4382,13 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    deleteCustomerCredential: {
+    deleteOrganizationCredential: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
                 provider: components["parameters"]["Provider"];
             };
             cookie?: never;
@@ -4497,8 +4497,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
@@ -4521,8 +4521,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
@@ -4554,8 +4554,8 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
             };
             cookie?: never;
         };
@@ -4578,8 +4578,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
                 /** @description Knowledge entry ID */
                 entry: components["parameters"]["Entry"];
             };
@@ -4604,8 +4604,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
                 /** @description Knowledge entry ID */
                 entry: components["parameters"]["Entry"];
             };
@@ -4634,8 +4634,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Customer key */
-                customer: components["parameters"]["Customer"];
+                /** @description Organization key */
+                organization: components["parameters"]["Organization"];
                 /** @description Knowledge entry ID */
                 entry: components["parameters"]["Entry"];
             };
@@ -4658,7 +4658,7 @@ export interface operations {
     listSkills: {
         parameters: {
             query: {
-                /** @description platform, customer:<key> or project:<key> */
+                /** @description platform, organization:<key> or project:<key> */
                 scope: string;
             };
             header?: never;

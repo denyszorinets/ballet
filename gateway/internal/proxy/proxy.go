@@ -1,6 +1,6 @@
 // Package proxy is the LLM gateway's request path (ADR-0011): it
 // authenticates run tokens, resolves the provider credential of the run's
-// customer/project through Core, and forwards the request — streaming
+// organization/project through Core, and forwards the request — streaming
 // included — with the real key, which callers never see.
 package proxy
 
@@ -34,12 +34,12 @@ const upstreamTimeout = 10 * time.Minute
 
 // CredentialResolver resolves provider credentials (Core).
 type CredentialResolver interface {
-	ResolveCredential(ctx context.Context, customer, project, provider string) (core.Credential, error)
+	ResolveCredential(ctx context.Context, organization, project, provider string) (core.Credential, error)
 }
 
 // BudgetChecker says whether work may still call the LLM (Core's budgets).
 type BudgetChecker interface {
-	CheckBudget(ctx context.Context, customer, project, ticket string) (allowed bool, reason string, err error)
+	CheckBudget(ctx context.Context, organization, project, ticket string) (allowed bool, reason string, err error)
 }
 
 // Anthropic proxies the Anthropic API (/v1/...).
@@ -83,7 +83,7 @@ func (a *Anthropic) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if a.Budget != nil {
-		allowed, reason, err := a.Budget.CheckBudget(r.Context(), claims.Customer, claims.Project, claims.Ticket)
+		allowed, reason, err := a.Budget.CheckBudget(r.Context(), claims.Organization, claims.Project, claims.Ticket)
 		switch {
 		case err != nil:
 			// Core also holds work over budget before each stage: fail open.
@@ -93,7 +93,7 @@ func (a *Anthropic) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	cred, err := a.Core.ResolveCredential(r.Context(), claims.Customer, claims.Project, "anthropic")
+	cred, err := a.Core.ResolveCredential(r.Context(), claims.Organization, claims.Project, "anthropic")
 	if errors.Is(err, core.ErrNoCredential) {
 		apiError(w, http.StatusForbidden, "permission_error", "no Anthropic credential configured for this project")
 		return

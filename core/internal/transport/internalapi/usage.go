@@ -13,7 +13,7 @@ import (
 type usageRecordJSON struct {
 	OccurredAt   time.Time `json:"occurred_at"`
 	Run          string    `json:"run"`
-	Customer     string    `json:"customer"`
+	Organization string    `json:"organization"`
 	Project      string    `json:"project"`
 	Ticket       string    `json:"ticket"`
 	Model        string    `json:"model"`
@@ -38,7 +38,7 @@ func RegisterUsage(r *Router, u *app.Usage) {
 		in := make([]app.UsageInput, 0, len(body.Records))
 		for _, r := range body.Records {
 			in = append(in, app.UsageInput{
-				OccurredAt: r.OccurredAt, Customer: r.Customer, Project: r.Project, Ticket: r.Ticket, Run: r.Run,
+				OccurredAt: r.OccurredAt, Organization: r.Organization, Project: r.Project, Ticket: r.Ticket, Run: r.Run,
 				Model: r.Model, Status: r.Status, InputTokens: r.InputTokens, OutputTokens: r.OutputTokens,
 				CacheRead: r.CacheRead, CacheWrite: r.CacheWrite,
 			})

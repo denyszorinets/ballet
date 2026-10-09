@@ -4,6 +4,13 @@ ADR-0021: Hybrid Vector Search over All Content
 :Status: Accepted
 :Date: 2026-10-01
 
+.. note::
+
+   Since :doc:`0027-tenancy-platform-organization-project`, customers are
+   called **organizations** and the installation-wide level formerly
+   called the organization is the **platform**; this record keeps the
+   terms of its time.
+
 Context
 -------
 

@@ -27,7 +27,7 @@ signing key, ``iss: "ballet-core"``.
    * - ``kind``
      - ``run``, ``agent``, ``planner`` or ``service``
    * - ``cust``, ``proj``
-     - Customer and project scope (required for ``run`` and ``planner``)
+     - Organization and project scope (required for ``run`` and ``planner``)
    * - ``tkt``
      - Ticket (required for ``run``; for ``planner`` when it acts for no
        human, e.g. answering an agent's question)
@@ -52,7 +52,7 @@ Capabilities
    * - ``tracker.report``
      - Report progress, stage reports, questions, assumptions, proposals
    * - ``knowledge.read``
-     - Search and read the customer's knowledge
+     - Search and read the organization's knowledge
    * - ``knowledge.write``
      - Create and update knowledge entries
    * - ``llm.invoke``

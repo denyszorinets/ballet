@@ -5,7 +5,7 @@
 	import { KINDS, kindLabel, type KnowledgeEntry, type KnowledgeKind } from '$lib/knowledge';
 	import { getSession, type Session } from '$lib/session';
 
-	const customer = $derived(page.params.customer ?? '');
+	const organization = $derived(page.params.organization ?? '');
 
 	let session = $state<Session>();
 	let entries = $state<KnowledgeEntry[]>([]);
@@ -23,11 +23,11 @@
 		const filters = { kind: kind || undefined, project: project.trim() || undefined };
 		const q = query.trim();
 		const res = q
-			? await s.api.GET('/api/v1/customers/{customer}/knowledge/search', {
-					params: { path: { customer }, query: { q, ...filters } }
+			? await s.api.GET('/api/v1/organizations/{organization}/knowledge/search', {
+					params: { path: { organization }, query: { q, ...filters } }
 				})
-			: await s.api.GET('/api/v1/customers/{customer}/knowledge/entries', {
-					params: { path: { customer }, query: filters }
+			: await s.api.GET('/api/v1/organizations/{organization}/knowledge/entries', {
+					params: { path: { organization }, query: filters }
 				});
 		if (res.error) {
 			error = apiError(res.error);
@@ -41,7 +41,7 @@
 	}
 
 	$effect(() => {
-		void customer;
+		void organization;
 		getSession()
 			.then((s) => {
 				session = s;
@@ -56,14 +56,17 @@
 	}
 </script>
 
-<svelte:head><title>Knowledge · {customer} · Ballet</title></svelte:head>
+<svelte:head><title>Knowledge · {organization} · Ballet</title></svelte:head>
 
 <div class="title">
 	<h1>Knowledge</h1>
-	<a class="mono muted" href={resolve('/customers/[customer]', { customer })}>{customer}</a>
-	{#if session?.permissions.can('knowledge.write', { customer })}
-		<a class="button primary" href={resolve('/customers/[customer]/knowledge/new', { customer })}
-			>New entry</a
+	<a class="mono muted" href={resolve('/organizations/[organization]', { organization })}
+		>{organization}</a
+	>
+	{#if session?.permissions.can('knowledge.write', { organization })}
+		<a
+			class="button primary"
+			href={resolve('/organizations/[organization]/knowledge/new', { organization })}>New entry</a
 		>
 	{/if}
 </div>
@@ -91,8 +94,11 @@
 	<ul class="entries" aria-label={searched ? 'Search results' : 'Entries'}>
 		{#each entries as e (e.id)}
 			<li class="card">
-				<a href={resolve('/customers/[customer]/knowledge/[entry]', { customer, entry: e.id })}
-					>{e.title}</a
+				<a
+					href={resolve('/organizations/[organization]/knowledge/[entry]', {
+						organization,
+						entry: e.id
+					})}>{e.title}</a
 				>
 				<span class="badge">{kindLabel[e.kind]}</span>
 				{#each e.projects as p (p)}<span class="badge mono">{p}</span>{/each}

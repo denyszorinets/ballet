@@ -1,6 +1,6 @@
 // Package skill defines agent skills (ADR-0010): named, versioned bundles
 // of instructions (a SKILL.md body plus supporting text files) at
-// platform, customer or project scope. Published versions are
+// platform, organization or project scope. Published versions are
 // immutable; the draft is what admins edit.
 package skill
 
@@ -19,31 +19,31 @@ type ScopeKind string
 
 // Scope kinds.
 const (
-	ScopePlatform ScopeKind = "platform"
-	ScopeCustomer ScopeKind = "customer"
-	ScopeProject  ScopeKind = "project"
+	ScopePlatform     ScopeKind = "platform"
+	ScopeOrganization ScopeKind = "organization"
+	ScopeProject      ScopeKind = "project"
 )
 
-// Scope of a skill; Customer is set for customer and project scopes.
+// Scope of a skill; Organization is set for organization and project scopes.
 type Scope struct {
-	Kind     ScopeKind
-	Customer string // customer key
-	Project  string // project key
+	Kind         ScopeKind
+	Organization string // organization key
+	Project      string // project key
 }
 
 // String formats the scope like role binding scopes.
 func (s Scope) String() string {
 	switch s.Kind {
-	case ScopeCustomer:
-		return "customer:" + s.Customer
+	case ScopeOrganization:
+		return "organization:" + s.Organization
 	case ScopeProject:
 		return "project:" + s.Project
 	}
 	return string(ScopePlatform)
 }
 
-// ParseScope parses "platform", "customer:<key>" or "project:<key>";
-// the customer of a project scope is resolved by the caller.
+// ParseScope parses "platform", "organization:<key>" or "project:<key>";
+// the organization of a project scope is resolved by the caller.
 func ParseScope(s string) (Scope, error) {
 	if s == string(ScopePlatform) {
 		return Scope{Kind: ScopePlatform}, nil
@@ -51,13 +51,13 @@ func ParseScope(s string) (Scope, error) {
 	kind, key, ok := strings.Cut(s, ":")
 	if ok && key != "" {
 		switch ScopeKind(kind) {
-		case ScopeCustomer:
-			return Scope{Kind: ScopeCustomer, Customer: key}, nil
+		case ScopeOrganization:
+			return Scope{Kind: ScopeOrganization, Organization: key}, nil
 		case ScopeProject:
 			return Scope{Kind: ScopeProject, Project: key}, nil
 		}
 	}
-	return Scope{}, fmt.Errorf("scope %q must be platform, customer:<key> or project:<key>", s)
+	return Scope{}, fmt.Errorf("scope %q must be platform, organization:<key> or project:<key>", s)
 }
 
 // Content is what a version (or the draft) contains.

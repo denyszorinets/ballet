@@ -384,7 +384,7 @@ func run() error {
 			if err != nil {
 				return nil, err
 			}
-			c, err := st.CustomerByID(ctx, p.CustomerID)
+			c, err := st.OrganizationByID(ctx, p.OrganizationID)
 			if err != nil {
 				return nil, err
 			}
@@ -394,7 +394,7 @@ func run() error {
 			}
 			tok, err := tokenIssuer.Issue(runtoken.Claims{
 				Kind: runtoken.KindRun, Subject: "run:" + r.ID, Audience: []string{"gateway", "knowledge", "core"},
-				Customer: c.Key, Project: p.Key, Ticket: it.Key,
+				Organization: c.Key, Project: p.Key, Ticket: it.Key,
 				Capabilities: []string{runtoken.CapLLMInvoke, runtoken.CapKnowledgeRead, runtoken.CapKnowledgeWrite,
 					runtoken.CapTrackerRead, runtoken.CapTrackerReport},
 			}, cfg.Agents.RunTokenTTL)

@@ -30,7 +30,7 @@ const (
 const (
 	CapTrackerRead    = "tracker.read"    // read own ticket and plan context
 	CapTrackerReport  = "tracker.report"  // report progress, stage reports, questions, proposals
-	CapKnowledgeRead  = "knowledge.read"  // search and read the customer's knowledge
+	CapKnowledgeRead  = "knowledge.read"  // search and read the organization's knowledge
 	CapKnowledgeWrite = "knowledge.write" // create and update knowledge entries
 	CapLLMInvoke      = "llm.invoke"      // call the LLM gateway
 	CapAgentConnect   = "agent.connect"   // connect an agent to Core
@@ -54,11 +54,11 @@ type Claims struct {
 	Audience []string  // services that accept the token, e.g. "knowledge"
 	Expiry   time.Time // set on issue
 
-	Customer  string // customer scope; required for run and planner tokens
-	Project   string // project scope; required for run and planner tokens
-	Ticket    string // ticket; required for run tokens
-	Session   string // planner session; required for planner tokens
-	ActingFor string // subject of the human a planner acts for
+	Organization string // organization scope; required for run and planner tokens
+	Project      string // project scope; required for run and planner tokens
+	Ticket       string // ticket; required for run tokens
+	Session      string // planner session; required for planner tokens
+	ActingFor    string // subject of the human a planner acts for
 
 	Capabilities []string
 }
@@ -83,8 +83,8 @@ func (c Claims) Validate() error {
 		errs = append(errs, errors.New("audience is required"))
 	}
 	if c.Kind == KindRun || c.Kind == KindPlanner {
-		if c.Customer == "" || c.Project == "" {
-			errs = append(errs, fmt.Errorf("%s tokens need customer and project", c.Kind))
+		if c.Organization == "" || c.Project == "" {
+			errs = append(errs, fmt.Errorf("%s tokens need organization and project", c.Kind))
 		}
 	}
 	if c.Kind == KindRun && c.Ticket == "" {

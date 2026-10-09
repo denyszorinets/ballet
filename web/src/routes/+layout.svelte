@@ -99,9 +99,9 @@
 		<nav aria-label="Main">
 			<a
 				href={resolve('/')}
-				aria-current={page.url.pathname === '/' || page.url.pathname.startsWith('/customers')
+				aria-current={page.url.pathname === '/' || page.url.pathname.startsWith('/organizations')
 					? 'page'
-					: undefined}>Customers</a
+					: undefined}>Organizations</a
 			>
 			<a
 				href={resolve('/inbox')}

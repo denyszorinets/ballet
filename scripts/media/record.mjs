@@ -1,8 +1,9 @@
-// Records the README's animations from a running Ballet with the fake
-// model (BALLET_FAKE_LLM=1 make run): sets up a demo project over the REST
-// API, drives the web UI with Playwright and saves each animation's frames
-// with their durations. gif.py turns them into GIFs. Run it through
-// `make readme-media`, which starts and stops Ballet.
+// Records the README's animations and the documentation's screenshots
+// from a running Ballet with the fake model (BALLET_FAKE_LLM=1 make run):
+// sets up a demo project over the REST API, drives the web UI with
+// Playwright, saves each animation's frames with their durations (gif.py
+// turns them into GIFs) and the screenshots. Run it through
+// `make media`, which starts and stops Ballet.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -11,6 +12,7 @@ import { chromium } from '../../web/node_modules/playwright/index.mjs';
 
 const base = process.env.BALLET_URL ?? 'http://localhost:8080';
 const out = process.argv[2] ?? '.run/readme-frames';
+const shots = process.argv[3] ?? 'docs/_static/screenshots';
 const api = async (method, path, body) => {
 	const r = await fetch(base + path, {
 		method,
@@ -34,9 +36,9 @@ git(work, '-c', 'user.name=Demo', '-c', 'user.email=demo@example.com', 'commit',
 git(demo, 'clone', '-q', '--bare', work, 'greeter.git');
 const repo = 'file://' + join(demo, 'greeter.git');
 
-await api('POST', '/api/v1/customers', { key: 'acme', name: 'Acme Corporation' });
-await api('PUT', '/api/v1/customers/acme/credentials/anthropic', { api_key: 'sk-fake' });
-await api('POST', '/api/v1/customers/acme/projects', { key: 'GREET', name: 'Greeter', description: 'A tiny demo project.' });
+await api('POST', '/api/v1/organizations', { key: 'acme', name: 'Acme Corporation' });
+await api('PUT', '/api/v1/organizations/acme/credentials/anthropic', { api_key: 'sk-fake' });
+await api('POST', '/api/v1/organizations/acme/projects', { key: 'GREET', name: 'Greeter', description: 'A tiny demo project.' });
 const x = await api('GET', '/api/v1/projects/GREET/execution');
 await api('PUT', '/api/v1/projects/GREET/execution', {
 	version: x.version, repo_url: repo, default_branch: 'main', forge: 'git'
@@ -65,6 +67,20 @@ await api('POST', '/api/v1/projects/GREET/changesets', {
 
 const browser = await chromium.launch({ channel: 'chrome' });
 const page = await browser.newPage({ viewport: { width: 1200, height: 720 }, colorScheme: 'light' });
+const shot = (name, target = page, fullPage = false) => target.screenshot({ path: join(shots, name), ...(target === page && { fullPage }) });
+
+// Screenshots of the organization and the project settings.
+await page.setViewportSize({ width: 1280, height: 800 });
+await page.goto(base + '/organizations/acme');
+await page.getByRole('link', { name: 'GREET' }).waitFor();
+await sleep(500);
+await shot('organization.png', page, true);
+await page.goto(base + '/projects/GREET/settings');
+// Shown with a GitHub URL, as a real project has; not saved.
+await page.getByRole('textbox', { name: 'Repository URL' }).fill('https://github.com/acme/greeter.git');
+await page.getByRole('combobox', { name: 'Forge' }).selectOption({ index: 0 });
+await shot('project-settings.png', page, true);
+await page.setViewportSize({ width: 1200, height: 720 });
 
 // A recording: frames with how long each is shown. Identical consecutive
 // frames are merged, so waiting costs no frames.
@@ -123,6 +139,7 @@ const move = async (key, to) => {
 	const r = recording('plan');
 	await page.goto(base + '/projects/GREET/changesets');
 	await page.getByRole('button', { name: 'Approve all' }).waitFor();
+	await shot('changeset.png', page.getByRole('article', { name: /Changeset/ }));
 	await r.frame(1800);
 	await page.getByRole('button', { name: 'Approve all' }).hover();
 	await r.frame(500);
@@ -143,6 +160,9 @@ const move = async (key, to) => {
 	await sleep(1500);
 	await r.frame(2500);
 	r.save();
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await shot('board.png');
+	await page.setViewportSize({ width: 1200, height: 720 });
 }
 
 // 2. A question answered while the session waits.
@@ -154,6 +174,9 @@ const move = async (key, to) => {
 	await r.frame(2000);
 	await r.type(page.getByRole('textbox', { name: 'Your answer' }), 'Yes: accept `fr` and `french`, case-insensitive.');
 	await r.frame(800);
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await shot('inbox.png');
+	await page.setViewportSize({ width: 1200, height: 720 });
 	await page.getByRole('button', { name: 'Answer and resume' }).click();
 	await sleep(1500);
 	await r.frame(1200);
@@ -164,6 +187,7 @@ const move = async (key, to) => {
 	await answer.scrollIntoViewIfNeeded();
 	await r.frame(3500);
 	r.save();
+	await shot('session-answer.png', page.getByRole('listitem', { name: 'Session implement' }));
 	await move('GREET-2', 'cancelled');
 }
 
@@ -178,6 +202,8 @@ await page.goto(base + '/projects/GREET/digest');
 await page.getByRole('list', { name: 'Summary' }).waitFor();
 await sleep(800);
 await page.screenshot({ path: join(out, 'digest.png') });
+await page.setViewportSize({ width: 1280, height: 800 });
+await shot('digest.png', page, true);
 
 await browser.close();
 rmSync(demo, { recursive: true, force: true });

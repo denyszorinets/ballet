@@ -25,10 +25,10 @@ import (
 	"github.com/denyszorinets/ballet/kit/auth/runtoken"
 )
 
-type creds map[string]core.Credential // "customer/project" → credential
+type creds map[string]core.Credential // "organization/project" → credential
 
-func (c creds) ResolveCredential(_ context.Context, customer, project, _ string) (core.Credential, error) {
-	if cr, ok := c[customer+"/"+project]; ok {
+func (c creds) ResolveCredential(_ context.Context, organization, project, _ string) (core.Credential, error) {
+	if cr, ok := c[organization+"/"+project]; ok {
 		return cr, nil
 	}
 	return core.Credential{}, core.ErrNoCredential
@@ -77,7 +77,7 @@ func setup(t *testing.T) fixture {
 	return fixture{client: client, url: srv.URL, provider: prov, issue: func(project string, caps ...string) string {
 		raw, err := issuer.Issue(runtoken.Claims{
 			Kind: runtoken.KindRun, Subject: "run:1", Audience: []string{proxy.Audience},
-			Customer: "acme", Project: project, Ticket: "WEB-1", Capabilities: caps,
+			Organization: "acme", Project: project, Ticket: "WEB-1", Capabilities: caps,
 		}, time.Hour)
 		require.NoError(t, err)
 		return raw

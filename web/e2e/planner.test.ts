@@ -21,10 +21,10 @@ const plan: FakeChangeset['operations'] = [
 async function open(page: Page, role: string, path: string, state: Partial<FakeCore> = {}) {
 	await fakeOIDC(page);
 	const core = await fakeCore(page, {
-		me: [{ role, scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		me: [{ role, scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
 		projects: [
-			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web shop', description: '', version: 1 }
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web shop', description: '', version: 1 }
 		],
 		...state
 	});

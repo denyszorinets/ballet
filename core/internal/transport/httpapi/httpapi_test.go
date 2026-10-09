@@ -181,20 +181,20 @@ func TestJWKS_IsPublicAndListsSigningKeys(t *testing.T) {
 	assert.NotContains(t, body.Keys[0], "d", "private key material must not be published")
 }
 
-func TestTenancyAPI_CustomerAndProjectLifecycle(t *testing.T) {
+func TestTenancyAPI_OrganizationAndProjectLifecycle(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
 
-	code, c := call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	code, c := call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
 	require.Equal(t, http.StatusCreated, code, c)
 	assert.Equal(t, "acme", c["key"])
 	assert.EqualValues(t, 1, c["version"])
 
-	code, p := call(t, api, "POST", "/api/v1/customers/acme/projects", "alice",
+	code, p := call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice",
 		`{"key":"ACME","name":"Acme Shop","description":"Online shop"}`)
 	require.Equal(t, http.StatusCreated, code, p)
-	assert.Equal(t, "acme", p["customer"])
+	assert.Equal(t, "acme", p["organization"])
 
-	code, list := call(t, api, "GET", "/api/v1/customers/acme/projects", "alice", "")
+	code, list := call(t, api, "GET", "/api/v1/organizations/acme/projects", "alice", "")
 	require.Equal(t, http.StatusOK, code)
 	assert.Len(t, list["items"], 1)
 
@@ -209,25 +209,25 @@ func TestTenancyAPI_CustomerAndProjectLifecycle(t *testing.T) {
 	assert.Equal(t, http.StatusConflict, code)
 	assert.Equal(t, "conflict", body["error"])
 
-	code, cs := call(t, api, "GET", "/api/v1/customers", "alice", "")
+	code, cs := call(t, api, "GET", "/api/v1/organizations", "alice", "")
 	require.Equal(t, http.StatusOK, code)
 	assert.Len(t, cs["items"], 1)
 }
 
 func TestTenancyAPI_ErrorMapping(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
 
 	tests := []struct {
 		name, method, path, body string
 		status                   int
 		code                     string
 	}{
-		{"duplicate", "POST", "/api/v1/customers", `{"key":"acme","name":"Again"}`, 409, "already_exists"},
-		{"invalid key", "POST", "/api/v1/customers", `{"key":"A B","name":"X"}`, 400, "invalid_argument"},
-		{"unknown field", "POST", "/api/v1/customers", `{"key":"x1","name":"X","extra":1}`, 400, "invalid_argument"},
-		{"malformed json", "POST", "/api/v1/customers", `{`, 400, "invalid_argument"},
-		{"missing customer", "GET", "/api/v1/customers/nobody", "", 404, "not_found"},
+		{"duplicate", "POST", "/api/v1/organizations", `{"key":"acme","name":"Again"}`, 409, "already_exists"},
+		{"invalid key", "POST", "/api/v1/organizations", `{"key":"A B","name":"X"}`, 400, "invalid_argument"},
+		{"unknown field", "POST", "/api/v1/organizations", `{"key":"x1","name":"X","extra":1}`, 400, "invalid_argument"},
+		{"malformed json", "POST", "/api/v1/organizations", `{`, 400, "invalid_argument"},
+		{"missing organization", "GET", "/api/v1/organizations/nobody", "", 404, "not_found"},
 		{"missing project", "GET", "/api/v1/projects/NOPE", "", 404, "not_found"},
 		{"unknown endpoint", "GET", "/api/v1/nothing", "", 404, "not_found"},
 	}
@@ -244,12 +244,12 @@ func TestTenancyAPI_ErrorMapping(t *testing.T) {
 func TestTenancyAPI_DenyAllReturnsForbidden(t *testing.T) {
 	api := newAPI(t, testUser, app.DenyAll{})
 
-	code, body := call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	code, body := call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
 
 	assert.Equal(t, http.StatusForbidden, code)
 	assert.Equal(t, "forbidden", body["error"])
 
-	code, list := call(t, api, "GET", "/api/v1/customers", "alice", "")
+	code, list := call(t, api, "GET", "/api/v1/organizations", "alice", "")
 	assert.Equal(t, http.StatusOK, code)
 	assert.Empty(t, list["items"], "lists only show what the caller may read")
 }
@@ -257,23 +257,23 @@ func TestTenancyAPI_DenyAllReturnsForbidden(t *testing.T) {
 func TestTenancyAPI_RequiresAuthentication(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
 
-	code, _ := call(t, api, "GET", "/api/v1/customers", "", "")
+	code, _ := call(t, api, "GET", "/api/v1/organizations", "", "")
 
 	assert.Equal(t, http.StatusUnauthorized, code)
 }
 
 func TestRBACAPI_RolesAndBindings(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
 
 	code, roles := call(t, api, "GET", "/api/v1/roles", "alice", "")
 	require.Equal(t, http.StatusOK, code)
 	assert.Len(t, roles["items"], 5)
 
 	code, b := call(t, api, "POST", "/api/v1/role-bindings", "alice",
-		`{"claim":"groups","value":"g1","role":"viewer","scope":"customer:acme"}`)
+		`{"claim":"groups","value":"g1","role":"viewer","scope":"organization:acme"}`)
 	require.Equal(t, http.StatusCreated, code, b)
-	assert.Equal(t, "customer:acme", b["scope"])
+	assert.Equal(t, "organization:acme", b["scope"])
 
 	// /me shows the binding: the test user's groups claim contains g1.
 	code, me := call(t, api, "GET", "/api/v1/me", "bob", "")
@@ -291,14 +291,14 @@ func TestRBACAPI_RolesAndBindings(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, rec.Code)
 
 	code, body := call(t, api, "POST", "/api/v1/role-bindings", "alice",
-		`{"claim":"groups","value":"g1","role":"viewer","scope":"customer:nobody"}`)
+		`{"claim":"groups","value":"g1","role":"viewer","scope":"organization:nobody"}`)
 	assert.Equal(t, http.StatusNotFound, code, body)
 }
 
 func TestTrackerAPI_ItemLifecycle(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 
 	code, epic := call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"epic","title":"Billing"}`)
 	require.Equal(t, http.StatusCreated, code, epic)
@@ -339,8 +339,8 @@ func TestTrackerAPI_ItemLifecycle(t *testing.T) {
 
 func TestDependencyAPI(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 	for range 2 {
 		call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"t"}`)
 	}
@@ -378,10 +378,10 @@ func TestDependencyAPI(t *testing.T) {
 
 func TestCredentialAPI_SetListDeleteWithoutExposingSecrets(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 
-	code, c := call(t, api, "PUT", "/api/v1/customers/acme/credentials/anthropic", "alice", `{"api_key":"sk-ant-secret-1234"}`)
+	code, c := call(t, api, "PUT", "/api/v1/organizations/acme/credentials/anthropic", "alice", `{"api_key":"sk-ant-secret-1234"}`)
 	require.Equal(t, http.StatusOK, code, c)
 	assert.NotContains(t, fmt.Sprint(c), "secret")
 	assert.Contains(t, c["fingerprint"], "1234")
@@ -390,12 +390,12 @@ func TestCredentialAPI_SetListDeleteWithoutExposingSecrets(t *testing.T) {
 	require.Equal(t, http.StatusOK, code, c)
 	assert.Equal(t, "WEB", c["project"])
 
-	code, list := call(t, api, "GET", "/api/v1/customers/acme/credentials", "alice", "")
+	code, list := call(t, api, "GET", "/api/v1/organizations/acme/credentials", "alice", "")
 	require.Equal(t, http.StatusOK, code)
 	assert.Len(t, list["items"], 2)
 	assert.NotContains(t, fmt.Sprint(list), "sk-")
 
-	code, body := call(t, api, "PUT", "/api/v1/customers/acme/credentials/gemini", "alice", `{"api_key":"x"}`)
+	code, body := call(t, api, "PUT", "/api/v1/organizations/acme/credentials/gemini", "alice", `{"api_key":"x"}`)
 	assert.Equal(t, http.StatusBadRequest, code, body)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/projects/WEB/credentials/anthropic", nil)
@@ -403,14 +403,14 @@ func TestCredentialAPI_SetListDeleteWithoutExposingSecrets(t *testing.T) {
 	rec := httptest.NewRecorder()
 	api.ServeHTTP(rec, req)
 	assert.Equal(t, http.StatusNoContent, rec.Code)
-	_, list = call(t, api, "GET", "/api/v1/customers/acme/credentials", "alice", "")
+	_, list = call(t, api, "GET", "/api/v1/organizations/acme/credentials", "alice", "")
 	assert.Len(t, list["items"], 1)
 }
 
 func TestUsageAPI_ReportShape(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 
 	code, rep := call(t, api, "GET", "/api/v1/projects/WEB/usage?group_by=model", "alice", "")
 	require.Equal(t, http.StatusOK, code, rep)
@@ -453,8 +453,8 @@ func TestSkillAPI_Lifecycle(t *testing.T) {
 
 func TestSkillAPI_ResolutionAndPins(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 	_, s := call(t, api, "POST", "/api/v1/skills", "alice", `{"scope":"platform","name":"gitflow","description":"d"}`)
 	call(t, api, "POST", "/api/v1/skills/"+s["id"].(string)+"/publish", "alice", `{"version":1}`)
 
@@ -490,8 +490,8 @@ func TestSearchAPI_Shape(t *testing.T) {
 
 func TestChangesetAPI_ProposeApplyReject(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 
 	plan := `{"title":"Auth","summary":"Accounts.","operations":[
 		{"kind":"create_item","ref":"auth","create":{"kind":"epic","title":"Auth"}},
@@ -540,8 +540,8 @@ func TestChangesetAPI_ProposeApplyReject(t *testing.T) {
 
 func TestPlannerAPI_SessionsAndTranscript(t *testing.T) {
 	api, pl := newAPIWithPlanner(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 
 	code, s := call(t, api, "POST", "/api/v1/projects/WEB/planner/sessions", "alice", `{"title":"Auth"}`)
 	require.Equal(t, http.StatusCreated, code, s)
@@ -575,8 +575,8 @@ func TestPlannerAPI_SessionsAndTranscript(t *testing.T) {
 
 func TestRunAPI_QueueInspectCancel(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 	call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"t"}`)
 
 	code, r := call(t, api, "POST", "/api/v1/items/WEB-1/runs", "alice",
@@ -614,8 +614,8 @@ func TestRunAPI_QueueInspectCancel(t *testing.T) {
 
 func TestExecutionAPI_SettingsShapeRuns(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 	call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"Login page"}`)
 
 	code, x := call(t, api, "GET", "/api/v1/projects/WEB/execution", "alice", "")
@@ -640,8 +640,8 @@ func TestExecutionAPI_SettingsShapeRuns(t *testing.T) {
 
 func TestReportsAPI_EmptyLists(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 	call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"t"}`)
 	for _, p := range []string{"reports", "questions"} {
 		code, out := call(t, api, "GET", "/api/v1/items/WEB-1/"+p, "alice", "")
@@ -654,8 +654,8 @@ func TestReportsAPI_EmptyLists(t *testing.T) {
 
 func TestPullRequestAPI_WithoutRepository(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 	call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"t"}`)
 	code, _ := call(t, api, "GET", "/api/v1/items/WEB-1/pull-request", "alice", "")
 	assert.Equal(t, http.StatusNotFound, code)
@@ -666,8 +666,8 @@ func TestPullRequestAPI_WithoutRepository(t *testing.T) {
 
 func TestPipelineAPI_TemplateSaveYAML(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 
 	code, p := call(t, api, "GET", "/api/v1/projects/WEB/pipelines/default", "alice", "")
 	require.Equal(t, http.StatusOK, code, p)
@@ -703,8 +703,8 @@ func toJSON(t *testing.T, v any) string {
 
 func TestFlowAPI_NoFlowYet(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 	call(t, api, "POST", "/api/v1/projects/WEB/items", "alice", `{"kind":"ticket","title":"t"}`)
 	code, _ := call(t, api, "GET", "/api/v1/items/WEB-1/flow", "alice", "")
 	assert.Equal(t, http.StatusNotFound, code)
@@ -733,8 +733,8 @@ func TestQuestionAPI_EmptyInbox(t *testing.T) {
 
 func TestAssumptionAPI_EmptyRegisterAndErrors(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 	code, out := call(t, api, "GET", "/api/v1/projects/WEB/assumptions?review=open", "alice", "")
 	assert.Equal(t, http.StatusOK, code)
 	assert.Equal(t, map[string]any{"items": []any{}}, out)
@@ -746,8 +746,8 @@ func TestAssumptionAPI_EmptyRegisterAndErrors(t *testing.T) {
 
 func TestControlAPI_PauseAndResume(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 	code, out := call(t, api, "PUT", "/api/v1/projects/WEB/pause", "alice", `{"reason":"freeze"}`)
 	require.Equal(t, http.StatusOK, code, out)
 	assert.Equal(t, "project", out["scope"])
@@ -764,8 +764,8 @@ func TestControlAPI_PauseAndResume(t *testing.T) {
 
 func TestBudgetAPI_SetAndRead(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 	code, out := call(t, api, "GET", "/api/v1/projects/WEB/budget", "alice", "")
 	require.Equal(t, http.StatusOK, code, out)
 	assert.Equal(t, float64(0), out["version"])
@@ -774,14 +774,14 @@ func TestBudgetAPI_SetAndRead(t *testing.T) {
 	assert.Equal(t, float64(1000), out["ticket_tokens"])
 	code, _ = call(t, api, "PUT", "/api/v1/projects/WEB/budget", "alice", `{"ticket_tokens":1,"daily_tokens":1,"version":0}`)
 	assert.Equal(t, http.StatusConflict, code)
-	code, _ = call(t, api, "PUT", "/api/v1/customers/acme/budget", "alice", `{"ticket_tokens":-1,"daily_tokens":0,"version":0}`)
+	code, _ = call(t, api, "PUT", "/api/v1/organizations/acme/budget", "alice", `{"ticket_tokens":-1,"daily_tokens":0,"version":0}`)
 	assert.Equal(t, http.StatusBadRequest, code)
 }
 
 func TestDigestAPI_DefaultsToTheLastDay(t *testing.T) {
 	api := newAPI(t, testUser, allow{})
-	call(t, api, "POST", "/api/v1/customers", "alice", `{"key":"acme","name":"Acme"}`)
-	call(t, api, "POST", "/api/v1/customers/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
+	call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	call(t, api, "POST", "/api/v1/organizations/acme/projects", "alice", `{"key":"WEB","name":"Web","description":""}`)
 	code, out := call(t, api, "GET", "/api/v1/projects/WEB/digest", "alice", "")
 	require.Equal(t, http.StatusOK, code, out)
 	assert.Contains(t, out["markdown"], "# Digest of WEB")

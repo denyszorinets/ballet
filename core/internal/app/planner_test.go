@@ -170,7 +170,7 @@ func TestPlanner_ChatTurnStreamsAndPersists(t *testing.T) {
 	assert.Equal(t, "claude-test", req.Model)
 	assert.Contains(t, req.System, "planner of a software project")
 	assert.Contains(t, req.System, "Use gitflow.")
-	assert.Equal(t, app.LLMCaller{CustomerKey: "acme", ProjectKey: "WEB", SessionID: s.ID, ActingFor: "bob"}, req.Caller)
+	assert.Equal(t, app.LLMCaller{OrganizationKey: "acme", ProjectKey: "WEB", SessionID: s.ID, ActingFor: "bob"}, req.Caller)
 	assert.Len(t, req.Tools, 2)
 }
 

@@ -27,7 +27,7 @@ func TestAgentTracker_RunsReportOnTheirTicketOnly(t *testing.T) {
 	other := mk(t, e.tr, tracker.KindTicket, "Other")
 	r, err := e.runs.Create(dave, tk.Key, "implement", cmd)
 	require.NoError(t, err)
-	me := app.RunCaller{RunID: r.ID, Customer: "acme", Project: "WEB", Ticket: tk.Key}
+	me := app.RunCaller{RunID: r.ID, Organization: "acme", Project: "WEB", Ticket: tk.Key}
 
 	_, err = at.Context(t.Context(), me)
 	assert.ErrorIs(t, err, app.ErrForbidden, "a queued run is not active yet")
@@ -55,9 +55,9 @@ func TestAgentTracker_RunsReportOnTheirTicketOnly(t *testing.T) {
 	assert.Contains(t, text, "Which IdP for staff? — open")
 
 	for name, c := range map[string]app.RunCaller{
-		"other ticket":   {RunID: r.ID, Customer: "acme", Project: "WEB", Ticket: other.Key},
-		"other customer": {RunID: r.ID, Customer: "globex", Project: "WEB", Ticket: tk.Key},
-		"unknown run":    {RunID: "nope", Customer: "acme", Project: "WEB", Ticket: tk.Key},
+		"other ticket":       {RunID: r.ID, Organization: "acme", Project: "WEB", Ticket: other.Key},
+		"other organization": {RunID: r.ID, Organization: "globex", Project: "WEB", Ticket: tk.Key},
+		"unknown run":        {RunID: "nope", Organization: "acme", Project: "WEB", Ticket: tk.Key},
 	} {
 		_, err := at.Report(t.Context(), c, report.KindProgress, "", "x", "")
 		assert.ErrorIs(t, err, app.ErrForbidden, name)

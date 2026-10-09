@@ -3,16 +3,16 @@ import json
 import pathlib
 
 DS = {"type": "prometheus", "uid": "prometheus"}
-SEL = 'customer=~"$customer", project=~"$project"'
+SEL = 'organization=~"$organization", project=~"$project"'
 
 
 def variables():
     def var(name, label):
         return {"name": name, "label": label, "type": "query", "datasource": DS, "multi": True, "includeAll": True,
                 "allValue": ".*", "current": {"text": "All", "value": "$__all"}, "refresh": 2, "sort": 1,
-                "query": {"query": f'label_values({{__name__=~"ballet_.+", customer!=""}}, {name})',
+                "query": {"query": f'label_values({{__name__=~"ballet_.+", organization!=""}}, {name})',
                           "refId": "var"}}
-    return {"list": [var("customer", "Customer"), var("project", "Project")]}
+    return {"list": [var("organization", "Organization"), var("project", "Project")]}
 
 
 def panel(pid, title, kind, exprs, x, y, w=12, h=8, unit=None, legend="{{project}}", description=""):
@@ -57,7 +57,7 @@ delivery = dashboard("ballet-delivery", "Ballet · Delivery", "Throughput, lead 
     panel(12, "Time to answer (median)", "timeseries", [(f'histogram_quantile(0.5, sum by (le, by) (increase(ballet_question_answer_seconds_bucket{{{SEL}}}[1d])))', "{{by}}")], 12, 28, unit="s"),
 ])
 
-usage = dashboard("ballet-llm-usage", "Ballet · LLM usage", "Tokens and requests per customer, project and model.", [
+usage = dashboard("ballet-llm-usage", "Ballet · LLM usage", "Tokens and requests per organization, project and model.", [
     panel(1, "Tokens in range (counted: input, output, cache writes)", "stat", [(f'sum(increase(ballet_usage_tokens_total{{type=~"input|output|cache_write", {SEL}}}[$__range])) or vector(0)', "tokens")], 0, 0, 8, 4, unit="short"),
     panel(2, "Requests in range", "stat", [(f'sum(increase(ballet_llm_requests_total{{{SEL}}}[$__range])) or vector(0)', "requests")], 8, 0, 8, 4),
     panel(3, "Refused or failed requests", "stat", [(f'sum(increase(ballet_llm_requests_total{{status!~"2..", {SEL}}}[$__range])) or vector(0)', "errors")], 16, 0, 8, 4),
@@ -65,7 +65,7 @@ usage = dashboard("ballet-llm-usage", "Ballet · LLM usage", "Tokens and request
     panel(5, "Tokens per hour by model", "timeseries", [(f'sum by (model) (increase(ballet_llm_tokens_total{{{SEL}}}[1h]))', "{{model}}")], 12, 4, unit="short"),
     panel(6, "Tokens by type", "timeseries", [(f'sum by (token_type) (increase(ballet_llm_tokens_total{{{SEL}}}[1h]))', "{{token_type}}")], 0, 12, unit="short"),
     panel(7, "Requests by status", "timeseries", [(f'sum by (status) (increase(ballet_llm_requests_total{{{SEL}}}[1h]))', "{{status}}")], 12, 12),
-    panel(8, "Tokens per customer (range)", "bargauge", [(f'sum by (customer) (increase(ballet_usage_tokens_total{{type=~"input|output|cache_write", {SEL}}}[$__range]))', "{{customer}}")], 0, 20, unit="short"),
+    panel(8, "Tokens per organization (range)", "bargauge", [(f'sum by (organization) (increase(ballet_usage_tokens_total{{type=~"input|output|cache_write", {SEL}}}[$__range]))', "{{organization}}")], 0, 20, unit="short"),
     panel(9, "Tokens per project (range)", "bargauge", [(f'sum by (project) (increase(ballet_usage_tokens_total{{type=~"input|output|cache_write", {SEL}}}[$__range]))',)], 12, 20, unit="short"),
 ])
 

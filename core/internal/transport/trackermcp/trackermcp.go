@@ -83,7 +83,7 @@ func caller(req *mcp.CallToolRequest, capability string) (app.RunCaller, error) 
 	if !c.Can(capability) {
 		return app.RunCaller{}, fmt.Errorf("the run token lacks %s", capability)
 	}
-	return app.RunCaller{RunID: runID, Customer: c.Customer, Project: c.Project, Ticket: c.Ticket}, nil
+	return app.RunCaller{RunID: runID, Organization: c.Organization, Project: c.Project, Ticket: c.Ticket}, nil
 }
 
 // toolErr turns errors into tool errors the agent can read.

@@ -7,13 +7,13 @@
 	import { formatScope, parseScope, scopeTarget, type Scope } from '$lib/skills';
 
 	const scopeParam = $derived(page.url.searchParams.get('scope'));
-	/** Without ?scope: the platform, or the caller's first customer or project binding. */
+	/** Without ?scope: the platform, or the caller's first organization or project binding. */
 	let defaultScope = $state<string>();
 	const scope = $derived(parseScope(scopeParam ?? defaultScope ?? 'platform'));
 
 	let session = $state<Session>();
 	let skills = $state<Schemas['Skill'][]>([]);
-	let projectCustomer = $state<string>();
+	let projectOrganization = $state<string>();
 	let loaded = $state(false);
 	let error = $state<string>();
 
@@ -22,18 +22,18 @@
 	let formError = $state<string>();
 
 	const canWrite = $derived(
-		!!session?.permissions.can('skill.write', scopeTarget(scope, projectCustomer))
+		!!session?.permissions.can('skill.write', scopeTarget(scope, projectOrganization))
 	);
 
 	async function load(s: Session, sc: Scope) {
 		error = undefined;
 		loaded = false;
-		projectCustomer = undefined;
+		projectOrganization = undefined;
 		if (sc.kind === 'project') {
 			const p = await s.api.GET('/api/v1/projects/{project}', {
 				params: { path: { project: sc.key } }
 			});
-			projectCustomer = p.data?.customer;
+			projectOrganization = p.data?.organization;
 		}
 		const res = await s.api.GET('/api/v1/skills', {
 			params: { query: { scope: formatScope(sc) } }
@@ -95,13 +95,13 @@
 		>Scope
 		<select bind:value={pick.kind}>
 			<option value="platform">Platform</option>
-			<option value="customer">Customer</option>
+			<option value="organization">Organization</option>
 			<option value="project">Project</option>
 		</select>
 	</label>
 	{#if pick.kind !== 'platform'}
 		<label
-			>{pick.kind === 'customer' ? 'Customer key' : 'Project key'}
+			>{pick.kind === 'organization' ? 'Organization key' : 'Project key'}
 			<input bind:value={pick.key} required /></label
 		>
 	{/if}

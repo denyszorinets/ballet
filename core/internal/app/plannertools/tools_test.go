@@ -34,11 +34,11 @@ type fakeKnowledge struct {
 	body  any
 }
 
-func (f *fakeKnowledge) Do(ctx context.Context, customer string, write bool, method, path string, q url.Values, body any) (json.RawMessage, error) {
+func (f *fakeKnowledge) Do(ctx context.Context, organization string, write bool, method, path string, q url.Values, body any) (json.RawMessage, error) {
 	if _, ok := app.PlannerSessionOf(ctx); !ok {
 		return nil, app.ErrForbidden
 	}
-	f.calls = append(f.calls, method+" "+customer+"/"+path+"?"+q.Encode())
+	f.calls = append(f.calls, method+" "+organization+"/"+path+"?"+q.Encode())
 	f.body = body
 	return json.RawMessage(`{"ok":true}`), nil
 }
@@ -60,14 +60,14 @@ func setup(t *testing.T) env {
 	r := &app.RBAC{Store: st, Bootstrap: []rbac.Binding{boot}}
 	ten := &app.Tenancy{Store: st, Authz: r, Now: time.Now, NewID: store.NewID}
 	alice := user(t, "alice", "admins")
-	_, err = ten.CreateCustomer(alice, app.CreateCustomerInput{Key: "acme", Name: "Acme"})
+	_, err = ten.CreateOrganization(alice, app.CreateOrganizationInput{Key: "acme", Name: "Acme"})
 	require.NoError(t, err)
-	_, err = ten.CreateProject(alice, app.CreateProjectInput{CustomerKey: "acme", Key: "WEB", Name: "Web"})
+	_, err = ten.CreateProject(alice, app.CreateProjectInput{OrganizationKey: "acme", Key: "WEB", Name: "Web"})
 	require.NoError(t, err)
 	bindings := &app.RoleBindings{RBAC: r, Tenancy: st, Now: time.Now, NewID: store.NewID}
 	for _, b := range []app.CreateRoleBindingInput{
-		{Claim: "groups", Value: "devs", Role: "engineer", Scope: "customer:acme"},
-		{Claim: "groups", Value: "viewers", Role: "viewer", Scope: "customer:acme"},
+		{Claim: "groups", Value: "devs", Role: "engineer", Scope: "organization:acme"},
+		{Claim: "groups", Value: "viewers", Role: "viewer", Scope: "organization:acme"},
 	} {
 		_, err := bindings.Create(alice, b)
 		require.NoError(t, err)
@@ -87,7 +87,7 @@ func setup(t *testing.T) env {
 	return e
 }
 
-var webEnv = app.ToolEnv{CustomerKey: "acme", ProjectKey: "WEB", SessionID: "s1"}
+var webEnv = app.ToolEnv{OrganizationKey: "acme", ProjectKey: "WEB", SessionID: "s1"}
 
 func (e env) call(t *testing.T, ctx context.Context, name, input string) (string, error) {
 	t.Helper()

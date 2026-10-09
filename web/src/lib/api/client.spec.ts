@@ -18,11 +18,11 @@ describe('createApiClient', () => {
 		const { calls, fetchFn } = recordingFetch(200, { items: [] });
 		const api = createApiClient({ getToken: async () => 'tok-123', fetch: fetchFn });
 
-		const { data } = await api.GET('/api/v1/customers');
+		const { data } = await api.GET('/api/v1/organizations');
 
 		expect(data).toEqual({ items: [] });
 		expect(calls[0].headers.get('Authorization')).toBe('Bearer tok-123');
-		expect(new URL(calls[0].url).pathname).toBe('/api/v1/customers');
+		expect(new URL(calls[0].url).pathname).toBe('/api/v1/organizations');
 	});
 
 	it('omits the Authorization header without a token', async () => {

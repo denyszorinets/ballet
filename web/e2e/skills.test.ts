@@ -17,7 +17,7 @@ const gitflow: FakeSkill = {
 };
 const review: FakeSkill = {
 	id: 's2',
-	scope: 'customer:acme',
+	scope: 'organization:acme',
 	name: 'code-review',
 	description: 'Review checklist',
 	body: 'Check tests.',
@@ -30,9 +30,9 @@ async function open(page: Page, me: { role: string; scope: string }[], path: str
 	await fakeOIDC(page);
 	const core = await fakeCore(page, {
 		me,
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
 		projects: [
-			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web shop', description: '', version: 1 }
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web shop', description: '', version: 1 }
 		],
 		skills: [structuredClone(gitflow), structuredClone(review)]
 	});
@@ -49,10 +49,10 @@ test('skills are listed per scope and created', async ({ page }) => {
 	await expect(page.getByRole('link', { name: 'gitflow' })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'code-review' })).toHaveCount(0);
 
-	await page.getByRole('combobox', { name: /^Scope/ }).selectOption('customer');
-	await page.getByLabel('Customer key').fill('acme');
+	await page.getByRole('combobox', { name: /^Scope/ }).selectOption('organization');
+	await page.getByLabel('Organization key').fill('acme');
 	await page.getByRole('button', { name: 'Show' }).click();
-	await expect(page).toHaveURL(/scope=customer%3Aacme/);
+	await expect(page).toHaveURL(/scope=organization%3Aacme/);
 	await expect(page.getByRole('link', { name: 'code-review' })).toBeVisible();
 
 	const form = page.getByRole('form', { name: 'New skill' });
@@ -63,9 +63,9 @@ test('skills are listed per scope and created', async ({ page }) => {
 	await expect(page.getByTestId('latest')).toHaveText('unpublished');
 });
 
-test('a customer engineer sees their customer scope and cannot edit', async ({ page }) => {
-	await open(page, [{ role: 'engineer', scope: 'customer:acme' }], '/skills');
-	await expect(page.getByRole('heading', { name: 'customer:acme' })).toBeVisible();
+test('an organization engineer sees their organization scope and cannot edit', async ({ page }) => {
+	await open(page, [{ role: 'engineer', scope: 'organization:acme' }], '/skills');
+	await expect(page.getByRole('heading', { name: 'organization:acme' })).toBeVisible();
 	await page.getByRole('link', { name: 'code-review' }).click();
 	await expect(page.getByText('Check tests.')).toBeVisible();
 	await expect(page.getByRole('form', { name: 'Skill draft' })).toHaveCount(0);
@@ -120,14 +120,14 @@ test('editing, publishing and comparing versions', async ({ page }) => {
 test('project skills: pin a version, disable and re-enable', async ({ page }) => {
 	const core = await open(
 		page,
-		[{ role: 'customer-admin', scope: 'customer:acme' }],
+		[{ role: 'organization-admin', scope: 'organization:acme' }],
 		'/projects/WEB'
 	);
 	await page.getByRole('main').getByRole('link', { name: 'Skills' }).click();
 
 	const row = (name: string) => page.getByRole('row').filter({ hasText: name });
 	await expect(row('gitflow')).toContainText('platform');
-	await expect(row('code-review')).toContainText('customer:acme');
+	await expect(row('code-review')).toContainText('organization:acme');
 
 	await page.getByLabel('Version of gitflow').selectOption('v1');
 	await expect(page.getByLabel('Version of gitflow')).toHaveValue('v1');

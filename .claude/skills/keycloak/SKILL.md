@@ -41,8 +41,8 @@ fail issuer validation.
 | User | Password | Groups | Intended role |
 |---|---|---|---|
 | alice | alice | ballet-admins | platform admin |
-| bob | bob | acme-devs | engineer for customer "acme" |
-| carol | carol | acme-viewers | viewer for customer "acme" |
+| bob | bob | acme-devs | engineer for organization "acme" |
+| carol | carol | acme-viewers | viewer for organization "acme" |
 
 Client `ballet-web`: public, authorization code + PKCE (S256), redirect
 URIs for `localhost:5173` (Vite dev), `:4173` (preview/e2e) and `:8080`
@@ -69,9 +69,9 @@ BALLET_CORE_RBAC_BOOTSTRAP_PLATFORM_ADMINS=groups:ballet-admins \
   go run ./core/cmd/core
 ```
 
-Typical setup for manual tests (as alice): create customer `acme`, then
-bind `acme-devs` → `engineer` @ `customer:acme` and `acme-viewers` →
-`viewer` @ `customer:acme` via `POST /api/v1/role-bindings`.
+Typical setup for manual tests (as alice): create organization `acme`, then
+bind `acme-devs` → `engineer` @ `organization:acme` and `acme-viewers` →
+`viewer` @ `organization:acme` via `POST /api/v1/role-bindings`.
 
 Decode a token's claims when debugging:
 

@@ -33,7 +33,7 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 
 type fixture struct {
 	url   string
-	issue func(customer, project string, caps ...string) string
+	issue func(organization, project string, caps ...string) string
 	ix    *app.Indexer
 }
 
@@ -53,9 +53,9 @@ func setup(t *testing.T) fixture {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	issuer := runtoken.NewIssuer(ring, time.Now)
-	return fixture{url: srv.URL + mcpapi.Path, ix: ix, issue: func(customer, project string, caps ...string) string {
+	return fixture{url: srv.URL + mcpapi.Path, ix: ix, issue: func(organization, project string, caps ...string) string {
 		raw, err := issuer.Issue(runtoken.Claims{Kind: runtoken.KindRun, Subject: "run:42", Audience: []string{"knowledge"},
-			Customer: customer, Project: project, Ticket: project + "-1", Capabilities: caps}, time.Hour)
+			Organization: organization, Project: project, Ticket: project + "-1", Capabilities: caps}, time.Hour)
 		require.NoError(t, err)
 		return raw
 	}}
@@ -133,7 +133,7 @@ func TestMCP_ScopeAndCapabilities(t *testing.T) {
 
 	globex := connect(t, f, f.issue("globex", "GLX", runtoken.CapKnowledgeRead))
 	_, isErr := callTool(t, globex, "knowledge_get", map[string]any{"id": id})
-	assert.True(t, isErr, "another customer cannot read the entry")
+	assert.True(t, isErr, "another organization cannot read the entry")
 	listed, _ := callTool(t, globex, "knowledge_list", map[string]any{})
 	assert.Empty(t, listed["entries"])
 

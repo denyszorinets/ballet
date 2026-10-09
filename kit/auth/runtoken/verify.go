@@ -81,7 +81,7 @@ func (v *Verifier) Verify(ctx context.Context, raw, audience string) (Claims, er
 
 	c := Claims{
 		ID: std.ID, Kind: wire.Kind, Subject: std.Subject, Audience: std.Audience,
-		Customer: wire.Customer, Project: wire.Project, Ticket: wire.Ticket,
+		Organization: wire.Organization, Project: wire.Project, Ticket: wire.Ticket,
 		Session: wire.Session, Capabilities: wire.Capabilities,
 	}
 	if std.Expiry != nil {

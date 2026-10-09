@@ -6,9 +6,11 @@ import { fakeRealtime } from './fixtures/realtime';
 async function open(page: Page, role: string): Promise<FakeCore> {
 	await fakeOIDC(page);
 	const core = await fakeCore(page, {
-		me: [{ role, scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
-		projects: [{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web', description: '', version: 1 }]
+		me: [{ role, scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		projects: [
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web', description: '', version: 1 }
+		]
 	});
 	await fakeRealtime(page, async () => ({}));
 	await page.goto('/projects/WEB/pipelines');
@@ -17,7 +19,7 @@ async function open(page: Page, role: string): Promise<FakeCore> {
 }
 
 test('an admin edits the default pipeline and publishes a new version', async ({ page }) => {
-	const core = await open(page, 'customer-admin');
+	const core = await open(page, 'organization-admin');
 	const stages = page.getByRole('list', { name: 'Stages' });
 	await expect(stages.getByRole('listitem')).toHaveCount(3);
 	await expect(page.getByText('not published yet')).toBeVisible();
@@ -58,7 +60,7 @@ test('an admin edits the default pipeline and publishes a new version', async ({
 });
 
 test('invalid YAML stays in the YAML view with its problems', async ({ page }) => {
-	await open(page, 'customer-admin');
+	await open(page, 'organization-admin');
 	await page.getByRole('tab', { name: 'YAML' }).click();
 	await page
 		.getByRole('textbox', { name: 'Pipeline YAML' })

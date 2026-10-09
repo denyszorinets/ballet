@@ -6,10 +6,10 @@ import { fakeRealtime } from './fixtures/realtime';
 test('admins set a project budget and see a used-up daily budget', async ({ page }) => {
 	await fakeOIDC(page);
 	const core = await fakeCore(page, {
-		me: [{ role: 'customer-admin', scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		me: [{ role: 'organization-admin', scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
 		projects: [
-			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web', description: '', version: 1 }
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web', description: '', version: 1 }
 		],
 		budgets: {
 			'project:WEB': { ticket_tokens: 0, daily_tokens: 0, used_today: 120000, version: 0 }
@@ -37,26 +37,28 @@ test('admins set a project budget and see a used-up daily budget', async ({ page
 test('viewers see the budget read-only', async ({ page }) => {
 	await fakeOIDC(page);
 	await fakeCore(page, {
-		me: [{ role: 'viewer', scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
-		projects: [{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web', description: '', version: 1 }]
+		me: [{ role: 'viewer', scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		projects: [
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web', description: '', version: 1 }
+		]
 	});
 	await fakeRealtime(page, async () => ({}));
-	await page.goto('/customers/acme');
+	await page.goto('/organizations/acme');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 	const budget = page.getByRole('region', { name: 'Budget' });
 	await expect(budget.getByRole('spinbutton', { name: 'Per day' })).toBeDisabled();
 	await expect(budget.getByRole('button', { name: 'Save budget' })).toHaveCount(0);
 });
 
-test('customer admins store an LLM key without seeing it again', async ({ page }) => {
+test('organization admins store an LLM key without seeing it again', async ({ page }) => {
 	await fakeOIDC(page);
 	const core = await fakeCore(page, {
-		me: [{ role: 'customer-admin', scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }]
+		me: [{ role: 'organization-admin', scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }]
 	});
 	await fakeRealtime(page, async () => ({}));
-	await page.goto('/customers/acme');
+	await page.goto('/organizations/acme');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
 	const creds = page.getByRole('region', { name: 'LLM credentials' });

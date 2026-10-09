@@ -8,7 +8,7 @@ OpenID Connect provider; Ballet validates the provider's access tokens
 Authentication is **off by default**: without ``[oidc] issuer_url``
 everyone is the single local user, a platform admin, and Core only
 listens on ``localhost`` (:ref:`reference-config-oidc`). Configure an
-issuer as below when several people, customers or roles share an
+issuer as below when several people, organizations or roles share an
 installation.
 
 Requirements for the identity provider
@@ -70,16 +70,16 @@ Authentication alone grants nothing; access comes from role bindings
    [rbac]
    bootstrap_platform_admins = ["groups:ballet-admins"]
 
-They can then create customers, projects and role bindings in the web
-UI — **Customers** (create, rename, add projects) and **Access** (grant
+They can then create organizations, projects and role bindings in the web
+UI — **Organizations** (create, rename, add projects) and **Access** (grant
 and remove role bindings) — or through the API, e.g. make the
-``acme-devs`` group engineers of customer ``acme``:
+``acme-devs`` group engineers of organization ``acme``:
 
 .. code-block:: bash
 
    curl -X POST localhost:8080/api/v1/role-bindings \
      -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
-     -d '{"claim":"groups","value":"acme-devs","role":"engineer","scope":"customer:acme"}'
+     -d '{"claim":"groups","value":"acme-devs","role":"engineer","scope":"organization:acme"}'
 
 The UI shows administration controls only to users whose bindings allow
 them; Core enforces the same rules on every request.

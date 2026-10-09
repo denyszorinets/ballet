@@ -4,20 +4,20 @@ Security
 Tenancy and isolation
 ---------------------
 
-The **customer** is the isolation boundary. Every customer-owned record
-(projects, tickets, runs, knowledge, credentials, customer-scoped
-skills) carries its customer ID, and every query is filtered by the
-customer scope derived from the caller's identity — never from request
+The **organization** is the isolation boundary. Every organization-owned record
+(projects, tickets, runs, knowledge, credentials, organization-scoped
+skills) carries its organization ID, and every query is filtered by the
+organization scope derived from the caller's identity — never from request
 parameters alone.
 
 Knowledge isolation is enforced in the Knowledge service itself, so a
-bug in Core or the UI cannot expose another customer's knowledge. Its
+bug in Core or the UI cannot expose another organization's knowledge. Its
 isolation test suite (``knowledge/internal/isolation``) runs in CI and
-covers REST, search and MCP with two customers holding near-identical
+covers REST, search and MCP with two organizations holding near-identical
 content: foreign tokens on foreign spaces (403), foreign entry IDs inside
-the caller's own space (404, no content returned), cross-customer search
+the caller's own space (404, no content returned), cross-organization search
 results (none), and forged tokens — wrong audience, untrusted signing
-key, expired, missing customer or capability. Any new Knowledge endpoint
+key, expired, missing organization or capability. Any new Knowledge endpoint
 or tool must be added to it.
 
 Human identity: OIDC
@@ -32,7 +32,7 @@ scope.
 
 .. code-block:: text
 
-   claim groups contains "acme-devs"  →  engineer        @ customer:acme
+   claim groups contains "acme-devs"  →  engineer        @ organization:acme
    claim groups contains "ballet-ops" →  platform-admin       @ platform
    claim email = "pm@acme.example"    →  approver        @ project:ACME
 
@@ -49,33 +49,33 @@ arrive):
      - Grants
      - Bindable at
    * - ``platform-admin``
-     - Every action, including creating customers
+     - Every action, including creating organizations
      - platform only
-   * - ``customer-admin``
-     - Read and update the customer; create, read, update its projects;
-       manage and read role bindings within the customer; read and write
+   * - ``organization-admin``
+     - Read and update the organization; create, read, update its projects;
+       manage and read role bindings within the organization; read and write
        its tracker and knowledge; manage its LLM credentials; edit and
        publish its skills; queue and cancel runs by hand (``run.manage``)
-     - customer
+     - organization
    * - ``engineer``
-     - Read customer and projects; read and write the tracker
+     - Read organization and projects; read and write the tracker
        (milestones, epics, tickets)
-     - customer, project
+     - organization, project
    * - ``approver``
-     - Read customer, projects and tracker (approvals as they are added)
-     - customer, project
+     - Read organization, projects and tracker (approvals as they are added)
+     - organization, project
    * - ``viewer``
-     - Read customer, projects and tracker
-     - customer, project
+     - Read organization, projects and tracker
+     - organization, project
 
 Scope semantics:
 
 - A platform binding applies everywhere.
-- A customer binding applies to the customer and all its projects.
+- An organization binding applies to the organization and all its projects.
 - A project binding applies to that project, and lets the holder *see*
-  (read) the project's customer — nothing else of it.
-- Platform-level actions (creating customers, platform-scope
-  bindings) require a platform binding, so a customer admin cannot
+  (read) the project's organization — nothing else of it.
+- Platform-level actions (creating organizations, platform-scope
+  bindings) require a platform binding, so an organization admin cannot
   escalate.
 
 Evaluation is deny-by-default in Core's application layer; list
@@ -93,9 +93,9 @@ Agent identity: scoped run tokens
 Agents are not OIDC users. When a run (or planner session) starts, Core
 mints a **short-lived token** bound to:
 
-- customer, project and ticket (or planner session);
+- organization, project and ticket (or planner session);
 - the capabilities of that run: read its ticket and plan context,
-  report progress, propose work, read/write knowledge in its customer
+  report progress, propose work, read/write knowledge in its organization
   space, call the LLM gateway.
 
 Tokens expire with the run. Planner tokens additionally record the human
@@ -104,7 +104,7 @@ on whose behalf the planner acts; audit entries show both.
 Secrets
 -------
 
-- LLM provider credentials are stored in Core per customer (default) and
+- LLM provider credentials are stored in Core per organization (default) and
   optionally per project (override), encrypted with AES-256-GCM using
   the key in ``[secrets] key_file``; each ciphertext is bound to its
   scope. The REST API accepts keys but only ever returns a fingerprint;
@@ -128,7 +128,7 @@ container or VM an agent runs in is the isolation boundary:
   agent's token or signal the agent; each gets a fresh workspace and
   ``HOME``, removed afterwards, and a minimal environment;
 - later sessions run where earlier ones ran: run agents of different
-  customers in different pools;
+  organizations in different pools;
 - coding agents skip their permission prompts (``IS_SANDBOX=1``,
   ``"permission": "allow"``) because the container is the boundary;
 - restrict the containers' network egress to the git remote, the LLM

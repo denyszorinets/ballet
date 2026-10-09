@@ -13,7 +13,7 @@
 
 	let session = $state<Session>();
 	let item = $state<Item>();
-	let customer = $state<string>();
+	let organization = $state<string>();
 	let containers = $state<Item[]>([]);
 	let deps = $state<Dependency[]>([]);
 	let history = $state<Event[]>([]);
@@ -45,7 +45,7 @@
 	let depForm = $state({ type: 'blocked_by' as Schemas['DependencyType'], item: '' });
 
 	const canWrite = $derived(
-		!!item && !!session?.permissions.can('tracker.write', { customer, project: item.project })
+		!!item && !!session?.permissions.can('tracker.write', { organization, project: item.project })
 	);
 
 	async function flowAction(action: 'start' | 'approve' | 'reject') {
@@ -109,18 +109,18 @@
 			params: { path: { project: it.data.project }, query: { group_by: 'run', ticket: k } }
 		});
 		usage = u.data?.items ?? [];
-		if (!customer || containers.length === 0) {
+		if (!organization || containers.length === 0) {
 			const pp = { params: { path: { project: it.data.project } } };
 			const [p, list] = await Promise.all([
 				s.api.GET('/api/v1/projects/{project}', pp),
 				s.api.GET('/api/v1/projects/{project}/items', pp)
 			]);
-			customer = p.data?.customer;
+			organization = p.data?.organization;
 			containers = (list.data?.items ?? []).filter((i) => i.kind !== 'ticket');
 		}
-		if (customer && s.permissions.can('knowledge.read', { customer })) {
-			const kn = await s.api.GET('/api/v1/customers/{customer}/knowledge/entries', {
-				params: { path: { customer }, query: { item: k } }
+		if (organization && s.permissions.can('knowledge.read', { organization })) {
+			const kn = await s.api.GET('/api/v1/organizations/{organization}/knowledge/entries', {
+				params: { path: { organization }, query: { item: k } }
 			});
 			knowledge = kn.data?.items ?? [];
 		}
@@ -379,7 +379,7 @@
 		</form>
 	{/if}
 
-	{#if customer && session?.permissions.can('knowledge.read', { customer })}
+	{#if organization && session?.permissions.can('knowledge.read', { organization })}
 		<h2>Knowledge</h2>
 		{#if knowledge.length === 0}
 			<p class="muted">No linked knowledge.</p>
@@ -387,17 +387,20 @@
 			<ul aria-label="Linked knowledge">
 				{#each knowledge as e (e.id)}
 					<li>
-						<a href={resolve('/customers/[customer]/knowledge/[entry]', { customer, entry: e.id })}
-							>{e.title}</a
+						<a
+							href={resolve('/organizations/[organization]/knowledge/[entry]', {
+								organization,
+								entry: e.id
+							})}>{e.title}</a
 						>
 						<span class="badge">{e.kind}</span>
 					</li>
 				{/each}
 			</ul>
 		{/if}
-		{#if session.permissions.can('knowledge.write', { customer })}
+		{#if session.permissions.can('knowledge.write', { organization })}
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved path plus a query -->
-			<a href={resolve('/customers/[customer]/knowledge/new', { customer }) + itemQuery}
+			<a href={resolve('/organizations/[organization]/knowledge/new', { organization }) + itemQuery}
 				>Add knowledge</a
 			>
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
@@ -437,7 +440,7 @@
 		{:else}
 			<p class="muted">Not started.</p>
 		{/if}
-		{#if item.state === 'ready' && (!flow || ['done', 'failed', 'stopped'].includes(flow.status)) && session?.permissions.can( 'run.manage', { customer, project: item.project } )}
+		{#if item.state === 'ready' && (!flow || ['done', 'failed', 'stopped'].includes(flow.status)) && session?.permissions.can( 'run.manage', { organization, project: item.project } )}
 			<button onclick={() => flowAction('start')}>Start pipeline</button>
 		{/if}
 		{#if flowError}<p class="error" role="alert">{flowError}</p>{/if}
@@ -490,7 +493,10 @@
 				{questions}
 				{history}
 				{usage}
-				canManage={!!session?.permissions.can('run.manage', { customer, project: item.project })}
+				canManage={!!session?.permissions.can('run.manage', {
+					organization,
+					project: item.project
+				})}
 			/>
 		{/if}
 		{#if reports.length}

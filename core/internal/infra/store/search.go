@@ -15,12 +15,12 @@ import (
 // UpsertSearchDoc stores a search document.
 func (s *Store) UpsertSearchDoc(ctx context.Context, d app.SearchDoc) error {
 	return s.db.Batch(ctx, sqlstore.Exec(`INSERT INTO search_docs
-			(id, kind, entity_id, ref, customer_key, project_key, scope, title, body, updated_at)
+			(id, kind, entity_id, ref, organization_key, project_key, scope, title, body, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (id) DO UPDATE SET ref = excluded.ref, customer_key = excluded.customer_key,
+		ON CONFLICT (id) DO UPDATE SET ref = excluded.ref, organization_key = excluded.organization_key,
 			project_key = excluded.project_key, scope = excluded.scope, title = excluded.title,
 			body = excluded.body, updated_at = excluded.updated_at`,
-		d.ID, d.Kind, d.EntityID, d.Ref, d.Customer, d.Project, d.Scope, d.Title, d.Body, formatTime(d.UpdatedAt)))
+		d.ID, d.Kind, d.EntityID, d.Ref, d.Organization, d.Project, d.Scope, d.Title, d.Body, formatTime(d.UpdatedAt)))
 }
 
 // SearchCursor returns the last event seq the search indexer processed.
@@ -42,7 +42,7 @@ func (s *Store) SetSearchCursor(ctx context.Context, seq int64) error {
 // StaleSearchDocs returns up to limit documents whose embedding is
 // missing, of another model or of older content.
 func (s *Store) StaleSearchDocs(ctx context.Context, model string, limit int, hash func(app.SearchDoc) string) ([]app.SearchDoc, error) {
-	rows, err := s.db.Query(ctx, `SELECT d.id, d.kind, d.entity_id, d.ref, d.customer_key, d.project_key, d.scope,
+	rows, err := s.db.Query(ctx, `SELECT d.id, d.kind, d.entity_id, d.ref, d.organization_key, d.project_key, d.scope,
 			d.title, d.body, COALESCE(e.model, ''), COALESCE(e.content_hash, '')
 		FROM search_docs d LEFT JOIN search_embeddings e ON e.doc_id = d.id`)
 	if err != nil {
@@ -53,7 +53,7 @@ func (s *Store) StaleSearchDocs(ctx context.Context, model string, limit int, ha
 	for rows.Next() && len(out) < limit {
 		var d app.SearchDoc
 		var m, h string
-		if err := rows.Scan(&d.ID, &d.Kind, &d.EntityID, &d.Ref, &d.Customer, &d.Project, &d.Scope, &d.Title, &d.Body, &m, &h); err != nil {
+		if err := rows.Scan(&d.ID, &d.Kind, &d.EntityID, &d.Ref, &d.Organization, &d.Project, &d.Scope, &d.Title, &d.Body, &m, &h); err != nil {
 			return nil, err
 		}
 		if m != model || h != hash(d) {
@@ -89,7 +89,7 @@ func (s *Store) SearchDocs(ctx context.Context, q app.DocQuery) ([]app.DocHit, e
 	if q.Project != "" {
 		// The project's own documents plus skills of its chain.
 		where = append(where, "(d.project_key = ? OR (d.kind = 'skill' AND (d.scope = 'platform' OR d.scope = ?)))")
-		args = append(args, q.Project, "customer:"+q.Customer)
+		args = append(args, q.Project, "organization:"+q.Organization)
 	}
 	filter := strings.Join(where, " AND ")
 	const candidates = 100
@@ -110,7 +110,7 @@ func (s *Store) SearchDocs(ctx context.Context, q app.DocQuery) ([]app.DocHit, e
 		fused = `SELECT id, SUM(1.0 / (60 + r)) AS score FROM (SELECT * FROM fts UNION ALL SELECT * FROM vec) GROUP BY id`
 	}
 	sqlText += `
-SELECT d.id, d.kind, d.entity_id, d.ref, d.customer_key, d.project_key, d.scope, d.title, d.body, f.score
+SELECT d.id, d.kind, d.entity_id, d.ref, d.organization_key, d.project_key, d.scope, d.title, d.body, f.score
 FROM (` + fused + `) f JOIN search_docs d ON d.id = f.id ORDER BY f.score DESC LIMIT ` + fmt.Sprint(candidates)
 	rows, err := s.db.Query(ctx, sqlText, all...)
 	if err != nil {
@@ -120,7 +120,7 @@ FROM (` + fused + `) f JOIN search_docs d ON d.id = f.id ORDER BY f.score DESC L
 	var out []app.DocHit
 	for rows.Next() {
 		var h app.DocHit
-		if err := rows.Scan(&h.ID, &h.Kind, &h.EntityID, &h.Ref, &h.Customer, &h.Project, &h.Scope, &h.Title, &h.Body, &h.Score); err != nil {
+		if err := rows.Scan(&h.ID, &h.Kind, &h.EntityID, &h.Ref, &h.Organization, &h.Project, &h.Scope, &h.Title, &h.Body, &h.Score); err != nil {
 			return nil, err
 		}
 		out = append(out, h)

@@ -9,24 +9,24 @@ import (
 	"github.com/denyszorinets/ballet/core/internal/domain/tenancy"
 )
 
-// TenancyStore persists customers and projects. Writes take the event to
+// TenancyStore persists organizations and projects. Writes take the event to
 // record atomically with the change. Updates use optimistic concurrency on
 // the entity's Version and return ErrConflict on a stale version.
 type TenancyStore interface {
-	CreateCustomer(ctx context.Context, c tenancy.Customer, e event.Event) error
-	UpdateCustomer(ctx context.Context, c tenancy.Customer, expectedVersion int64, e event.Event) error
-	CustomerByKey(ctx context.Context, key string) (tenancy.Customer, error)
-	CustomerByID(ctx context.Context, id string) (tenancy.Customer, error)
-	ListCustomers(ctx context.Context) ([]tenancy.Customer, error)
+	CreateOrganization(ctx context.Context, c tenancy.Organization, e event.Event) error
+	UpdateOrganization(ctx context.Context, c tenancy.Organization, expectedVersion int64, e event.Event) error
+	OrganizationByKey(ctx context.Context, key string) (tenancy.Organization, error)
+	OrganizationByID(ctx context.Context, id string) (tenancy.Organization, error)
+	ListOrganizations(ctx context.Context) ([]tenancy.Organization, error)
 
 	CreateProject(ctx context.Context, p tenancy.Project, e event.Event) error
 	UpdateProject(ctx context.Context, p tenancy.Project, expectedVersion int64, e event.Event) error
 	ProjectByKey(ctx context.Context, key string) (tenancy.Project, error)
 	ProjectByID(ctx context.Context, id string) (tenancy.Project, error)
-	ListProjects(ctx context.Context, customerID string) ([]tenancy.Project, error)
+	ListProjects(ctx context.Context, organizationID string) ([]tenancy.Project, error)
 }
 
-// Tenancy implements customer and project use cases.
+// Tenancy implements organization and project use cases.
 type Tenancy struct {
 	Store TenancyStore
 	Authz Authorizer
@@ -34,123 +34,123 @@ type Tenancy struct {
 	NewID func() string
 }
 
-// CreateCustomerInput is the input of CreateCustomer.
-type CreateCustomerInput struct {
+// CreateOrganizationInput is the input of CreateOrganization.
+type CreateOrganizationInput struct {
 	Key  string
 	Name string
 }
 
-// CreateCustomer creates a customer. Platform-level action.
-func (t *Tenancy) CreateCustomer(ctx context.Context, in CreateCustomerInput) (tenancy.Customer, error) {
+// CreateOrganization creates an organization. Platform-level action.
+func (t *Tenancy) CreateOrganization(ctx context.Context, in CreateOrganizationInput) (tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return tenancy.Customer{}, err
+		return tenancy.Organization{}, err
 	}
-	if err := t.Authz.Authorize(ctx, id, ActCustomerCreate, Scope{}); err != nil {
-		return tenancy.Customer{}, err
+	if err := t.Authz.Authorize(ctx, id, ActOrganizationCreate, Scope{}); err != nil {
+		return tenancy.Organization{}, err
 	}
-	if err := firstErr(tenancy.ValidateCustomerKey(in.Key), tenancy.ValidateName(in.Name)); err != nil {
-		return tenancy.Customer{}, invalid(err)
+	if err := firstErr(tenancy.ValidateOrganizationKey(in.Key), tenancy.ValidateName(in.Name)); err != nil {
+		return tenancy.Organization{}, invalid(err)
 	}
 	now := t.Now()
-	c := tenancy.Customer{ID: t.NewID(), Key: in.Key, Name: in.Name, CreatedAt: now, UpdatedAt: now, Version: 1}
-	e := customerEvent(c, "customer.created", actorOf(id), map[string]any{"key": c.Key, "name": c.Name})
-	if err := t.Store.CreateCustomer(ctx, c, e); err != nil {
-		return tenancy.Customer{}, err
+	c := tenancy.Organization{ID: t.NewID(), Key: in.Key, Name: in.Name, CreatedAt: now, UpdatedAt: now, Version: 1}
+	e := organizationEvent(c, "organization.created", actorOf(id), map[string]any{"key": c.Key, "name": c.Name})
+	if err := t.Store.CreateOrganization(ctx, c, e); err != nil {
+		return tenancy.Organization{}, err
 	}
 	return c, nil
 }
 
-// GetCustomer returns a customer by key.
-func (t *Tenancy) GetCustomer(ctx context.Context, key string) (tenancy.Customer, error) {
+// GetOrganization returns an organization by key.
+func (t *Tenancy) GetOrganization(ctx context.Context, key string) (tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return tenancy.Customer{}, err
+		return tenancy.Organization{}, err
 	}
-	if err := t.Authz.Authorize(ctx, id, ActCustomerRead, Scope{Customer: key}); err != nil {
-		return tenancy.Customer{}, err
+	if err := t.Authz.Authorize(ctx, id, ActOrganizationRead, Scope{Organization: key}); err != nil {
+		return tenancy.Organization{}, err
 	}
-	return t.Store.CustomerByKey(ctx, key)
+	return t.Store.OrganizationByKey(ctx, key)
 }
 
-// ListCustomers returns the customers the caller may read.
-func (t *Tenancy) ListCustomers(ctx context.Context) ([]tenancy.Customer, error) {
+// ListOrganizations returns the organizations the caller may read.
+func (t *Tenancy) ListOrganizations(ctx context.Context) ([]tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
 		return nil, err
 	}
-	all, err := t.Store.ListCustomers(ctx)
+	all, err := t.Store.ListOrganizations(ctx)
 	if err != nil {
 		return nil, err
 	}
-	visible := []tenancy.Customer{}
+	visible := []tenancy.Organization{}
 	for _, c := range all {
-		if t.Authz.Authorize(ctx, id, ActCustomerRead, Scope{Customer: c.Key}) == nil {
+		if t.Authz.Authorize(ctx, id, ActOrganizationRead, Scope{Organization: c.Key}) == nil {
 			visible = append(visible, c)
 		}
 	}
 	return visible, nil
 }
 
-// UpdateCustomerInput is the input of UpdateCustomer.
-type UpdateCustomerInput struct {
+// UpdateOrganizationInput is the input of UpdateOrganization.
+type UpdateOrganizationInput struct {
 	Key     string
 	Name    string
 	Version int64 // version the caller last read
 }
 
-// UpdateCustomer renames a customer.
-func (t *Tenancy) UpdateCustomer(ctx context.Context, in UpdateCustomerInput) (tenancy.Customer, error) {
+// UpdateOrganization renames an organization.
+func (t *Tenancy) UpdateOrganization(ctx context.Context, in UpdateOrganizationInput) (tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return tenancy.Customer{}, err
+		return tenancy.Organization{}, err
 	}
-	if err := t.Authz.Authorize(ctx, id, ActCustomerUpdate, Scope{Customer: in.Key}); err != nil {
-		return tenancy.Customer{}, err
+	if err := t.Authz.Authorize(ctx, id, ActOrganizationUpdate, Scope{Organization: in.Key}); err != nil {
+		return tenancy.Organization{}, err
 	}
 	if err := tenancy.ValidateName(in.Name); err != nil {
-		return tenancy.Customer{}, invalid(err)
+		return tenancy.Organization{}, invalid(err)
 	}
-	c, err := t.Store.CustomerByKey(ctx, in.Key)
+	c, err := t.Store.OrganizationByKey(ctx, in.Key)
 	if err != nil {
-		return tenancy.Customer{}, err
+		return tenancy.Organization{}, err
 	}
 	c.Name, c.UpdatedAt, c.Version = in.Name, t.Now(), in.Version+1
-	e := customerEvent(c, "customer.updated", actorOf(id), map[string]any{"name": c.Name})
-	if err := t.Store.UpdateCustomer(ctx, c, in.Version, e); err != nil {
-		return tenancy.Customer{}, err
+	e := organizationEvent(c, "organization.updated", actorOf(id), map[string]any{"name": c.Name})
+	if err := t.Store.UpdateOrganization(ctx, c, in.Version, e); err != nil {
+		return tenancy.Organization{}, err
 	}
 	return c, nil
 }
 
 // CreateProjectInput is the input of CreateProject.
 type CreateProjectInput struct {
-	CustomerKey string
-	Key         string
-	Name        string
-	Description string
+	OrganizationKey string
+	Key             string
+	Name            string
+	Description     string
 }
 
-// CreateProject creates a project for a customer.
+// CreateProject creates a project for an organization.
 func (t *Tenancy) CreateProject(ctx context.Context, in CreateProjectInput) (tenancy.Project, error) {
 	id, err := caller(ctx)
 	if err != nil {
 		return tenancy.Project{}, err
 	}
-	if err := t.Authz.Authorize(ctx, id, ActProjectCreate, Scope{Customer: in.CustomerKey}); err != nil {
+	if err := t.Authz.Authorize(ctx, id, ActProjectCreate, Scope{Organization: in.OrganizationKey}); err != nil {
 		return tenancy.Project{}, err
 	}
 	if err := firstErr(tenancy.ValidateProjectKey(in.Key), tenancy.ValidateName(in.Name),
 		tenancy.ValidateDescription(in.Description)); err != nil {
 		return tenancy.Project{}, invalid(err)
 	}
-	c, err := t.Store.CustomerByKey(ctx, in.CustomerKey)
+	c, err := t.Store.OrganizationByKey(ctx, in.OrganizationKey)
 	if err != nil {
 		return tenancy.Project{}, err
 	}
 	now := t.Now()
 	p := tenancy.Project{
-		ID: t.NewID(), CustomerID: c.ID, Key: in.Key, Name: in.Name, Description: in.Description,
+		ID: t.NewID(), OrganizationID: c.ID, Key: in.Key, Name: in.Name, Description: in.Description,
 		CreatedAt: now, UpdatedAt: now, Version: 1,
 	}
 	e := projectEvent(p, "project.created", actorOf(id), map[string]any{"key": p.Key, "name": p.Name})
@@ -160,10 +160,10 @@ func (t *Tenancy) CreateProject(ctx context.Context, in CreateProjectInput) (ten
 	return p, nil
 }
 
-// ProjectView is a project together with its customer's key.
+// ProjectView is a project together with its organization's key.
 type ProjectView struct {
 	tenancy.Project
-	CustomerKey string
+	OrganizationKey string
 }
 
 // GetProject returns a project by key.
@@ -172,23 +172,23 @@ func (t *Tenancy) GetProject(ctx context.Context, key string) (ProjectView, erro
 	if err != nil {
 		return ProjectView{}, err
 	}
-	p, c, err := t.projectWithCustomer(ctx, key)
+	p, c, err := t.projectWithOrganization(ctx, key)
 	if err != nil {
 		return ProjectView{}, err
 	}
-	if err := t.Authz.Authorize(ctx, id, ActProjectRead, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := t.Authz.Authorize(ctx, id, ActProjectRead, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return ProjectView{}, err
 	}
-	return ProjectView{Project: p, CustomerKey: c.Key}, nil
+	return ProjectView{Project: p, OrganizationKey: c.Key}, nil
 }
 
-// ListProjects returns a customer's projects the caller may read.
-func (t *Tenancy) ListProjects(ctx context.Context, customerKey string) ([]ProjectView, error) {
+// ListProjects returns an organization's projects the caller may read.
+func (t *Tenancy) ListProjects(ctx context.Context, organizationKey string) ([]ProjectView, error) {
 	id, err := caller(ctx)
 	if err != nil {
 		return nil, err
 	}
-	c, err := t.Store.CustomerByKey(ctx, customerKey)
+	c, err := t.Store.OrganizationByKey(ctx, organizationKey)
 	if err != nil {
 		return nil, err
 	}
@@ -198,8 +198,8 @@ func (t *Tenancy) ListProjects(ctx context.Context, customerKey string) ([]Proje
 	}
 	visible := []ProjectView{}
 	for _, p := range all {
-		if t.Authz.Authorize(ctx, id, ActProjectRead, Scope{Customer: c.Key, Project: p.Key}) == nil {
-			visible = append(visible, ProjectView{Project: p, CustomerKey: c.Key})
+		if t.Authz.Authorize(ctx, id, ActProjectRead, Scope{Organization: c.Key, Project: p.Key}) == nil {
+			visible = append(visible, ProjectView{Project: p, OrganizationKey: c.Key})
 		}
 	}
 	return visible, nil
@@ -219,11 +219,11 @@ func (t *Tenancy) UpdateProject(ctx context.Context, in UpdateProjectInput) (Pro
 	if err != nil {
 		return ProjectView{}, err
 	}
-	p, c, err := t.projectWithCustomer(ctx, in.Key)
+	p, c, err := t.projectWithOrganization(ctx, in.Key)
 	if err != nil {
 		return ProjectView{}, err
 	}
-	if err := t.Authz.Authorize(ctx, id, ActProjectUpdate, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := t.Authz.Authorize(ctx, id, ActProjectUpdate, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return ProjectView{}, err
 	}
 	if err := firstErr(tenancy.ValidateName(in.Name), tenancy.ValidateDescription(in.Description)); err != nil {
@@ -234,31 +234,31 @@ func (t *Tenancy) UpdateProject(ctx context.Context, in UpdateProjectInput) (Pro
 	if err := t.Store.UpdateProject(ctx, p, in.Version, e); err != nil {
 		return ProjectView{}, err
 	}
-	return ProjectView{Project: p, CustomerKey: c.Key}, nil
+	return ProjectView{Project: p, OrganizationKey: c.Key}, nil
 }
 
-func (t *Tenancy) projectWithCustomer(ctx context.Context, key string) (tenancy.Project, tenancy.Customer, error) {
+func (t *Tenancy) projectWithOrganization(ctx context.Context, key string) (tenancy.Project, tenancy.Organization, error) {
 	p, err := t.Store.ProjectByKey(ctx, key)
 	if err != nil {
-		return tenancy.Project{}, tenancy.Customer{}, err
+		return tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := t.Store.CustomerByID(ctx, p.CustomerID)
+	c, err := t.Store.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
-		return tenancy.Project{}, tenancy.Customer{}, err
+		return tenancy.Project{}, tenancy.Organization{}, err
 	}
 	return p, c, nil
 }
 
-func customerEvent(c tenancy.Customer, typ string, actor event.Actor, payload map[string]any) event.Event {
+func organizationEvent(c tenancy.Organization, typ string, actor event.Actor, payload map[string]any) event.Event {
 	return event.Event{
-		Customer: c.ID, EntityType: "customer", EntityID: c.ID, Type: typ, Actor: actor,
+		Organization: c.ID, EntityType: "organization", EntityID: c.ID, Type: typ, Actor: actor,
 		OccurredAt: c.UpdatedAt, Payload: mustJSON(payload),
 	}
 }
 
 func projectEvent(p tenancy.Project, typ string, actor event.Actor, payload map[string]any) event.Event {
 	return event.Event{
-		Customer: p.CustomerID, Project: p.ID, EntityType: "project", EntityID: p.ID, Type: typ,
+		Organization: p.OrganizationID, Project: p.ID, EntityType: "project", EntityID: p.ID, Type: typ,
 		Actor: actor, OccurredAt: p.UpdatedAt, Payload: mustJSON(payload),
 	}
 }

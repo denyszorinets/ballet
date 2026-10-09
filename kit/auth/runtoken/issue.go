@@ -14,7 +14,7 @@ import (
 // wireClaims is the JSON representation of the Ballet-specific claims.
 type wireClaims struct {
 	Kind         Kind     `json:"kind"`
-	Customer     string   `json:"cust,omitempty"`
+	Organization string   `json:"org,omitempty"`
 	Project      string   `json:"proj,omitempty"`
 	Ticket       string   `json:"tkt,omitempty"`
 	Session      string   `json:"sess,omitempty"`
@@ -67,7 +67,7 @@ func (i *TokenIssuer) Issue(c Claims, ttl time.Duration) (string, error) {
 		Expiry:   jwt.NewNumericDate(now.Add(ttl)),
 	}
 	wire := wireClaims{
-		Kind: c.Kind, Customer: c.Customer, Project: c.Project, Ticket: c.Ticket,
+		Kind: c.Kind, Organization: c.Organization, Project: c.Project, Ticket: c.Ticket,
 		Session: c.Session, Capabilities: c.Capabilities,
 	}
 	if c.ActingFor != "" {

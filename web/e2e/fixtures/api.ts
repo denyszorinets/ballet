@@ -2,11 +2,11 @@ import type { Page, Route } from '@playwright/test';
 
 /** In-memory fake of Core's REST API for e2e tests. */
 export interface FakeCore {
-	customers: { id: string; key: string; name: string; version: number }[];
+	organizations: { id: string; key: string; name: string; version: number }[];
 	projects: {
 		id: string;
 		key: string;
-		customer: string;
+		organization: string;
 		name: string;
 		description: string;
 		version: number;
@@ -32,7 +32,7 @@ export interface FakeCore {
 	changesets: FakeChangeset[];
 	/** Execution settings by project key. */
 	execution: Record<string, Record<string, unknown>>;
-	/** Customer LLM credentials by "customer/provider" (the keys as received). */
+	/** Organization LLM credentials by "organization/provider" (the keys as received). */
 	llmKeys: Record<string, string>;
 	/** Git tokens by project key (as the fake received them). */
 	gitTokens: Record<string, string>;
@@ -76,7 +76,7 @@ export interface FakeCore {
 	digestQueries: string[];
 	/** Published pipeline versions by name, oldest first (API shape). */
 	pipelines: Record<string, Record<string, unknown>[]>;
-	/** Budgets by "customer:<key>" or "project:<key>" (API shape). */
+	/** Budgets by "organization:<key>" or "project:<key>" (API shape). */
 	budgets: Record<
 		string,
 		{ ticket_tokens: number; daily_tokens: number; used_today: number; version: number }
@@ -136,7 +136,7 @@ export interface FakeSkill {
 
 export interface FakeEntry {
 	id: string;
-	customer: string;
+	organization: string;
 	kind: 'document' | 'decision' | 'note' | 'debt';
 	title: string;
 	body: string;
@@ -170,8 +170,8 @@ const ROLES = [
 			'project.update',
 			'credential.manage',
 			'run.manage',
-			'customer.create',
-			'customer.read',
+			'organization.create',
+			'organization.read',
 			'project.read',
 			'tracker.read',
 			'knowledge.read',
@@ -179,19 +179,19 @@ const ROLES = [
 			'role_binding.manage',
 			'role_binding.read',
 			'project.create',
-			'customer.update',
+			'organization.update',
 			'tracker.write',
 			'knowledge.write',
 			'skill.write'
 		]
 	},
 	{
-		role: 'customer-admin',
+		role: 'organization-admin',
 		actions: [
 			'project.update',
 			'credential.manage',
 			'run.manage',
-			'customer.read',
+			'organization.read',
 			'project.read',
 			'tracker.read',
 			'knowledge.read',
@@ -199,7 +199,7 @@ const ROLES = [
 			'role_binding.manage',
 			'role_binding.read',
 			'project.create',
-			'customer.update',
+			'organization.update',
 			'tracker.write',
 			'knowledge.write',
 			'skill.write'
@@ -208,7 +208,7 @@ const ROLES = [
 	{
 		role: 'engineer',
 		actions: [
-			'customer.read',
+			'organization.read',
 			'project.read',
 			'tracker.read',
 			'knowledge.read',
@@ -219,11 +219,11 @@ const ROLES = [
 	},
 	{
 		role: 'approver',
-		actions: ['customer.read', 'project.read', 'tracker.read', 'knowledge.read', 'skill.read']
+		actions: ['organization.read', 'project.read', 'tracker.read', 'knowledge.read', 'skill.read']
 	},
 	{
 		role: 'viewer',
-		actions: ['customer.read', 'project.read', 'tracker.read', 'knowledge.read', 'skill.read']
+		actions: ['organization.read', 'project.read', 'tracker.read', 'knowledge.read', 'skill.read']
 	}
 ];
 
@@ -241,7 +241,7 @@ function ref(i: FakeItem) {
 
 export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promise<FakeCore> {
 	const core: FakeCore = {
-		customers: [],
+		organizations: [],
 		projects: [],
 		bindings: [],
 		me: [],
@@ -338,20 +338,20 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			});
 		}
 		if (path === '/roles') return r.fulfill({ json: { items: ROLES } });
-		if (path === '/customers' && method === 'GET') {
-			return r.fulfill({ json: { items: core.customers.map(withTimes) } });
+		if (path === '/organizations' && method === 'GET') {
+			return r.fulfill({ json: { items: core.organizations.map(withTimes) } });
 		}
-		if (path === '/customers' && method === 'POST') {
-			if (core.customers.some((c) => c.key === body.key)) {
-				return err(r, 409, 'already_exists', `create customer: already exists`);
+		if (path === '/organizations' && method === 'POST') {
+			if (core.organizations.some((c) => c.key === body.key)) {
+				return err(r, 409, 'already_exists', `create organization: already exists`);
 			}
 			const c = { id: id(), key: body.key, name: body.name, version: 1 };
-			core.customers.push(c);
+			core.organizations.push(c);
 			return r.fulfill({ status: 201, json: withTimes(c) });
 		}
-		if ((m = path.match(/^\/customers\/([^/]+)$/))) {
-			const c = core.customers.find((x) => x.key === m![1]);
-			if (!c) return err(r, 404, 'not_found', 'customer not found');
+		if ((m = path.match(/^\/organizations\/([^/]+)$/))) {
+			const c = core.organizations.find((x) => x.key === m![1]);
+			if (!c) return err(r, 404, 'not_found', 'organization not found');
 			if (method === 'PATCH') {
 				if (body.version !== c.version) return err(r, 409, 'conflict', 'stale version');
 				c.name = body.name;
@@ -359,12 +359,12 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			}
 			return r.fulfill({ json: withTimes(c) });
 		}
-		if ((m = path.match(/^\/customers\/([^/]+)\/projects$/))) {
+		if ((m = path.match(/^\/organizations\/([^/]+)\/projects$/))) {
 			if (method === 'POST') {
 				const p = {
 					id: id(),
 					key: body.key,
-					customer: m[1],
+					organization: m[1],
 					name: body.name,
 					description: body.description ?? '',
 					version: 1
@@ -373,7 +373,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				return r.fulfill({ status: 201, json: withTimes(p) });
 			}
 			return r.fulfill({
-				json: { items: core.projects.filter((p) => p.customer === m![1]).map(withTimes) }
+				json: { items: core.projects.filter((p) => p.organization === m![1]).map(withTimes) }
 			});
 		}
 		if ((m = path.match(/^\/projects\/([^/]+)$/))) {
@@ -562,13 +562,13 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			core.deps = core.deps.filter((d) => d.id !== m![1]);
 			return r.fulfill({ status: 204 });
 		}
-		if ((m = path.match(/^\/customers\/([^/]+)\/knowledge\/(entries|search)$/))) {
+		if ((m = path.match(/^\/organizations\/([^/]+)\/knowledge\/(entries|search)$/))) {
 			const c = m[1];
 			const q = url.searchParams;
 			if (m[2] === 'entries' && method === 'POST') {
 				const e: FakeEntry = {
 					id: id(),
-					customer: c,
+					organization: c,
 					kind: body.kind,
 					title: body.title,
 					body: body.body ?? '',
@@ -582,7 +582,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			const words = (q.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean);
 			const found = core.knowledge.filter(
 				(e) =>
-					e.customer === c &&
+					e.organization === c &&
 					(!q.get('kind') || e.kind === q.get('kind')) &&
 					(!q.get('project') || e.projects.includes(q.get('project')!)) &&
 					(!q.get('item') || e.items.includes(q.get('item')!)) &&
@@ -594,8 +594,8 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 					: found.map(entryJSON);
 			return r.fulfill({ json: { items } });
 		}
-		if ((m = path.match(/^\/customers\/([^/]+)\/knowledge\/entries\/([^/]+)(\/versions)?$/))) {
-			const e = core.knowledge.find((x) => x.customer === m![1] && x.id === m![2]);
+		if ((m = path.match(/^\/organizations\/([^/]+)\/knowledge\/entries\/([^/]+)(\/versions)?$/))) {
+			const e = core.knowledge.find((x) => x.organization === m![1] && x.id === m![2]);
 			if (!e) return err(r, 404, 'not_found', 'entry not found');
 			if (m[3]) {
 				const all = [...(e.history ?? []), { version: e.version, title: e.title, body: e.body }];
@@ -674,7 +674,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 		}
 		if ((m = path.match(/^\/projects\/([^/]+)\/skills$/))) {
 			const project = core.projects.find((p) => p.key === m![1]);
-			const chain = ['platform', `customer:${project?.customer}`, `project:${m[1]}`];
+			const chain = ['platform', `organization:${project?.organization}`, `project:${m[1]}`];
 			const best: Record<string, FakeSkill> = {};
 			for (const sk of core.skills) {
 				const rank = chain.indexOf(sk.scope);
@@ -735,8 +735,8 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			if (m[2] === 'reject') a.follow_up = 'changeset:cs9';
 			return r.fulfill({ json: a });
 		}
-		if ((m = path.match(/^\/(customers|projects)\/([^/]+)\/budget$/))) {
-			const k = `${m[1] === 'customers' ? 'customer' : 'project'}:${m[2]}`;
+		if ((m = path.match(/^\/(organizations|projects)\/([^/]+)\/budget$/))) {
+			const k = `${m[1] === 'organizations' ? 'organization' : 'project'}:${m[2]}`;
 			const b = core.budgets[k] ?? { ticket_tokens: 0, daily_tokens: 0, used_today: 0, version: 0 };
 			if (method === 'PUT') {
 				if (body.version !== b.version) return err(r, 409, 'conflict', 'budget changed');
@@ -833,11 +833,11 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				}
 			});
 		}
-		if ((m = path.match(/^\/customers\/([^/]+)\/credentials(?:\/([a-z]+))?$/))) {
-			const [, cust, provider] = m;
+		if ((m = path.match(/^\/organizations\/([^/]+)\/credentials(?:\/([a-z]+))?$/))) {
+			const [, org, provider] = m;
 			if (!provider) {
 				const items = Object.keys(core.llmKeys)
-					.filter((k) => k.startsWith(cust + '/'))
+					.filter((k) => k.startsWith(org + '/'))
 					.map((k) => ({
 						provider: k.split('/')[1],
 						base_url: '',
@@ -847,10 +847,10 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 				return r.fulfill({ json: { items } });
 			}
 			if (method === 'DELETE') {
-				delete core.llmKeys[`${cust}/${provider}`];
+				delete core.llmKeys[`${org}/${provider}`];
 				return r.fulfill({ status: 204 });
 			}
-			core.llmKeys[`${cust}/${provider}`] = body.api_key;
+			core.llmKeys[`${org}/${provider}`] = body.api_key;
 			return r.fulfill({
 				json: { provider, base_url: '', fingerprint: 'sha256:x', updated_at: now }
 			});

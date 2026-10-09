@@ -36,11 +36,11 @@ func NewReporter(core Poster, reg prometheus.Registerer, interval time.Duration,
 	r := &Reporter{
 		core: core, interval: interval, logger: logger,
 		tokens: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "ballet_llm_tokens_total", Help: "LLM tokens by customer, project, model and token type.",
-		}, []string{"customer", "project", "model", "token_type"}),
+			Name: "ballet_llm_tokens_total", Help: "LLM tokens by organization, project, model and token type.",
+		}, []string{"organization", "project", "model", "token_type"}),
 		requests: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name: "ballet_llm_requests_total", Help: "LLM requests by customer, project, model and HTTP status.",
-		}, []string{"customer", "project", "model", "status"}),
+			Name: "ballet_llm_requests_total", Help: "LLM requests by organization, project, model and HTTP status.",
+		}, []string{"organization", "project", "model", "status"}),
 	}
 	reg.MustRegister(r.tokens, r.requests)
 	return r
@@ -48,12 +48,12 @@ func NewReporter(core Poster, reg prometheus.Registerer, interval time.Duration,
 
 // Sink records one request.
 func (r *Reporter) Sink(rec Record) {
-	r.requests.WithLabelValues(rec.Customer, rec.Project, rec.Model, strconv.Itoa(rec.Status)).Inc()
+	r.requests.WithLabelValues(rec.Organization, rec.Project, rec.Model, strconv.Itoa(rec.Status)).Inc()
 	for typ, n := range map[string]int64{
 		"input": rec.InputTokens, "output": rec.OutputTokens, "cache_read": rec.CacheRead, "cache_write": rec.CacheWrite,
 	} {
 		if n > 0 {
-			r.tokens.WithLabelValues(rec.Customer, rec.Project, rec.Model, typ).Add(float64(n))
+			r.tokens.WithLabelValues(rec.Organization, rec.Project, rec.Model, typ).Add(float64(n))
 		}
 	}
 	r.mu.Lock()

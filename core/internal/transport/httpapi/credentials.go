@@ -26,8 +26,8 @@ type setCredentialBody struct {
 }
 
 func registerCredentials(mux *router, cr *app.Credentials) {
-	mux.handle("GET /api/v1/customers/{customer}/credentials", func(w http.ResponseWriter, r *http.Request) {
-		list, err := cr.List(r.Context(), r.PathValue("customer"))
+	mux.handle("GET /api/v1/organizations/{organization}/credentials", func(w http.ResponseWriter, r *http.Request) {
+		list, err := cr.List(r.Context(), r.PathValue("organization"))
 		if err != nil {
 			writeError(w, err)
 			return
@@ -39,14 +39,14 @@ func registerCredentials(mux *router, cr *app.Credentials) {
 		writeJSON(w, http.StatusOK, out)
 	})
 
-	set := func(customerKey, projectKey string, w http.ResponseWriter, r *http.Request) {
+	set := func(organizationKey, projectKey string, w http.ResponseWriter, r *http.Request) {
 		var in setCredentialBody
 		if err := decode(r, &in); err != nil {
 			writeError(w, err)
 			return
 		}
 		v, err := cr.Set(r.Context(), app.SetCredentialInput{
-			CustomerKey: customerKey, ProjectKey: projectKey,
+			OrganizationKey: organizationKey, ProjectKey: projectKey,
 			Provider: credential.Provider(r.PathValue("provider")), APIKey: in.APIKey, BaseURL: in.BaseURL,
 		})
 		if err != nil {
@@ -55,18 +55,18 @@ func registerCredentials(mux *router, cr *app.Credentials) {
 		}
 		writeJSON(w, http.StatusOK, toCredentialJSON(v))
 	}
-	del := func(customerKey, projectKey string, w http.ResponseWriter, r *http.Request) {
-		if err := cr.Delete(r.Context(), customerKey, projectKey, credential.Provider(r.PathValue("provider"))); err != nil {
+	del := func(organizationKey, projectKey string, w http.ResponseWriter, r *http.Request) {
+		if err := cr.Delete(r.Context(), organizationKey, projectKey, credential.Provider(r.PathValue("provider"))); err != nil {
 			writeError(w, err)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	}
-	mux.handle("PUT /api/v1/customers/{customer}/credentials/{provider}", func(w http.ResponseWriter, r *http.Request) {
-		set(r.PathValue("customer"), "", w, r)
+	mux.handle("PUT /api/v1/organizations/{organization}/credentials/{provider}", func(w http.ResponseWriter, r *http.Request) {
+		set(r.PathValue("organization"), "", w, r)
 	})
-	mux.handle("DELETE /api/v1/customers/{customer}/credentials/{provider}", func(w http.ResponseWriter, r *http.Request) {
-		del(r.PathValue("customer"), "", w, r)
+	mux.handle("DELETE /api/v1/organizations/{organization}/credentials/{provider}", func(w http.ResponseWriter, r *http.Request) {
+		del(r.PathValue("organization"), "", w, r)
 	})
 	mux.handle("PUT /api/v1/projects/{project}/credentials/{provider}", func(w http.ResponseWriter, r *http.Request) {
 		set("", r.PathValue("project"), w, r)

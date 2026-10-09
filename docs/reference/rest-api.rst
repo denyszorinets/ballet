@@ -19,14 +19,14 @@ Authentication
 
 Authorization
    Every operation is authorized for the caller at platform,
-   customer or project scope; denied operations return ``403``. List
+   organization or project scope; denied operations return ``403``. List
    endpoints return only the items the caller may read.
 
 Bodies
    JSON. Unknown fields are rejected (``400``). Maximum 1 MiB.
 
 Keys
-   Customers and projects are addressed by their immutable keys
+   Organizations and projects are addressed by their immutable keys
    (``acme``, ``ACME``), not by internal IDs.
 
 Optimistic concurrency
@@ -93,18 +93,18 @@ Binding representation:
 .. code-block:: json
 
    {"id": "0199…", "claim": "groups", "value": "acme-devs", "role": "engineer",
-    "scope": "customer:acme", "bootstrap": false, "created_at": "…"}
+    "scope": "organization:acme", "bootstrap": false, "created_at": "…"}
 
-``scope`` is ``platform``, ``customer:<key>`` or ``project:<key>``.
+``scope`` is ``platform``, ``organization:<key>`` or ``project:<key>``.
 
 ``GET /api/v1/role-bindings`` → ``200`` list
    Bindings the caller may read (``role_binding.read`` at the binding's
-   customer, or platform), bootstrap bindings first.
+   organization, or platform), bootstrap bindings first.
 
 ``POST /api/v1/role-bindings`` — ``{"claim", "value", "role", "scope"}`` → ``201``
    Requires ``role_binding.manage`` at the scope. ``platform-admin`` only at
-   ``platform``; ``customer-admin`` not at project scope. The
-   customer/project must exist (``404``); duplicates are ``409``.
+   ``platform``; ``organization-admin`` not at project scope. The
+   organization/project must exist (``404``); duplicates are ``409``.
 
 ``DELETE /api/v1/role-bindings/{id}`` → ``204``
    Bootstrap bindings are not stored and return ``404``.
@@ -117,8 +117,8 @@ Credentials
 Provider API keys used by the LLM gateway
 (:doc:`/architecture/decisions/0011-llm-gateway-for-credentials-and-metering`)
 and the token runs use for the project repository.
-A customer has a default per provider; a project may override it.
-Permission: ``credential.manage`` (customer admins, platform admins).
+An organization has a default per provider; a project may override it.
+Permission: ``credential.manage`` (organization admins, platform admins).
 
 Representation — the key itself is **never returned**:
 
@@ -130,13 +130,13 @@ Representation — the key itself is **never returned**:
 ``provider`` is ``anthropic`` (messages), ``openai`` (OpenAI-compatible
 API, used for embeddings) or ``git`` (token for cloning and pushing the
 project repository, delivered only to runs —
-:ref:`reference-agents-workspace`). ``project`` is absent for the customer
+:ref:`reference-agents-workspace`). ``project`` is absent for the organization
 default.
 
-``GET /api/v1/customers/{customer}/credentials`` → ``200`` list
+``GET /api/v1/organizations/{organization}/credentials`` → ``200`` list
 
-``PUT /api/v1/customers/{customer}/credentials/{provider}`` — ``{"api_key", "base_url"?}`` → ``200``
-   Sets or replaces the customer default.
+``PUT /api/v1/organizations/{organization}/credentials/{provider}`` — ``{"api_key", "base_url"?}`` → ``200``
+   Sets or replaces the organization default.
 
 ``PUT /api/v1/projects/{project}/credentials/{provider}`` — ``{"api_key", "base_url"?}`` → ``200``
    Sets or replaces the project override.
@@ -146,11 +146,11 @@ default.
 Knowledge
 ---------
 
-The customer's knowledge space, stored by the Knowledge service and
+The organization's knowledge space, stored by the Knowledge service and
 reached through Core
 (:doc:`/architecture/decisions/0022-humans-reach-knowledge-through-core`).
 Permissions: ``knowledge.read`` (all roles), ``knowledge.write``
-(engineers, customer admins, platform admins), at the customer.
+(engineers, organization admins, platform admins), at the organization.
 
 Representation:
 
@@ -165,20 +165,20 @@ Representation:
 Markdown; ``items`` link tracker items. ``created_by``/``updated_by`` are
 the subjects of the humans (or agents) who wrote it.
 
-``GET /api/v1/customers/{customer}/knowledge/entries`` → ``200`` list
+``GET /api/v1/organizations/{organization}/knowledge/entries`` → ``200`` list
    Filters: ``kind``, ``project``, ``item``. Most recently updated first.
 
-``POST /api/v1/customers/{customer}/knowledge/entries`` — ``{"kind", "title", "body"?, "projects"?, "items"?}`` → ``201``
+``POST /api/v1/organizations/{organization}/knowledge/entries`` — ``{"kind", "title", "body"?, "projects"?, "items"?}`` → ``201``
 
-``GET /api/v1/customers/{customer}/knowledge/entries/{entry}`` → ``200``
+``GET /api/v1/organizations/{organization}/knowledge/entries/{entry}`` → ``200``
 
-``PATCH /api/v1/customers/{customer}/knowledge/entries/{entry}`` — ``{"version", …changed fields}`` → ``200``
+``PATCH /api/v1/organizations/{organization}/knowledge/entries/{entry}`` — ``{"version", …changed fields}`` → ``200``
    Every update creates a new immutable version.
 
-``GET /api/v1/customers/{customer}/knowledge/entries/{entry}/versions`` → ``200``
+``GET /api/v1/organizations/{organization}/knowledge/entries/{entry}/versions`` → ``200``
    All versions, newest first.
 
-``GET /api/v1/customers/{customer}/knowledge/search?q=…`` → ``200``
+``GET /api/v1/organizations/{organization}/knowledge/search?q=…`` → ``200``
    Hybrid search: full-text (FTS5, BM25) and semantic similarity, fused
    by reciprocal rank. Filters: ``kind``, ``project``; ``limit`` (default
    20, max 50). Result: ``{"items": [{"entry": {…}, "score": 0.0328}]}``,
@@ -210,8 +210,8 @@ Agent skills (:doc:`/concepts/skills`,
 :doc:`/architecture/decisions/0010-central-skill-registry`). A skill is
 identified by its scope and name and has an editable **draft** and
 immutable **published versions**. Permissions: ``skill.read`` (all
-roles), ``skill.write`` (platform admins anywhere; customer admins within
-their customer and its projects).
+roles), ``skill.write`` (platform admins anywhere; organization admins within
+their organization and its projects).
 
 Skill representation (the draft):
 
@@ -222,7 +222,7 @@ Skill representation (the draft):
     "files": {"scripts/check.sh": "…"}, "latest_version": 2,
     "created_at": "…", "updated_at": "…", "version": 5}
 
-``scope`` is ``platform``, ``customer:<key>`` or ``project:<key>``;
+``scope`` is ``platform``, ``organization:<key>`` or ``project:<key>``;
 names are 2–64 lowercase letters, digits and single hyphens and unique
 per scope; ``files`` are supporting text files (clean relative paths,
 not ``SKILL.md``; at most 50 files, 1 MiB in total).
@@ -245,7 +245,7 @@ not ``SKILL.md``; at most 50 files, 1 MiB in total).
 
 ``GET /api/v1/projects/{project}/skills`` → ``200``
    The project's **effective skills**: published skills of the
-   platform, the project's customer and the project, the most
+   platform, the project's organization and the project, the most
    specific scope winning per name, with the project's pins applied:
 
    .. code-block:: json
@@ -279,21 +279,21 @@ Search
    description, body). Results are filtered by permission: items need
    ``tracker.read`` on their project, skills ``skill.read`` on their
    scope. Filters: ``kind`` (``item`` or ``skill``), ``project`` (its
-   items plus the skills of its platform → customer → project
+   items plus the skills of its platform → organization → project
    chain), ``limit`` (default 20, max 50).
 
    .. code-block:: json
 
       {"items": [{"kind": "item", "ref": "WEB-1", "title": "Rate limit the public API",
-                  "snippet": "429 after 100 requests per minute", "customer": "acme",
+                  "snippet": "429 after 100 requests per minute", "organization": "acme",
                   "project": "WEB", "score": 0.0328}]}
 
    The index follows Core's event log and is updated within a few seconds
    of a change. Core currently embeds with the built-in ``hash-256``
    model; gateway embeddings for Core content are a follow-up.
 
-Customers
----------
+Organizations
+-------------
 
 Representation:
 
@@ -302,15 +302,15 @@ Representation:
    {"id": "0199…", "key": "acme", "name": "Acme", "created_at": "2026-10-01T03:40:00Z",
     "updated_at": "2026-10-01T03:40:00Z", "version": 1}
 
-``POST /api/v1/customers`` — ``{"key", "name"}`` → ``201``
+``POST /api/v1/organizations`` — ``{"key", "name"}`` → ``201``
    Key: 2–32 lowercase letters, digits, single hyphens; starts with a
    letter; immutable. Platform-level permission.
 
-``GET /api/v1/customers`` → ``200`` list
+``GET /api/v1/organizations`` → ``200`` list
 
-``GET /api/v1/customers/{customer}`` → ``200``
+``GET /api/v1/organizations/{organization}`` → ``200``
 
-``PATCH /api/v1/customers/{customer}`` — ``{"name", "version"}`` → ``200``
+``PATCH /api/v1/organizations/{organization}`` — ``{"name", "version"}`` → ``200``
 
 Projects
 --------
@@ -319,14 +319,14 @@ Representation:
 
 .. code-block:: json
 
-   {"id": "0199…", "key": "ACME", "customer": "acme", "name": "Acme Shop",
+   {"id": "0199…", "key": "ACME", "organization": "acme", "name": "Acme Shop",
     "description": "Online shop", "created_at": "…", "updated_at": "…", "version": 1}
 
-``POST /api/v1/customers/{customer}/projects`` — ``{"key", "name", "description"}`` → ``201``
+``POST /api/v1/organizations/{organization}/projects`` — ``{"key", "name", "description"}`` → ``201``
    Key: 2–10 uppercase letters and digits, starts with a letter,
    globally unique, immutable; prefix of ticket keys (``ACME-42``).
 
-``GET /api/v1/customers/{customer}/projects`` → ``200`` list
+``GET /api/v1/organizations/{organization}/projects`` → ``200`` list
 
 ``GET /api/v1/projects/{project}`` → ``200``
 
@@ -462,7 +462,7 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
 ``POST /api/v1/items/{item}/runs`` — ``{"stage", "spec": {"command", "env"?, "image"?, "workdir"?, "timeout_seconds"?, "files"?}}`` or ``{"stage", "agent": {"adapter": "claude-code"|"opencode", "prompt", "timeout_seconds"?}}`` → ``201``
    Queues a run of a ticket by hand: a command (``spec``) or a coding
    agent session (``agent``, :ref:`reference-agents-runs`). Needs
-   ``run.manage`` on the project (platform and customer admins).
+   ``run.manage`` on the project (platform and organization admins).
    ``400`` for non-tickets, both or neither of ``spec`` and ``agent``, an
    unknown adapter, an empty command or prompt, a stage not matching
    ``[a-z][a-z0-9_-]{0,31}`` or invalid environment variable names.
@@ -510,7 +510,7 @@ Representation: ``{"id", "project", "ticket", "stage", "status", "spec",
 
 ``GET /api/v1/inbox`` → ``200``
    Open questions of every project the caller can read, in inbox order
-   (:doc:`/concepts/questions`): the question fields plus ``"customer",
+   (:doc:`/concepts/questions`): the question fields plus ``"organization",
    "project", "ticket_title", "ticket_state", "blocked_behind"`` (unresolved
    items waiting behind the ticket) and ``"chat"?`` (its sub-chat).
 
@@ -571,8 +571,8 @@ See :ref:`concepts-unattended-budgets`.
    ``project.update``; ``400`` for negative limits, ``409`` when it
    changed meanwhile.
 
-``GET`` and ``PUT /api/v1/customers/{customer}/budget``
-   The same for a customer (``customer.read`` / ``customer.update``); its
+``GET`` and ``PUT /api/v1/organizations/{organization}/budget``
+   The same for an organization (``organization.read`` / ``organization.update``); its
    ``ticket_tokens`` applies to projects without their own.
 
 .. _reference-rest-control:

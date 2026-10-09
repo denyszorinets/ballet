@@ -23,7 +23,7 @@ import (
 	"github.com/denyszorinets/ballet/knowledge/internal/transport/mcpapi"
 )
 
-// world has two customers, acme and globex, with deliberately similar
+// world has two organizations, acme and globex, with deliberately similar
 // knowledge so that any leak would show up in search.
 type world struct {
 	url        string
@@ -73,8 +73,8 @@ func setup(t *testing.T) world {
 
 	w := world{url: srv.URL, ring: ring, foreign: foreign, acmeTitle: "Acme pricing strategy", globexBody: "Globex merger plans in Q3"}
 	write := []string{runtoken.CapKnowledgeRead, runtoken.CapKnowledgeWrite}
-	acme := runtoken.ContextWithClaims(t.Context(), runtoken.Claims{Customer: "acme", Subject: "s", Capabilities: write})
-	globex := runtoken.ContextWithClaims(t.Context(), runtoken.Claims{Customer: "globex", Subject: "s", Capabilities: write})
+	acme := runtoken.ContextWithClaims(t.Context(), runtoken.Claims{Organization: "acme", Subject: "s", Capabilities: write})
+	globex := runtoken.ContextWithClaims(t.Context(), runtoken.Claims{Organization: "globex", Subject: "s", Capabilities: write})
 	a, err := svc.Create(acme, "acme", app.CreateInput{Kind: "decision", Title: w.acmeTitle, Body: "Confidential pricing strategy for invoices"})
 	require.NoError(t, err)
 	g, err := svc.Create(globex, "globex", app.CreateInput{Kind: "decision", Title: "Pricing strategy", Body: w.globexBody + " pricing strategy invoices"})
@@ -107,9 +107,9 @@ func rest(t *testing.T, w world, token, method, path, body string) (int, string)
 func TestIsolation_REST(t *testing.T) {
 	w := setup(t)
 	rw := []string{runtoken.CapKnowledgeRead, runtoken.CapKnowledgeWrite}
-	globexTok := issue(t, w.ring, runtoken.Claims{Customer: "globex", Capabilities: rw}, time.Hour)
-	acmePath := "/v1/customers/acme/knowledge"
-	globexPath := "/v1/customers/globex/knowledge"
+	globexTok := issue(t, w.ring, runtoken.Claims{Organization: "globex", Capabilities: rw}, time.Hour)
+	acmePath := "/v1/organizations/acme/knowledge"
+	globexPath := "/v1/organizations/globex/knowledge"
 
 	tests := []struct {
 		name, token, method, path, body string
@@ -128,10 +128,10 @@ func TestIsolation_REST(t *testing.T) {
 		{"versions of foreign entry via own space", globexTok, "GET", globexPath + "/entries/" + w.acmeID + "/versions", "", 404},
 		// Forged or misdirected tokens.
 		{"no token", "", "GET", acmePath + "/entries", "", 401},
-		{"token for another audience", issue(t, w.ring, runtoken.Claims{Customer: "acme", Audience: []string{"gateway"}, Capabilities: rw}, time.Hour), "GET", acmePath + "/entries", "", 401},
-		{"token signed by an untrusted key", issue(t, w.foreign, runtoken.Claims{Customer: "acme", Capabilities: rw}, time.Hour), "GET", acmePath + "/entries", "", 401},
-		{"token without customer", issue(t, w.ring, runtoken.Claims{Capabilities: rw}, time.Hour), "GET", acmePath + "/entries", "", 403},
-		{"token without capability", issue(t, w.ring, runtoken.Claims{Customer: "acme"}, time.Hour), "GET", acmePath + "/entries", "", 403},
+		{"token for another audience", issue(t, w.ring, runtoken.Claims{Organization: "acme", Audience: []string{"gateway"}, Capabilities: rw}, time.Hour), "GET", acmePath + "/entries", "", 401},
+		{"token signed by an untrusted key", issue(t, w.foreign, runtoken.Claims{Organization: "acme", Capabilities: rw}, time.Hour), "GET", acmePath + "/entries", "", 401},
+		{"token without organization", issue(t, w.ring, runtoken.Claims{Capabilities: rw}, time.Hour), "GET", acmePath + "/entries", "", 403},
+		{"token without capability", issue(t, w.ring, runtoken.Claims{Organization: "acme"}, time.Hour), "GET", acmePath + "/entries", "", 403},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -143,7 +143,7 @@ func TestIsolation_REST(t *testing.T) {
 	}
 
 	// The acme entry is untouched.
-	acmeTok := issue(t, w.ring, runtoken.Claims{Customer: "acme", Capabilities: rw}, time.Hour)
+	acmeTok := issue(t, w.ring, runtoken.Claims{Organization: "acme", Capabilities: rw}, time.Hour)
 	code, body := rest(t, w, acmeTok, "GET", acmePath+"/entries/"+w.acmeID, "")
 	require.Equal(t, 200, code)
 	assert.Contains(t, body, w.acmeTitle)
@@ -156,11 +156,11 @@ func TestIsolation_ExpiredToken(t *testing.T) {
 	ring := w.ring
 	raw, err := runtoken.NewIssuer(ring, func() time.Time { return past }).Issue(runtoken.Claims{
 		Kind: runtoken.KindService, Subject: "service:core", Audience: []string{"knowledge"},
-		Customer: "acme", Capabilities: []string{runtoken.CapKnowledgeRead},
+		Organization: "acme", Capabilities: []string{runtoken.CapKnowledgeRead},
 	}, time.Minute)
 	require.NoError(t, err)
 
-	code, _ := rest(t, w, raw, "GET", "/v1/customers/acme/knowledge/entries", "")
+	code, _ := rest(t, w, raw, "GET", "/v1/organizations/acme/knowledge/entries", "")
 
 	assert.Equal(t, 401, code)
 }
@@ -168,8 +168,8 @@ func TestIsolation_ExpiredToken(t *testing.T) {
 func TestIsolation_SearchNeverLeaks(t *testing.T) {
 	w := setup(t)
 	for _, c := range []string{"acme", "globex"} {
-		tok := issue(t, w.ring, runtoken.Claims{Customer: c, Capabilities: []string{runtoken.CapKnowledgeRead}}, time.Hour)
-		code, body := rest(t, w, tok, "GET", "/v1/customers/"+c+"/knowledge/search?q=pricing+strategy+invoices+merger", "")
+		tok := issue(t, w.ring, runtoken.Claims{Organization: c, Capabilities: []string{runtoken.CapKnowledgeRead}}, time.Hour)
+		code, body := rest(t, w, tok, "GET", "/v1/organizations/"+c+"/knowledge/search?q=pricing+strategy+invoices+merger", "")
 		require.Equal(t, 200, code)
 		var out struct {
 			Items []struct {
@@ -196,7 +196,7 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 
 func TestIsolation_MCP(t *testing.T) {
 	w := setup(t)
-	tok := issue(t, w.ring, runtoken.Claims{Kind: runtoken.KindRun, Subject: "run:9", Customer: "globex", Project: "GLX",
+	tok := issue(t, w.ring, runtoken.Claims{Kind: runtoken.KindRun, Subject: "run:9", Organization: "globex", Project: "GLX",
 		Ticket: "GLX-1", Capabilities: []string{runtoken.CapKnowledgeRead, runtoken.CapKnowledgeWrite}}, time.Hour)
 	client := mcp.NewClient(&mcp.Implementation{Name: "agent", Version: "1"}, nil)
 	s, err := client.Connect(t.Context(), &mcp.StreamableClientTransport{
@@ -215,7 +215,7 @@ func TestIsolation_MCP(t *testing.T) {
 	for _, c := range calls {
 		res, err := s.CallTool(t.Context(), &mcp.CallToolParams{Name: c.name, Arguments: c.args})
 		require.NoError(t, err)
-		assert.True(t, res.IsError, "%s on another customer's entry must fail", c.name)
+		assert.True(t, res.IsError, "%s on another organization's entry must fail", c.name)
 		b, _ := json.Marshal(res)
 		assert.NotContains(t, string(b), w.acmeTitle)
 	}

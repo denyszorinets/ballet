@@ -36,7 +36,7 @@ var hours = []float64{60, 300, 900, 1800, 3600, 2 * 3600, 4 * 3600, 8 * 3600, 16
 
 // NewDelivery registers delivery metrics on reg; gauges may be nil.
 func NewDelivery(reg prometheus.Registerer, gauges app.GaugeStore) *Delivery {
-	cp := []string{"customer", "project"}
+	cp := []string{"organization", "project"}
 	d := &Delivery{
 		stages: prometheus.NewCounterVec(prometheus.CounterOpts{Name: "ballet_stages_finished_total",
 			Help: "Pipeline stages finished, by stage and outcome (done, failed, blocked)."},
@@ -81,45 +81,45 @@ func NewDelivery(reg prometheus.Registerer, gauges app.GaugeStore) *Delivery {
 }
 
 // StageFinished implements app.DeliveryObserver.
-func (d *Delivery) StageFinished(customer, project, stage, outcome string) {
-	d.stages.WithLabelValues(customer, project, stage, outcome).Inc()
+func (d *Delivery) StageFinished(organization, project, stage, outcome string) {
+	d.stages.WithLabelValues(organization, project, stage, outcome).Inc()
 }
 
 // FlowFinished implements app.DeliveryObserver.
-func (d *Delivery) FlowFinished(customer, project, status string, lead time.Duration, iterations int) {
-	d.flows.WithLabelValues(customer, project, status).Inc()
-	d.leadTime.WithLabelValues(customer, project, status).Observe(lead.Seconds())
+func (d *Delivery) FlowFinished(organization, project, status string, lead time.Duration, iterations int) {
+	d.flows.WithLabelValues(organization, project, status).Inc()
+	d.leadTime.WithLabelValues(organization, project, status).Observe(lead.Seconds())
 	if status == "done" {
-		d.iterations.WithLabelValues(customer, project).Observe(float64(iterations))
+		d.iterations.WithLabelValues(organization, project).Observe(float64(iterations))
 	}
 }
 
 // FlowWaiting implements app.DeliveryObserver.
-func (d *Delivery) FlowWaiting(customer, project, reason string) {
-	d.waits.WithLabelValues(customer, project, reason).Inc()
+func (d *Delivery) FlowWaiting(organization, project, reason string) {
+	d.waits.WithLabelValues(organization, project, reason).Inc()
 }
 
 // RunFinished implements app.DeliveryObserver.
-func (d *Delivery) RunFinished(customer, project, stage, status string, took time.Duration) {
-	d.runs.WithLabelValues(customer, project, stage, status).Inc()
+func (d *Delivery) RunFinished(organization, project, stage, status string, took time.Duration) {
+	d.runs.WithLabelValues(organization, project, stage, status).Inc()
 	if took > 0 {
-		d.runTime.WithLabelValues(customer, project, stage).Observe(took.Seconds())
+		d.runTime.WithLabelValues(organization, project, stage).Observe(took.Seconds())
 	}
 }
 
 // QuestionRaised implements app.DeliveryObserver.
-func (d *Delivery) QuestionRaised(customer, project string, blocking bool) {
+func (d *Delivery) QuestionRaised(organization, project string, blocking bool) {
 	b := "false"
 	if blocking {
 		b = "true"
 	}
-	d.raised.WithLabelValues(customer, project, b).Inc()
+	d.raised.WithLabelValues(organization, project, b).Inc()
 }
 
 // QuestionAnswered implements app.DeliveryObserver.
-func (d *Delivery) QuestionAnswered(customer, project, by string, wait time.Duration) {
-	d.answered.WithLabelValues(customer, project, by).Inc()
-	d.answerTime.WithLabelValues(customer, project, by).Observe(wait.Seconds())
+func (d *Delivery) QuestionAnswered(organization, project, by string, wait time.Duration) {
+	d.answered.WithLabelValues(organization, project, by).Inc()
+	d.answerTime.WithLabelValues(organization, project, by).Observe(wait.Seconds())
 }
 
 // Usage counts the tokens of an ingested usage record (Usage.Observe).
@@ -127,7 +127,7 @@ func (d *Delivery) Usage(r app.UsageInput) {
 	for typ, n := range map[string]int64{"input": r.InputTokens, "output": r.OutputTokens, "cache_read": r.CacheRead,
 		"cache_write": r.CacheWrite} {
 		if n > 0 {
-			d.tokens.WithLabelValues(r.Customer, r.Project, typ).Add(float64(n))
+			d.tokens.WithLabelValues(r.Organization, r.Project, typ).Add(float64(n))
 		}
 	}
 }
@@ -152,15 +152,15 @@ func (g gaugeCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 	for _, r := range s.Flows {
-		ch <- prometheus.MustNewConstMetric(g.d.activeFlows, prometheus.GaugeValue, float64(r.Count), r.Customer, r.Project,
+		ch <- prometheus.MustNewConstMetric(g.d.activeFlows, prometheus.GaugeValue, float64(r.Count), r.Organization, r.Project,
 			r.State, r.Detail)
 	}
 	for _, r := range s.Questions {
-		ch <- prometheus.MustNewConstMetric(g.d.openQuestions, prometheus.GaugeValue, float64(r.Count), r.Customer,
+		ch <- prometheus.MustNewConstMetric(g.d.openQuestions, prometheus.GaugeValue, float64(r.Count), r.Organization,
 			r.Project, r.State)
 	}
 	for _, r := range s.Runs {
-		ch <- prometheus.MustNewConstMetric(g.d.activeRuns, prometheus.GaugeValue, float64(r.Count), r.Customer, r.Project,
+		ch <- prometheus.MustNewConstMetric(g.d.activeRuns, prometheus.GaugeValue, float64(r.Count), r.Organization, r.Project,
 			r.State)
 	}
 }

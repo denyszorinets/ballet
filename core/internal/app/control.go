@@ -86,7 +86,7 @@ func (ct *Control) List(ctx context.Context) ([]PauseView, error) {
 		if err != nil {
 			continue // the project is gone
 		}
-		if ct.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: c.Key, Project: pr.Key}) == nil {
+		if ct.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Organization: c.Key, Project: pr.Key}) == nil {
 			out = append(out, PauseView{Pause: p, ProjectKey: pr.Key})
 		}
 	}
@@ -163,42 +163,42 @@ func (ct *Control) Resume(ctx context.Context, projectKey string) error {
 	return nil
 }
 
-func (ct *Control) authorize(ctx context.Context, projectKey string) (identity, string, tenancy.Project, tenancy.Customer, error) {
+func (ct *Control) authorize(ctx context.Context, projectKey string) (identity, string, tenancy.Project, tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return identity{}, "", tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, "", tenancy.Project{}, tenancy.Organization{}, err
 	}
 	if projectKey == "" {
 		if err := ct.Authz.Authorize(ctx, id, ActRunManage, Scope{}); err != nil {
-			return identity{}, "", tenancy.Project{}, tenancy.Customer{}, err
+			return identity{}, "", tenancy.Project{}, tenancy.Organization{}, err
 		}
-		return id, PausePlatform, tenancy.Project{}, tenancy.Customer{}, nil
+		return id, PausePlatform, tenancy.Project{}, tenancy.Organization{}, nil
 	}
 	p, err := ct.Tenancy.ProjectByKey(ctx, projectKey)
 	if err != nil {
-		return identity{}, "", tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, "", tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := ct.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := ct.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
-		return identity{}, "", tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, "", tenancy.Project{}, tenancy.Organization{}, err
 	}
-	if err := ct.Authz.Authorize(ctx, id, ActRunManage, Scope{Customer: c.Key, Project: p.Key}); err != nil {
-		return identity{}, "", tenancy.Project{}, tenancy.Customer{}, err
+	if err := ct.Authz.Authorize(ctx, id, ActRunManage, Scope{Organization: c.Key, Project: p.Key}); err != nil {
+		return identity{}, "", tenancy.Project{}, tenancy.Organization{}, err
 	}
 	return id, p.ID, p, c, nil
 }
 
-func (ct *Control) project(ctx context.Context, projectID string) (tenancy.Project, tenancy.Customer, error) {
+func (ct *Control) project(ctx context.Context, projectID string) (tenancy.Project, tenancy.Organization, error) {
 	p, err := ct.Tenancy.ProjectByID(ctx, projectID)
 	if err != nil {
-		return tenancy.Project{}, tenancy.Customer{}, err
+		return tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := ct.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := ct.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	return p, c, err
 }
 
-func (ct *Control) event(p tenancy.Project, c tenancy.Customer, typ string, actor event.Actor, reason string) event.Event {
-	e := event.Event{Customer: c.ID, Project: p.ID, EntityType: "project", EntityID: p.ID, Type: typ, Actor: actor,
+func (ct *Control) event(p tenancy.Project, c tenancy.Organization, typ string, actor event.Actor, reason string) event.Event {
+	e := event.Event{Organization: c.ID, Project: p.ID, EntityType: "project", EntityID: p.ID, Type: typ, Actor: actor,
 		OccurredAt: ct.Now(), Payload: mustJSON(map[string]any{"reason": reason})}
 	if p.ID == "" {
 		e.EntityType, e.EntityID = "platform", PausePlatform

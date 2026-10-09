@@ -19,12 +19,12 @@ For a team or a server, install it with containers instead
 2. Add a model key
 ------------------
 
-On the customer page, under **LLM credentials**, save your **Anthropic**
+On the organization page, under **LLM credentials**, save your **Anthropic**
 API key. Keys are stored encrypted and never shown again. Agent sessions
 never see the key: they call Ballet's LLM gateway with a short-lived run
 token, and the gateway adds the key, meters every token and enforces
 budgets (:doc:`/reference/llm-gateway`). A project can override the
-customer's key in its settings.
+organization's key in its settings.
 
 3. Connect the repository
 -------------------------
@@ -67,7 +67,7 @@ the project's compilers, package managers and services.
 5. Set limits
 -------------
 
-Before leaving agents alone, set **budgets** (customer page and project
+Before leaving agents alone, set **budgets** (organization page and project
 settings): tokens per ticket and per day. Work over budget waits instead
 of spending (:ref:`concepts-unattended-budgets`). Each ticket's **policy**
 says whether a human must also approve the pull request and whether

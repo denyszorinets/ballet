@@ -15,12 +15,12 @@ type BudgetVerdict struct {
 }
 
 // RegisterBudgets adds GET /internal/v1/budget/check
-// (?customer=<key>&project=<key>&ticket=<key>) for holders of
+// (?organization=<key>&project=<key>&ticket=<key>) for holders of
 // credentials.read (the gateway, before forwarding a call).
 func RegisterBudgets(r *Router, bs *app.Budgets) {
 	r.Handle("GET /internal/v1/budget/check", runtoken.CapCredentialsRead, func(w http.ResponseWriter, req *http.Request) {
 		q := req.URL.Query()
-		ex, err := bs.CheckKeys(req.Context(), q.Get("customer"), q.Get("project"), q.Get("ticket"))
+		ex, err := bs.CheckKeys(req.Context(), q.Get("organization"), q.Get("project"), q.Get("ticket"))
 		if errors.Is(err, app.ErrNotFound) {
 			WriteError(w, http.StatusNotFound, "not_found", err.Error())
 			return

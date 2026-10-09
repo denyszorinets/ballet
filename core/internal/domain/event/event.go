@@ -30,14 +30,14 @@ var System = Actor{Kind: ActorSystem, Subject: "ballet-core"}
 
 // Event is one recorded change.
 type Event struct {
-	Seq        int64           `json:"seq"` // monotonic, assigned by the store
-	ID         string          `json:"id"`
-	OccurredAt time.Time       `json:"occurred_at"`
-	Customer   string          `json:"customer,omitempty"`
-	Project    string          `json:"project,omitempty"`
-	EntityType string          `json:"entity_type"` // e.g. "ticket"
-	EntityID   string          `json:"entity_id"`
-	Type       string          `json:"type"` // e.g. "ticket.created"
-	Actor      Actor           `json:"actor"`
-	Payload    json.RawMessage `json:"payload,omitempty"`
+	Seq          int64           `json:"seq"` // monotonic, assigned by the store
+	ID           string          `json:"id"`
+	OccurredAt   time.Time       `json:"occurred_at"`
+	Organization string          `json:"organization,omitempty"`
+	Project      string          `json:"project,omitempty"`
+	EntityType   string          `json:"entity_type"` // e.g. "ticket"
+	EntityID     string          `json:"entity_id"`
+	Type         string          `json:"type"` // e.g. "ticket.created"
+	Actor        Actor           `json:"actor"`
+	Payload      json.RawMessage `json:"payload,omitempty"`
 }

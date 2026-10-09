@@ -27,7 +27,7 @@ async function signIn(page: Page, user: string) {
 		.first()
 		.fill(user);
 	await page.getByRole('button', { name: /sign in/i }).click();
-	await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
 }
 
 test('board and item pages update live from other clients', async ({ page }) => {
@@ -36,8 +36,8 @@ test('board and item pages update live from other clients', async ({ page }) => 
 		.toUpperCase()
 		.replace(/[^A-Z0-9]/g, '');
 	const project = `B${suffix.slice(-8)}`;
-	await api('POST', '/customers', { key: `board-${suffix.toLowerCase()}`, name: 'Board test' });
-	await api('POST', `/customers/board-${suffix.toLowerCase()}/projects`, {
+	await api('POST', '/organizations', { key: `board-${suffix.toLowerCase()}`, name: 'Board test' });
+	await api('POST', `/organizations/board-${suffix.toLowerCase()}/projects`, {
 		key: project,
 		name: 'Board project'
 	});

@@ -47,7 +47,7 @@ func TestTracker_CreatesItemsWithSharedKeySequence(t *testing.T) {
 	assert.Equal(t, tracker.DefaultPolicy, tk.Policy, "default policy is autonomous")
 	assert.Equal(t, "WEB-2", tk.EpicKey)
 	assert.Equal(t, "WEB-1", tk.MilestoneKey)
-	assert.Equal(t, "acme", tk.CustomerKey)
+	assert.Equal(t, "acme", tk.OrganizationKey)
 
 	other, err := tr.CreateItem(bob, app.CreateItemInput{ProjectKey: "APP", Kind: tracker.KindTicket, Title: "x"})
 	require.NoError(t, err)

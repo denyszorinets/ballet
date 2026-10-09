@@ -103,9 +103,9 @@ bundle: web-deps ## Build all binaries into bin/, with the web UI embedded in co
 run: bundle ## Build everything and run Ballet on http://localhost:8080 (Ctrl-C stops)
 	scripts/run.sh
 
-.PHONY: readme-media
-readme-media: bundle ## Re-record the README's GIFs and screenshots (fake model, Chrome) into docs/_static/readme
-	scripts/readme-media/record.sh
+.PHONY: media
+media: bundle ## Re-record the README's GIFs and the docs screenshots from a running Ballet (fake model, Chrome)
+	scripts/media/record.sh
 
 ##@ Containers
 

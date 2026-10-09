@@ -16,27 +16,27 @@ type Action string
 
 // Actions. Read actions are listed in readActions.
 const (
-	ActCustomerCreate    Action = "customer.create"
-	ActCustomerRead      Action = "customer.read"
-	ActCustomerUpdate    Action = "customer.update"
-	ActProjectCreate     Action = "project.create"
-	ActProjectRead       Action = "project.read"
-	ActProjectUpdate     Action = "project.update"
-	ActRoleBindingManage Action = "role_binding.manage"
-	ActRoleBindingRead   Action = "role_binding.read"
-	ActTrackerRead       Action = "tracker.read"      // milestones, epics, tickets, dependencies, history
-	ActTrackerWrite      Action = "tracker.write"     // create, edit and transition them
-	ActCredentialManage  Action = "credential.manage" // LLM provider credentials (never readable)
-	ActKnowledgeRead     Action = "knowledge.read"    // the customer's knowledge space
-	ActKnowledgeWrite    Action = "knowledge.write"
-	ActSkillRead         Action = "skill.read"  // agent skills (process)
-	ActSkillWrite        Action = "skill.write" // edit and publish skills
-	ActRunManage         Action = "run.manage"  // queue and cancel agent runs by hand
+	ActOrganizationCreate Action = "organization.create"
+	ActOrganizationRead   Action = "organization.read"
+	ActOrganizationUpdate Action = "organization.update"
+	ActProjectCreate      Action = "project.create"
+	ActProjectRead        Action = "project.read"
+	ActProjectUpdate      Action = "project.update"
+	ActRoleBindingManage  Action = "role_binding.manage"
+	ActRoleBindingRead    Action = "role_binding.read"
+	ActTrackerRead        Action = "tracker.read"      // milestones, epics, tickets, dependencies, history
+	ActTrackerWrite       Action = "tracker.write"     // create, edit and transition them
+	ActCredentialManage   Action = "credential.manage" // LLM provider credentials (never readable)
+	ActKnowledgeRead      Action = "knowledge.read"    // the organization's knowledge space
+	ActKnowledgeWrite     Action = "knowledge.write"
+	ActSkillRead          Action = "skill.read"  // agent skills (process)
+	ActSkillWrite         Action = "skill.write" // edit and publish skills
+	ActRunManage          Action = "run.manage"  // queue and cancel agent runs by hand
 )
 
 // AllActions lists every action, for documentation and exhaustive tests.
 var AllActions = []Action{
-	ActCustomerCreate, ActCustomerRead, ActCustomerUpdate,
+	ActOrganizationCreate, ActOrganizationRead, ActOrganizationUpdate,
 	ActProjectCreate, ActProjectRead, ActProjectUpdate,
 	ActRoleBindingManage, ActRoleBindingRead,
 	ActTrackerRead, ActTrackerWrite,
@@ -48,22 +48,22 @@ type Role string
 
 // Roles.
 const (
-	RolePlatformAdmin Role = "platform-admin"
-	RoleCustomerAdmin Role = "customer-admin"
-	RoleEngineer      Role = "engineer"
-	RoleApprover      Role = "approver"
-	RoleViewer        Role = "viewer"
+	RolePlatformAdmin     Role = "platform-admin"
+	RoleOrganizationAdmin Role = "organization-admin"
+	RoleEngineer          Role = "engineer"
+	RoleApprover          Role = "approver"
+	RoleViewer            Role = "viewer"
 )
 
 // AllRoles lists every role.
-var AllRoles = []Role{RolePlatformAdmin, RoleCustomerAdmin, RoleEngineer, RoleApprover, RoleViewer}
+var AllRoles = []Role{RolePlatformAdmin, RoleOrganizationAdmin, RoleEngineer, RoleApprover, RoleViewer}
 
-var readActions = []Action{ActCustomerRead, ActProjectRead, ActTrackerRead, ActKnowledgeRead, ActSkillRead}
+var readActions = []Action{ActOrganizationRead, ActProjectRead, ActTrackerRead, ActKnowledgeRead, ActSkillRead}
 
 var grants = map[Role][]Action{
 	RolePlatformAdmin: AllActions,
-	RoleCustomerAdmin: {
-		ActCustomerRead, ActCustomerUpdate, ActProjectCreate, ActProjectRead, ActProjectUpdate,
+	RoleOrganizationAdmin: {
+		ActOrganizationRead, ActOrganizationUpdate, ActProjectCreate, ActProjectRead, ActProjectUpdate,
 		ActRoleBindingManage, ActRoleBindingRead, ActTrackerRead, ActTrackerWrite, ActCredentialManage,
 		ActKnowledgeRead, ActKnowledgeWrite, ActSkillRead, ActSkillWrite, ActRunManage,
 	},
@@ -86,25 +86,25 @@ type ScopeKind string
 
 // Scope kinds.
 const (
-	ScopePlatform ScopeKind = "platform"
-	ScopeCustomer ScopeKind = "customer"
-	ScopeProject  ScopeKind = "project"
+	ScopePlatform     ScopeKind = "platform"
+	ScopeOrganization ScopeKind = "organization"
+	ScopeProject      ScopeKind = "project"
 )
 
-// BindingScope is where a binding applies. Customer is set for customer and
-// project scopes (a project binding records its project's customer).
+// BindingScope is where a binding applies. Organization is set for organization and
+// project scopes (a project binding records its project's organization).
 type BindingScope struct {
-	Kind     ScopeKind
-	Customer string
-	Project  string
+	Kind         ScopeKind
+	Organization string
+	Project      string
 }
 
-// String formats the scope as "platform", "customer:<key>" or
+// String formats the scope as "platform", "organization:<key>" or
 // "project:<key>".
 func (s BindingScope) String() string {
 	switch s.Kind {
-	case ScopeCustomer:
-		return "customer:" + s.Customer
+	case ScopeOrganization:
+		return "organization:" + s.Organization
 	case ScopeProject:
 		return "project:" + s.Project
 	default:
@@ -112,30 +112,30 @@ func (s BindingScope) String() string {
 	}
 }
 
-// ParseScope parses "platform", "customer:<key>" or "project:<key>".
-// The customer of a project scope must be resolved by the caller.
+// ParseScope parses "platform", "organization:<key>" or "project:<key>".
+// The organization of a project scope must be resolved by the caller.
 func ParseScope(s string) (BindingScope, error) {
 	if s == string(ScopePlatform) {
 		return BindingScope{Kind: ScopePlatform}, nil
 	}
 	kind, key, ok := strings.Cut(s, ":")
 	if !ok || key == "" {
-		return BindingScope{}, fmt.Errorf("scope %q must be platform, customer:<key> or project:<key>", s)
+		return BindingScope{}, fmt.Errorf("scope %q must be platform, organization:<key> or project:<key>", s)
 	}
 	switch ScopeKind(kind) {
-	case ScopeCustomer:
-		return BindingScope{Kind: ScopeCustomer, Customer: key}, nil
+	case ScopeOrganization:
+		return BindingScope{Kind: ScopeOrganization, Organization: key}, nil
 	case ScopeProject:
 		return BindingScope{Kind: ScopeProject, Project: key}, nil
 	}
-	return BindingScope{}, fmt.Errorf("scope %q must be platform, customer:<key> or project:<key>", s)
+	return BindingScope{}, fmt.Errorf("scope %q must be platform, organization:<key> or project:<key>", s)
 }
 
 // Target is the scope of a requested action. Empty fields mea platform
-// level; a project target carries its customer.
+// level; a project target carries its organization.
 type Target struct {
-	Customer string
-	Project  string
+	Organization string
+	Project      string
 }
 
 // covers reports whether a binding at s applies to an action on t.
@@ -143,14 +143,14 @@ func (s BindingScope) covers(t Target, a Action) bool {
 	switch s.Kind {
 	case ScopePlatform:
 		return true
-	case ScopeCustomer:
-		return t.Customer == s.Customer
+	case ScopeOrganization:
+		return t.Organization == s.Organization
 	case ScopeProject:
 		if t.Project == s.Project {
 			return true
 		}
-		// Seeing a project implies seeing its customer.
-		return a == ActCustomerRead && t.Project == "" && t.Customer == s.Customer
+		// Seeing a project implies seeing its organization.
+		return a == ActOrganizationRead && t.Project == "" && t.Organization == s.Organization
 	}
 	return false
 }
@@ -178,8 +178,8 @@ func (b Binding) Validate() error {
 	if b.Role == RolePlatformAdmin && b.Scope.Kind != ScopePlatform {
 		errs = append(errs, errors.New("platform-admin can only be bound at platform scope"))
 	}
-	if b.Role == RoleCustomerAdmin && b.Scope.Kind == ScopeProject {
-		errs = append(errs, errors.New("customer-admin cannot be bound at project scope"))
+	if b.Role == RoleOrganizationAdmin && b.Scope.Kind == ScopeProject {
+		errs = append(errs, errors.New("organization-admin cannot be bound at project scope"))
 	}
 	return errors.Join(errs...)
 }

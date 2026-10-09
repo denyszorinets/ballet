@@ -12,7 +12,7 @@ Authentication
 ``Authorization: Bearer <run token>`` — the run's own token (kind
 ``run``, audience ``core``). Every tool works on **the token's ticket
 only**, and only while the run is active (starting or running); a token
-for another ticket, customer or project, an unknown or finished run, and
+for another ticket, organization or project, an unknown or finished run, and
 any non-run token are refused. ``ticket_context`` needs
 ``tracker.read``; the other tools need ``tracker.report``.
 

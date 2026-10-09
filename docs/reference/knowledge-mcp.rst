@@ -1,7 +1,7 @@
 Knowledge MCP
 =============
 
-Agents use the customer's knowledge base through MCP
+Agents use the organization's knowledge base through MCP
 (:doc:`/architecture/decisions/0005-knowledge-as-separate-service-with-mcp`):
 streamable HTTP at ``/mcp`` on the Knowledge service.
 
@@ -9,7 +9,7 @@ Authentication
 --------------
 
 ``Authorization: Bearer <run token>`` with audience ``knowledge``. The
-token's customer selects the knowledge space; ``knowledge.read`` allows
+token's organization selects the knowledge space; ``knowledge.read`` allows
 the read tools, ``knowledge.write`` the write tools. Requests without a
 valid token get ``401``; tool calls outside the token's capabilities fail
 with a tool error. Entries are recorded with the run's subject as author.
@@ -64,7 +64,7 @@ Trying it
 
 .. code-block:: bash
 
-   TOKEN=$(bin/devtoken -keys data/token-keys.json -customer acme -project WEB \
+   TOKEN=$(bin/devtoken -keys data/token-keys.json -organization acme -project WEB \
      -ticket WEB-1 -aud knowledge -caps knowledge.read,knowledge.write)
    curl localhost:8081/mcp -H "Authorization: Bearer $TOKEN" \
      -H 'Content-Type: application/json' -H 'Accept: application/json, text/event-stream' \

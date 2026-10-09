@@ -24,13 +24,13 @@ func TestReader_LinkedThenSearched(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := verifier.Verify(r.Context(), strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), "knowledge")
 		require.NoError(t, err)
-		assert.Equal(t, "acme", c.Customer)
+		assert.Equal(t, "acme", c.Organization)
 		assert.Equal(t, []string{runtoken.CapKnowledgeRead}, c.Capabilities, "read only")
 		switch r.URL.Path {
-		case "/v1/customers/acme/knowledge/entries":
+		case "/v1/organizations/acme/knowledge/entries":
 			assert.Equal(t, "WEB-3", r.URL.Query().Get("item"))
 			_, _ = w.Write([]byte(`{"items":[{"id":"k1","kind":"decision","title":"Use OIDC","body":"b1"}]}`))
-		case "/v1/customers/acme/knowledge/search":
+		case "/v1/organizations/acme/knowledge/search":
 			assert.Equal(t, "Login", r.URL.Query().Get("q"))
 			assert.Equal(t, "WEB", r.URL.Query().Get("project"))
 			_, _ = w.Write([]byte(`{"items":[{"entry":{"id":"k1","kind":"decision","title":"Use OIDC","body":"b1"},"score":1},

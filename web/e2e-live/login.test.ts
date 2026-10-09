@@ -4,15 +4,15 @@ import { expect, test, type Page } from '@playwright/test';
 
 const repo = path.resolve(import.meta.dirname, '../..');
 
-/** Creates a customer through Core as alice, so the test needs no seeded data. */
-async function createCustomer(key: string, name: string) {
+/** Creates an organization through Core as alice, so the test needs no seeded data. */
+async function createOrganization(key: string, name: string) {
 	const token = execFileSync(path.join(repo, 'scripts/dev-token.sh'), ['alice']).toString().trim();
-	const res = await fetch('http://localhost:8080/api/v1/customers', {
+	const res = await fetch('http://localhost:8080/api/v1/organizations', {
 		method: 'POST',
 		headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
 		body: JSON.stringify({ key, name })
 	});
-	if (!res.ok) throw new Error(`create customer: ${res.status} ${await res.text()}`);
+	if (!res.ok) throw new Error(`create organization: ${res.status} ${await res.text()}`);
 }
 
 async function signIn(page: Page, user: string) {
@@ -26,7 +26,7 @@ async function signIn(page: Page, user: string) {
 	await page.getByRole('button', { name: /sign in/i }).click();
 }
 
-test('alice signs in through Keycloak, sees customers and the live connection', async ({
+test('alice signs in through Keycloak, sees organizations and the live connection', async ({
 	page
 }) => {
 	const errors: string[] = [];
@@ -37,10 +37,10 @@ test('alice signs in through Keycloak, sees customers and the live connection', 
 	page.on('response', (r) => r.status() >= 400 && errors.push(`${r.status()} ${r.url()}`));
 
 	const name = `Login Test ${Date.now().toString(36)}`;
-	await createCustomer(`login-${Date.now().toString(36)}`, name);
+	await createOrganization(`login-${Date.now().toString(36)}`, name);
 	await signIn(page, 'alice');
 
-	await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
 	await expect(page.getByTestId('user-name')).toHaveText('Alice Admin');
 	await expect(page.getByText(name)).toBeVisible();
 	await expect(page.getByRole('status')).toHaveText('Live');
@@ -57,8 +57,8 @@ test('alice signs in through Keycloak, sees customers and the live connection', 
 	expect(errors).toEqual([]);
 });
 
-test('carol without role bindings sees no customers', async ({ page }) => {
+test('carol without role bindings sees no organizations', async ({ page }) => {
 	await signIn(page, 'carol');
 
-	await expect(page.getByText('There are no customers you can see yet.')).toBeVisible();
+	await expect(page.getByText('There are no organizations you can see yet.')).toBeVisible();
 });

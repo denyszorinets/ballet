@@ -18,9 +18,9 @@ import (
 	"github.com/denyszorinets/ballet/knowledge/internal/store"
 )
 
-func as(t *testing.T, customer string, caps ...string) context.Context {
+func as(t *testing.T, organization string, caps ...string) context.Context {
 	return runtoken.ContextWithClaims(t.Context(), runtoken.Claims{
-		Kind: runtoken.KindService, Subject: "service:core", Customer: customer, ActingFor: "bob", Capabilities: caps,
+		Kind: runtoken.KindService, Subject: "service:core", Organization: organization, ActingFor: "bob", Capabilities: caps,
 	})
 }
 
@@ -43,20 +43,20 @@ func setup(t *testing.T) (*app.Service, *app.Indexer, *store.Store) {
 	return svc, ix, st
 }
 
-func create(t *testing.T, svc *app.Service, customer string, in app.CreateInput) domain.Entry {
+func create(t *testing.T, svc *app.Service, organization string, in app.CreateInput) domain.Entry {
 	t.Helper()
-	e, err := svc.Create(as(t, customer, runtoken.CapKnowledgeWrite), customer, in)
+	e, err := svc.Create(as(t, organization, runtoken.CapKnowledgeWrite), organization, in)
 	require.NoError(t, err)
 	return e
 }
 
-func search(t *testing.T, svc *app.Service, customer, text string, opts ...func(*app.SearchQuery)) []string {
+func search(t *testing.T, svc *app.Service, organization, text string, opts ...func(*app.SearchQuery)) []string {
 	t.Helper()
 	q := app.SearchQuery{Text: text}
 	for _, o := range opts {
 		o(&q)
 	}
-	hits, err := svc.Search(as(t, customer, runtoken.CapKnowledgeRead), customer, q)
+	hits, err := svc.Search(as(t, organization, runtoken.CapKnowledgeRead), organization, q)
 	require.NoError(t, err)
 	var titles []string
 	for _, h := range hits {
@@ -88,7 +88,7 @@ func TestIndexer_EmbedsNewChangedAndRemodelledEntries(t *testing.T) {
 	assert.Equal(t, 2, n, "a new model re-embeds everything")
 }
 
-func TestSearch_HybridWithinOneCustomer(t *testing.T) {
+func TestSearch_HybridWithinOneOrganization(t *testing.T) {
 	svc, ix, _ := setup(t)
 	create(t, svc, "acme", app.CreateInput{Kind: domain.KindDecision, Title: "Invoice export format", Body: "Invoices are exported as CSV files.", Projects: []string{"WEB"}})
 	create(t, svc, "acme", app.CreateInput{Kind: domain.KindNote, Title: "Login", Body: "OIDC with Keycloak.", Projects: []string{"APP"}})
@@ -101,7 +101,7 @@ func TestSearch_HybridWithinOneCustomer(t *testing.T) {
 	require.NotEmpty(t, got)
 	assert.Equal(t, "Invoice export format", got[0])
 	assert.Contains(t, got, "Slow CSV generation")
-	assert.NotContains(t, got, "Invoice export at Globex", "never another customer's entries")
+	assert.NotContains(t, got, "Invoice export at Globex", "never another organization's entries")
 	assert.NotContains(t, got, "Login")
 
 	assert.Equal(t, []string{"Slow CSV generation"},
@@ -121,7 +121,7 @@ func TestSearch_FallsBackToFullTextWhenEmbeddingFails(t *testing.T) {
 	assert.Equal(t, []string{"Invoices"}, search(t, svc, "acme", "csv"))
 }
 
-func TestSearch_RequiresReadCapabilityAndMatchingCustomer(t *testing.T) {
+func TestSearch_RequiresReadCapabilityAndMatchingOrganization(t *testing.T) {
 	svc, _, _ := setup(t)
 
 	_, err := svc.Search(as(t, "globex", runtoken.CapKnowledgeRead), "acme", app.SearchQuery{Text: "x"})

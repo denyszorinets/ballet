@@ -5,10 +5,10 @@ import { fakeOIDC } from './fixtures/oidc';
 async function open(page: Page, role: string) {
 	await fakeOIDC(page);
 	const core = await fakeCore(page, {
-		me: [{ role, scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
+		me: [{ role, scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }],
 		projects: [
-			{ id: 'p1', key: 'WEB', customer: 'acme', name: 'Web shop', description: '', version: 1 }
+			{ id: 'p1', key: 'WEB', organization: 'acme', name: 'Web shop', description: '', version: 1 }
 		]
 	});
 	await page.goto('/projects/WEB');
@@ -18,7 +18,7 @@ async function open(page: Page, role: string) {
 }
 
 test('admins configure execution and the git token', async ({ page }) => {
-	const core = await open(page, 'customer-admin');
+	const core = await open(page, 'organization-admin');
 	const form = page.getByRole('form', { name: 'Execution settings' });
 	await form.getByLabel('Repository URL').fill('https://github.com/acme/web.git');
 	await form.getByLabel('Default branch').fill('main');

@@ -6,7 +6,7 @@ Core
 
 The system of record for everything except knowledge.
 
-- Tenancy: platform, customers, projects, process profiles.
+- Tenancy: platform, organizations, projects, process profiles.
 - Tracker: milestones, epics, tickets, dependencies (DAG validation),
   plan changesets, pull request records, gates.
 - Scheduler: ready queue, concurrency limits, Gantt forecast.
@@ -36,7 +36,7 @@ Knowledge
 Separate service, separate database
 (:doc:`decisions/0005-knowledge-as-separate-service-with-mcp`).
 
-- Customer-scoped spaces; entries (documents, decisions, notes, debt)
+- Organization-scoped spaces; entries (documents, decisions, notes, debt)
   with immutable version history and links to projects and tracker
   items.
 - Humans reach it through Core, which authorizes and forwards with a
@@ -45,7 +45,7 @@ Separate service, separate database
 - Hybrid full-text + vector search; lineage graph queries
   (:doc:`decisions/0021-hybrid-vector-search-over-all-content`).
 - **Knowledge MCP** for agents; REST API for the UI editor.
-- Trusts Core-issued tokens for identity and customer scope; holds no
+- Trusts Core-issued tokens for identity and organization scope; holds no
   tracker data beyond entity IDs.
 
 Agent
@@ -75,10 +75,10 @@ LLM Gateway
 A proxy between agent sessions and LLM providers
 (:doc:`decisions/0011-llm-gateway-for-credentials-and-metering`).
 
-- Authenticates the run token, injects the customer's (or project's)
+- Authenticates the run token, injects the organization's (or project's)
   provider credentials — sessions never see real keys.
 - Meters tokens per request and attributes them to run → ticket →
-  project → customer.
+  project → organization.
 - Exposes usage metrics (:doc:`observability`).
 
 Planner

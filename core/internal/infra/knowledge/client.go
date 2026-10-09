@@ -28,17 +28,17 @@ type Client struct {
 
 const tokenTTL = 5 * time.Minute
 
-// Do authorizes the caller for the customer's knowledge (knowledge.write
-// for writes), then sends method to /v1/customers/{customer}/knowledge/{path}
+// Do authorizes the caller for the organization's knowledge (knowledge.write
+// for writes), then sends method to /v1/organizations/{organization}/knowledge/{path}
 // and returns the response body. Error responses map to app errors.
-func (c *Client) Do(ctx context.Context, customer string, write bool, method, path string, query url.Values, body any) (json.RawMessage, error) {
-	g, err := c.Access.Authorize(ctx, customer, write)
+func (c *Client) Do(ctx context.Context, organization string, write bool, method, path string, query url.Values, body any) (json.RawMessage, error) {
+	g, err := c.Access.Authorize(ctx, organization, write)
 	if err != nil {
 		return nil, err
 	}
 	claims := runtoken.Claims{
 		Kind: runtoken.KindService, Subject: "service:core", Audience: []string{"knowledge"},
-		Customer: g.Customer, ActingFor: g.ActingFor, Capabilities: g.Capabilities,
+		Organization: g.Organization, ActingFor: g.ActingFor, Capabilities: g.Capabilities,
 	}
 	if session, ok := app.PlannerSessionOf(ctx); ok {
 		claims.Subject = "planner:" + session // Core forwarding for the planner
@@ -47,7 +47,7 @@ func (c *Client) Do(ctx context.Context, customer string, write bool, method, pa
 	if err != nil {
 		return nil, err
 	}
-	u := c.URL.JoinPath("v1", "customers", customer, "knowledge", path)
+	u := c.URL.JoinPath("v1", "organizations", organization, "knowledge", path)
 	u.RawQuery = query.Encode()
 	var rd io.Reader
 	if body != nil {

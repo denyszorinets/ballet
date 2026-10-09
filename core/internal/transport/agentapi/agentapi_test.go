@@ -42,9 +42,9 @@ func setup(t *testing.T) env {
 	authz := &app.RBAC{Store: st, Bootstrap: []rbac.Binding{boot}}
 	admin := auth.WithIdentity(t.Context(), auth.Identity{Kind: auth.KindHuman, Subject: "alice", Claims: map[string]any{"groups": []any{"admins"}}})
 	ten := &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID}
-	_, err = ten.CreateCustomer(admin, app.CreateCustomerInput{Key: "acme", Name: "Acme"})
+	_, err = ten.CreateOrganization(admin, app.CreateOrganizationInput{Key: "acme", Name: "Acme"})
 	require.NoError(t, err)
-	_, err = ten.CreateProject(admin, app.CreateProjectInput{CustomerKey: "acme", Key: "WEB", Name: "Web"})
+	_, err = ten.CreateProject(admin, app.CreateProjectInput{OrganizationKey: "acme", Key: "WEB", Name: "Web"})
 	require.NoError(t, err)
 	tr := &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID}
 	it, err := tr.CreateItem(admin, app.CreateItemInput{ProjectKey: "WEB", Kind: tracker.KindTicket, Title: "t"})

@@ -26,21 +26,21 @@ func (s *Store) AppendEvent(e event.Event) sqlstore.Stmt {
 		payload = string(e.Payload)
 	}
 	return sqlstore.Exec(`INSERT INTO events
-		(id, occurred_at, customer_id, project_id, entity_type, entity_id, type, actor_kind, actor_sub, acting_for, payload)
+		(id, occurred_at, organization_id, project_id, entity_type, entity_id, type, actor_kind, actor_sub, acting_for, payload)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		e.ID, formatTime(e.OccurredAt), nullable(e.Customer), nullable(e.Project),
+		e.ID, formatTime(e.OccurredAt), nullable(e.Organization), nullable(e.Project),
 		e.EntityType, e.EntityID, e.Type, string(e.Actor.Kind), e.Actor.Subject, nullable(e.Actor.ActingFor), payload)
 }
 
 // EventFilter selects events. Zero fields do not filter.
 type EventFilter struct {
-	Customer   string
-	Project    string
-	EntityType string
-	EntityID   string
-	AfterSeq   int64 // only events with a greater seq
-	UpToSeq    int64 // only events with a smaller or equal seq (0: no bound)
-	Limit      int   // default and maximum 1000
+	Organization string
+	Project      string
+	EntityType   string
+	EntityID     string
+	AfterSeq     int64 // only events with a greater seq
+	UpToSeq      int64 // only events with a smaller or equal seq (0: no bound)
+	Limit        int   // default and maximum 1000
 	// Since narrows to events at or after it, to the second (callers
 	// filter exactly); zero: no bound.
 	Since time.Time
@@ -56,8 +56,8 @@ func (s *Store) ListEvents(ctx context.Context, f EventFilter) ([]event.Event, e
 		where = append(where, cond)
 		args = append(args, v)
 	}
-	if f.Customer != "" {
-		add("customer_id = ?", f.Customer)
+	if f.Organization != "" {
+		add("organization_id = ?", f.Organization)
 	}
 	if f.Project != "" {
 		add("project_id = ?", f.Project)
@@ -83,7 +83,7 @@ func (s *Store) ListEvents(ctx context.Context, f EventFilter) ([]event.Event, e
 	if limit <= 0 || limit > maxEvents {
 		limit = maxEvents
 	}
-	q := `SELECT seq, id, occurred_at, customer_id, project_id, entity_type, entity_id, type,
+	q := `SELECT seq, id, occurred_at, organization_id, project_id, entity_type, entity_id, type,
 		actor_kind, actor_sub, acting_for, payload FROM events`
 	if len(where) > 0 {
 		q += " WHERE " + strings.Join(where, " AND ")
@@ -100,15 +100,15 @@ func (s *Store) ListEvents(ctx context.Context, f EventFilter) ([]event.Event, e
 	for rows.Next() {
 		var e event.Event
 		var occurred, actorKind string
-		var customer, project, actingFor, payload sql.NullString
-		if err := rows.Scan(&e.Seq, &e.ID, &occurred, &customer, &project, &e.EntityType, &e.EntityID,
+		var organization, project, actingFor, payload sql.NullString
+		if err := rows.Scan(&e.Seq, &e.ID, &occurred, &organization, &project, &e.EntityType, &e.EntityID,
 			&e.Type, &actorKind, &e.Actor.Subject, &actingFor, &payload); err != nil {
 			return nil, fmt.Errorf("list events: %w", err)
 		}
 		if e.OccurredAt, err = parseTime(occurred); err != nil {
 			return nil, fmt.Errorf("list events: %w", err)
 		}
-		e.Customer, e.Project = customer.String, project.String
+		e.Organization, e.Project = organization.String, project.String
 		e.Actor.Kind, e.Actor.ActingFor = event.ActorKind(actorKind), actingFor.String
 		if payload.Valid {
 			e.Payload = []byte(payload.String)

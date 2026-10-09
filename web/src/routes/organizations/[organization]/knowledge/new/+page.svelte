@@ -6,7 +6,7 @@
 	import KnowledgeEditor, { type Draft } from '$lib/components/KnowledgeEditor.svelte';
 	import { getSession } from '$lib/session';
 
-	const customer = $derived(page.params.customer ?? '');
+	const organization = $derived(page.params.organization ?? '');
 	let error = $state<string>();
 
 	// A link from a tracker item pre-fills the item and its project.
@@ -23,9 +23,9 @@
 		error = undefined;
 		const s = await getSession();
 		const { data, error: err } = await s.api.POST(
-			'/api/v1/customers/{customer}/knowledge/entries',
+			'/api/v1/organizations/{organization}/knowledge/entries',
 			{
-				params: { path: { customer } },
+				params: { path: { organization } },
 				body: d
 			}
 		);
@@ -33,7 +33,9 @@
 			error = apiError(err);
 			return;
 		}
-		await goto(resolve('/customers/[customer]/knowledge/[entry]', { customer, entry: data.id }));
+		await goto(
+			resolve('/organizations/[organization]/knowledge/[entry]', { organization, entry: data.id })
+		);
 	}
 </script>
 
@@ -45,5 +47,5 @@
 	submitLabel="Create entry"
 	{error}
 	onsubmit={create}
-	oncancel={() => goto(resolve('/customers/[customer]/knowledge', { customer }))}
+	oncancel={() => goto(resolve('/organizations/[organization]/knowledge', { organization }))}
 />

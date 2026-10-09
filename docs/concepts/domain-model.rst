@@ -7,7 +7,7 @@ Tenancy
 .. code-block:: text
 
    Platform                the Ballet installation and its operators
-   └── Customer            hard isolation boundary; owns a knowledge space
+   └── Organization        hard isolation boundary; owns a knowledge space
        └── Project         one product; one or more git repositories
            ├── Milestone
            ├── Epic
@@ -20,11 +20,11 @@ Tenancy
    definitions, platform-scope role bindings and the global pause and
    kill switch (:doc:`/architecture/decisions/0027-tenancy-platform-organization-project`).
 
-**Customer**
+**Organization**
    Identified by an immutable key such as ``acme``. The isolation
-   boundary. All of a customer's projects share one
+   boundary. All of an organization's projects share one
    knowledge space; nothing — knowledge, tickets, runs, credentials —
-   crosses between customers. Holds the default LLM credentials, which
+   crosses between organizations. Holds the default LLM credentials, which
    projects may override.
 
 **Project**
@@ -86,7 +86,7 @@ Execution entities
    uncertainty. Listed on the ticket for later confirmation.
 
 **Budget**
-   A token or cost limit for a ticket, project (per day) or customer (per
+   A token or cost limit for a ticket, project (per day) or organization (per
    month).
 
 **Pull Request**
@@ -114,7 +114,7 @@ Configuration entities
 
 **Skill**
    A versioned bundle of agent instructions, scoped to platform,
-   customer or project (:doc:`skills`).
+   organization or project (:doc:`skills`).
 
 **Agent Runtime**
    A supported coding agent (Claude Code, Codex, opencode) with its

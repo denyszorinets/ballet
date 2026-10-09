@@ -17,13 +17,16 @@ async function api(method: string, p: string, body?: unknown) {
 
 test('alice writes, publishes, compares and pins a skill', async ({ page }) => {
 	const suffix = Date.now().toString(36);
-	const customer = `sk-${suffix}`;
+	const organization = `sk-${suffix}`;
 	const project = `S${suffix
 		.toUpperCase()
 		.replace(/[^A-Z0-9]/g, '')
 		.slice(-8)}`;
-	await api('POST', '/customers', { key: customer, name: 'Skill test' });
-	await api('POST', `/customers/${customer}/projects`, { key: project, name: 'Skill project' });
+	await api('POST', '/organizations', { key: organization, name: 'Skill test' });
+	await api('POST', `/organizations/${organization}/projects`, {
+		key: project,
+		name: 'Skill project'
+	});
 	const errors: string[] = [];
 	page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 
@@ -35,9 +38,9 @@ test('alice writes, publishes, compares and pins a skill', async ({ page }) => {
 		.first()
 		.fill('alice');
 	await page.getByRole('button', { name: /sign in/i }).click();
-	await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
 
-	await page.goto(`/skills?scope=customer:${customer}`);
+	await page.goto(`/skills?scope=organization:${organization}`);
 	const form = page.getByRole('form', { name: 'New skill' });
 	await form.getByLabel('Name').fill('release-notes');
 	await form.getByLabel('Description').fill('How to write release notes');

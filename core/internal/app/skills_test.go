@@ -27,7 +27,7 @@ func content(desc, body string) skill.Content {
 func TestSkills_PublishedVersionsAreImmutable(t *testing.T) {
 	sk, env := newSkills(t)
 	dave := user(t, "dave", "acme-admins")
-	s, err := sk.CreateSkill(dave, "customer:acme", "gitflow", content("Branching rules", "# v1"))
+	s, err := sk.CreateSkill(dave, "organization:acme", "gitflow", content("Branching rules", "# v1"))
 	require.NoError(t, err)
 	assert.Zero(t, s.LatestVersion)
 
@@ -68,10 +68,10 @@ func TestSkills_ScopesAndAuthorization(t *testing.T) {
 	_, err := sk.CreateSkill(alice, "platform", "code-review", content("Review checklist", "# Review"))
 	require.NoError(t, err)
 	_, err = sk.CreateSkill(dave, "platform", "x-skill", content("x", ""))
-	assert.ErrorIs(t, err, app.ErrForbidden, "customer admins cannot change platform process")
+	assert.ErrorIs(t, err, app.ErrForbidden, "organization admins cannot change platform process")
 	proj, err := sk.CreateSkill(dave, "project:WEB", "code-review", content("Project override", "# WEB review"))
 	require.NoError(t, err, "same name at another scope is allowed")
-	assert.Equal(t, "acme", proj.Scope.Customer, "project scope records its customer")
+	assert.Equal(t, "acme", proj.Scope.Organization, "project scope records its organization")
 	_, err = sk.CreateSkill(dave, "project:GLX", "code-review", content("x", ""))
 	assert.ErrorIs(t, err, app.ErrForbidden)
 	_, err = sk.CreateSkill(dave, "project:WEB", "code-review", content("dup", ""))
@@ -86,7 +86,7 @@ func TestSkills_ScopesAndAuthorization(t *testing.T) {
 	list, err := sk.ListSkills(bob, "project:WEB")
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
-	_, err = sk.ListSkills(user(t, "eve"), "customer:acme")
+	_, err = sk.ListSkills(user(t, "eve"), "organization:acme")
 	assert.ErrorIs(t, err, app.ErrForbidden)
 
 	for name, in := range map[string]struct{ scope, name string }{
@@ -98,7 +98,7 @@ func TestSkills_ScopesAndAuthorization(t *testing.T) {
 	}
 	_, err = sk.CreateSkill(alice, "platform", "evil", skill.Content{Description: "d", Files: map[string]string{"../x": ""}})
 	assert.ErrorIs(t, err, app.ErrInvalid)
-	_, err = sk.CreateSkill(alice, "customer:nobody", "x-y", content("d", ""))
+	_, err = sk.CreateSkill(alice, "organization:nobody", "x-y", content("d", ""))
 	assert.ErrorIs(t, err, app.ErrNotFound)
 }
 

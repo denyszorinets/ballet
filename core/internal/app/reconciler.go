@@ -102,7 +102,7 @@ func (rc *Reconciler) flow(ctx context.Context, f Flow) error {
 	if err != nil {
 		return err
 	}
-	_, c, err := fl.customer(ctx, f.ProjectID)
+	_, c, err := fl.organization(ctx, f.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -198,7 +198,7 @@ func (rc *Reconciler) expected(f Flow) (Job, bool) {
 
 // flag stops a flow's stage, cancels its run and asks the humans how to
 // continue.
-func (rc *Reconciler) flag(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer, reason string) error {
+func (rc *Reconciler) flag(ctx context.Context, f Flow, it tracker.Item, c tenancy.Organization, reason string) error {
 	fl := rc.Flows
 	next := f
 	next.Status, next.Waiting, next.RunID, next.Report = FlowWaiting, "question", "", reason

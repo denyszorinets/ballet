@@ -54,9 +54,9 @@ func (s *Store) CountedTokens(ctx context.Context, f app.UsageFilter) (int64, er
 		until = formatTime(f.Until)
 	}
 	err := s.db.QueryRow(ctx, `SELECT sum(input_tokens + output_tokens + cache_write_tokens) FROM usage_records
-		WHERE (? = '' OR customer_id = ?) AND (? = '' OR project_id = ?) AND (? = '' OR ticket_key = ?)
+		WHERE (? = '' OR organization_id = ?) AND (? = '' OR project_id = ?) AND (? = '' OR ticket_key = ?)
 		AND occurred_at >= ? AND (? = '' OR occurred_at < ?)`,
-		f.CustomerID, f.CustomerID, f.ProjectID, f.ProjectID, f.Ticket, f.Ticket, formatTime(f.Since), until, until).Scan(&n)
+		f.OrganizationID, f.OrganizationID, f.ProjectID, f.ProjectID, f.Ticket, f.Ticket, formatTime(f.Since), until, until).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("counted tokens: %w", err)
 	}

@@ -71,7 +71,7 @@ type RoleBindings struct {
 
 // target is the authorization target governing a binding's scope.
 func target(s rbac.BindingScope) Scope {
-	return Scope{Customer: s.Customer}
+	return Scope{Organization: s.Organization}
 }
 
 // List returns the bindings the caller may read, bootstrap bindings first.
@@ -98,7 +98,7 @@ type CreateRoleBindingInput struct {
 	Claim string
 	Value string
 	Role  string
-	Scope string // "platform", "customer:<key>" or "project:<key>"
+	Scope string // "platform", "organization:<key>" or "project:<key>"
 }
 
 // Create adds a binding. The caller needs role_binding.manage at the
@@ -112,7 +112,7 @@ func (rb *RoleBindings) Create(ctx context.Context, in CreateRoleBindingInput) (
 	if err != nil {
 		return rbac.Binding{}, invalid(err)
 	}
-	customerID, err := rb.resolve(ctx, &scope)
+	organizationID, err := rb.resolve(ctx, &scope)
 	if err != nil {
 		return rbac.Binding{}, err
 	}
@@ -126,7 +126,7 @@ func (rb *RoleBindings) Create(ctx context.Context, in CreateRoleBindingInput) (
 		return rbac.Binding{}, invalid(err)
 	}
 	e := event.Event{
-		Customer: customerID, EntityType: "role_binding", EntityID: b.ID, Type: "role_binding.created",
+		Organization: organizationID, EntityType: "role_binding", EntityID: b.ID, Type: "role_binding.created",
 		Actor: actorOf(id), OccurredAt: b.CreatedAt,
 		Payload: mustJSON(map[string]any{"claim": b.Claim, "value": b.Value, "role": b.Role, "scope": b.Scope.String()}),
 	}
@@ -150,25 +150,25 @@ func (rb *RoleBindings) Delete(ctx context.Context, bindingID string) error {
 		return err
 	}
 	scope := b.Scope
-	customerID, err := rb.resolve(ctx, &scope)
+	organizationID, err := rb.resolve(ctx, &scope)
 	if err != nil {
 		return err
 	}
 	e := event.Event{
-		Customer: customerID, EntityType: "role_binding", EntityID: b.ID, Type: "role_binding.deleted",
+		Organization: organizationID, EntityType: "role_binding", EntityID: b.ID, Type: "role_binding.deleted",
 		Actor: actorOf(id), OccurredAt: rb.Now(),
 		Payload: mustJSON(map[string]any{"claim": b.Claim, "value": b.Value, "role": b.Role, "scope": b.Scope.String()}),
 	}
 	return rb.RBAC.Store.DeleteRoleBinding(ctx, b.ID, e)
 }
 
-// resolve checks that the scope's customer/project exist, fills in the
-// customer of a project scope, and returns the customer's ID ("" for
+// resolve checks that the scope's organization/project exist, fills in the
+// organization of a project scope, and returns the organization's ID ("" for
 // platform scope).
 func (rb *RoleBindings) resolve(ctx context.Context, s *rbac.BindingScope) (string, error) {
 	switch s.Kind {
-	case rbac.ScopeCustomer:
-		c, err := rb.Tenancy.CustomerByKey(ctx, s.Customer)
+	case rbac.ScopeOrganization:
+		c, err := rb.Tenancy.OrganizationByKey(ctx, s.Organization)
 		if err != nil {
 			return "", err
 		}
@@ -178,11 +178,11 @@ func (rb *RoleBindings) resolve(ctx context.Context, s *rbac.BindingScope) (stri
 		if err != nil {
 			return "", err
 		}
-		c, err := rb.Tenancy.CustomerByID(ctx, p.CustomerID)
+		c, err := rb.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 		if err != nil {
 			return "", err
 		}
-		s.Customer = c.Key
+		s.Organization = c.Key
 		return c.ID, nil
 	}
 	return "", nil

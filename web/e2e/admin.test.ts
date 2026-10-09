@@ -2,21 +2,26 @@ import { expect, test } from '@playwright/test';
 import { fakeCore } from './fixtures/api';
 import { fakeOIDC } from './fixtures/oidc';
 
-test('a platform admin creates and renames a customer and adds a project', async ({ page }) => {
+test('a platform admin creates and renames an organization and adds a project', async ({
+	page
+}) => {
 	await fakeOIDC(page);
 	await fakeCore(page, { me: [{ role: 'platform-admin', scope: 'platform' }] });
 	await page.goto('/');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
-	const form = page.getByRole('form', { name: 'New customer' });
+	const form = page.getByRole('form', { name: 'New organization' });
 	await form.getByLabel('Key').fill('acme');
 	await form.getByLabel('Name').fill('Acme');
-	await form.getByRole('button', { name: 'Create customer' }).click();
+	await form.getByRole('button', { name: 'Create organization' }).click();
 	await page.getByRole('link', { name: /acme/ }).click();
 
 	await expect(page.getByRole('heading', { name: 'Acme' })).toBeVisible();
 	await page.getByRole('button', { name: 'Rename' }).click();
-	await page.getByRole('form', { name: 'Rename customer' }).getByLabel('Name').fill('Acme Corp');
+	await page
+		.getByRole('form', { name: 'Rename organization' })
+		.getByLabel('Name')
+		.fill('Acme Corp');
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(page.getByRole('heading', { name: 'Acme Corp' })).toBeVisible();
 
@@ -31,15 +36,15 @@ test('API errors are shown on the form', async ({ page }) => {
 	await fakeOIDC(page);
 	await fakeCore(page, {
 		me: [{ role: 'platform-admin', scope: 'platform' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }]
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }]
 	});
 	await page.goto('/');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
-	const form = page.getByRole('form', { name: 'New customer' });
+	const form = page.getByRole('form', { name: 'New organization' });
 	await form.getByLabel('Key').fill('acme');
 	await form.getByLabel('Name').fill('Again');
-	await form.getByRole('button', { name: 'Create customer' }).click();
+	await form.getByRole('button', { name: 'Create organization' }).click();
 
 	await expect(form.getByRole('alert')).toContainText('already exists');
 });
@@ -81,14 +86,14 @@ test('access page lists, grants and removes role bindings', async ({ page }) => 
 test('viewers see no administration controls', async ({ page }) => {
 	await fakeOIDC(page);
 	await fakeCore(page, {
-		me: [{ role: 'viewer', scope: 'customer:acme' }],
-		customers: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }]
+		me: [{ role: 'viewer', scope: 'organization:acme' }],
+		organizations: [{ id: 'c1', key: 'acme', name: 'Acme', version: 1 }]
 	});
 	await page.goto('/');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
 	await expect(page.getByRole('link', { name: /acme/ })).toBeVisible();
-	await expect(page.getByRole('form', { name: 'New customer' })).toHaveCount(0);
+	await expect(page.getByRole('form', { name: 'New organization' })).toHaveCount(0);
 	await expect(page.getByRole('link', { name: 'Access' })).toHaveCount(0);
 	await page.getByRole('link', { name: /acme/ }).click();
 	await expect(page.getByRole('heading', { name: 'Acme' })).toBeVisible();

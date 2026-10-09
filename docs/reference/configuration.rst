@@ -252,7 +252,7 @@ server).
 ~~~~~~~
 
 Base URL of the Knowledge service, to which Core forwards authorized
-``/api/v1/customers/{customer}/knowledge/...`` requests.
+``/api/v1/organizations/{organization}/knowledge/...`` requests.
 
 :Type: string (URL)
 :Default: ``"http://localhost:8081"``
@@ -400,7 +400,7 @@ Coding-agent runs (:ref:`reference-agents-runs`).
    ``http://localhost:8082``) with the knowledge service token
    (``embeddings.token_file``, default
    ``data/service-tokens/knowledge.token``), attributed to each entry's
-   customer; ``model`` names any model the gateway serves (default
+   organization; ``model`` names any model the gateway serves (default
    ``hash-256``). Changing the model re-embeds all entries.
    ``BALLET_KNOWLEDGE_EMBEDDINGS_MODE``, ``…_MODEL``, ``…_GATEWAY_URL``,
    ``…_TOKEN_FILE``.
@@ -411,7 +411,7 @@ Coding-agent runs (:ref:`reference-agents-runs`).
    usually need a lower value). ``BALLET_KNOWLEDGE_SEARCH_MAX_DISTANCE``.
 
 Knowledge accepts only Core-issued tokens with audience ``knowledge``
-whose customer matches the requested space.
+whose organization matches the requested space.
 
 .. _reference-config-gateway:
 

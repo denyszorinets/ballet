@@ -45,17 +45,17 @@ type budgetVerdict struct {
 	expires time.Time
 }
 
-// CheckBudget asks Core whether work of a customer/project (and ticket)
+// CheckBudget asks Core whether work of an organization/project (and ticket)
 // may still call the LLM, cached for BudgetTTL.
-func (c *Client) CheckBudget(ctx context.Context, customer, project, ticket string) (bool, string, error) {
-	key := customer + "/" + project + "/" + ticket
+func (c *Client) CheckBudget(ctx context.Context, organization, project, ticket string) (bool, string, error) {
+	key := organization + "/" + project + "/" + ticket
 	c.mu.Lock()
 	if v, ok := c.budgets[key]; ok && time.Now().Before(v.expires) {
 		c.mu.Unlock()
 		return v.Allowed, v.Reason, nil
 	}
 	c.mu.Unlock()
-	q := url.Values{"customer": {customer}, "project": {project}, "ticket": {ticket}}
+	q := url.Values{"organization": {organization}, "project": {project}, "ticket": {ticket}}
 	var v budgetVerdict
 	if _, err := c.get(ctx, "/internal/v1/budget/check?"+q.Encode(), &v); err != nil {
 		return false, "", err
@@ -79,10 +79,10 @@ type cached struct {
 	expires time.Time
 }
 
-// ResolveCredential returns the credential for a customer/project and
+// ResolveCredential returns the credential for an organization/project and
 // provider, cached for CacheTTL.
-func (c *Client) ResolveCredential(ctx context.Context, customer, project, provider string) (Credential, error) {
-	key := customer + "/" + project + "/" + provider
+func (c *Client) ResolveCredential(ctx context.Context, organization, project, provider string) (Credential, error) {
+	key := organization + "/" + project + "/" + provider
 	c.mu.Lock()
 	if e, ok := c.cache[key]; ok && time.Now().Before(e.expires) {
 		c.mu.Unlock()
@@ -90,7 +90,7 @@ func (c *Client) ResolveCredential(ctx context.Context, customer, project, provi
 	}
 	c.mu.Unlock()
 
-	q := url.Values{"customer": {customer}, "project": {project}, "provider": {provider}}
+	q := url.Values{"organization": {organization}, "project": {project}, "provider": {provider}}
 	var cred Credential
 	status, err := c.get(ctx, "/internal/v1/credentials/resolve?"+q.Encode(), &cred)
 	if status == http.StatusNotFound {

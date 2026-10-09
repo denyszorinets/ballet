@@ -14,7 +14,7 @@ import (
 
 // SkillStore persists skills.
 type SkillStore interface {
-	CreateSkill(ctx context.Context, sk skill.Skill, customerID string, e event.Event) error
+	CreateSkill(ctx context.Context, sk skill.Skill, organizationID string, e event.Event) error
 	UpdateSkillDraft(ctx context.Context, sk skill.Skill, expectedVersion int64, e event.Event) error
 	PublishSkill(ctx context.Context, sk skill.Skill, v skill.Version, expectedVersion int64, e event.Event) error
 	Skill(ctx context.Context, id string) (skill.Skill, error)
@@ -37,18 +37,18 @@ type Skills struct {
 }
 
 // target is the authorization target of a skill scope.
-func skillTarget(s skill.Scope) Scope { return Scope{Customer: s.Customer, Project: s.Project} }
+func skillTarget(s skill.Scope) Scope { return Scope{Organization: s.Organization, Project: s.Project} }
 
 // resolveScope parses a scope, checks it exists, fills in a project's
-// customer and returns the customer's ID ("" for platform scope).
+// organization and returns the organization's ID ("" for platform scope).
 func (sk *Skills) resolveScope(ctx context.Context, raw string) (skill.Scope, string, error) {
 	sc, err := skill.ParseScope(raw)
 	if err != nil {
 		return skill.Scope{}, "", invalid(err)
 	}
 	switch sc.Kind {
-	case skill.ScopeCustomer:
-		c, err := sk.Tenancy.CustomerByKey(ctx, sc.Customer)
+	case skill.ScopeOrganization:
+		c, err := sk.Tenancy.OrganizationByKey(ctx, sc.Organization)
 		if err != nil {
 			return skill.Scope{}, "", err
 		}
@@ -58,11 +58,11 @@ func (sk *Skills) resolveScope(ctx context.Context, raw string) (skill.Scope, st
 		if err != nil {
 			return skill.Scope{}, "", err
 		}
-		c, err := sk.Tenancy.CustomerByID(ctx, p.CustomerID)
+		c, err := sk.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 		if err != nil {
 			return skill.Scope{}, "", err
 		}
-		sc.Customer = c.Key
+		sc.Organization = c.Key
 		return sc, c.ID, nil
 	}
 	return sc, "", nil
@@ -76,25 +76,25 @@ func (sk *Skills) authorize(ctx context.Context, action Action, scope skill.Scop
 	return id, sk.Authz.Authorize(ctx, id, action, skillTarget(scope))
 }
 
-func (sk *Skills) customerID(ctx context.Context, scope skill.Scope) string {
-	if scope.Customer == "" {
+func (sk *Skills) organizationID(ctx context.Context, scope skill.Scope) string {
+	if scope.Organization == "" {
 		return ""
 	}
-	c, err := sk.Tenancy.CustomerByKey(ctx, scope.Customer)
+	c, err := sk.Tenancy.OrganizationByKey(ctx, scope.Organization)
 	if err != nil {
 		return ""
 	}
 	return c.ID
 }
 
-func skillEvent(s skill.Skill, customerID, typ string, actor event.Actor, payload map[string]any) event.Event {
-	return event.Event{Customer: customerID, EntityType: "skill", EntityID: s.ID, Type: typ, Actor: actor,
+func skillEvent(s skill.Skill, organizationID, typ string, actor event.Actor, payload map[string]any) event.Event {
+	return event.Event{Organization: organizationID, EntityType: "skill", EntityID: s.ID, Type: typ, Actor: actor,
 		OccurredAt: s.UpdatedAt, Payload: mustJSON(payload)}
 }
 
 // CreateSkill creates a skill with its first draft.
 func (sk *Skills) CreateSkill(ctx context.Context, scope, name string, draft skill.Content) (skill.Skill, error) {
-	sc, customerID, err := sk.resolveScope(ctx, scope)
+	sc, organizationID, err := sk.resolveScope(ctx, scope)
 	if err != nil {
 		return skill.Skill{}, err
 	}
@@ -107,8 +107,8 @@ func (sk *Skills) CreateSkill(ctx context.Context, scope, name string, draft ski
 	}
 	now := sk.Now()
 	s := skill.Skill{ID: sk.NewID(), Scope: sc, Name: name, Draft: draft, CreatedAt: now, UpdatedAt: now, Version: 1}
-	e := skillEvent(s, customerID, "skill.created", actorOf(id), map[string]any{"name": name, "scope": sc.String()})
-	if err := sk.Store.CreateSkill(ctx, s, customerID, e); err != nil {
+	e := skillEvent(s, organizationID, "skill.created", actorOf(id), map[string]any{"name": name, "scope": sc.String()})
+	if err := sk.Store.CreateSkill(ctx, s, organizationID, e); err != nil {
 		return skill.Skill{}, err
 	}
 	return s, nil
@@ -173,7 +173,7 @@ func (sk *Skills) UpdateDraft(ctx context.Context, skillID string, in UpdateDraf
 		return skill.Skill{}, invalid(err)
 	}
 	s.UpdatedAt, s.Version = sk.Now(), in.Version+1
-	e := skillEvent(s, sk.customerID(ctx, s.Scope), "skill.updated", actorOf(id), map[string]any{"name": s.Name})
+	e := skillEvent(s, sk.organizationID(ctx, s.Scope), "skill.updated", actorOf(id), map[string]any{"name": s.Name})
 	if err := sk.Store.UpdateSkillDraft(ctx, s, in.Version, e); err != nil {
 		return skill.Skill{}, err
 	}
@@ -196,7 +196,7 @@ func (sk *Skills) Publish(ctx context.Context, skillID string, expectedVersion i
 	now := sk.Now()
 	v := skill.Version{Number: s.LatestVersion + 1, Content: s.Draft, PublishedBy: id.Subject, PublishedAt: now}
 	s.LatestVersion, s.UpdatedAt, s.Version = v.Number, now, expectedVersion+1
-	e := skillEvent(s, sk.customerID(ctx, s.Scope), "skill.published", actorOf(id),
+	e := skillEvent(s, sk.organizationID(ctx, s.Scope), "skill.published", actorOf(id),
 		map[string]any{"name": s.Name, "number": v.Number})
 	if err := sk.Store.PublishSkill(ctx, s, v, expectedVersion, e); err != nil {
 		return skill.Version{}, err
@@ -229,19 +229,19 @@ func (sk *Skills) projectScope(ctx context.Context, projectKey string) (string, 
 	if err != nil {
 		return "", "", nil, err
 	}
-	c, err := sk.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := sk.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
 		return "", "", nil, err
 	}
 	chain := []skill.Scope{
 		{Kind: skill.ScopePlatform},
-		{Kind: skill.ScopeCustomer, Customer: c.Key},
-		{Kind: skill.ScopeProject, Customer: c.Key, Project: p.Key},
+		{Kind: skill.ScopeOrganization, Organization: c.Key},
+		{Kind: skill.ScopeProject, Organization: c.Key, Project: p.Key},
 	}
 	return p.ID, c.ID, chain, nil
 }
 
-// Resolve returns a project's effective skills (platform → customer →
+// Resolve returns a project's effective skills (platform → organization →
 // project, pins applied). Requires skill.read on the project.
 func (sk *Skills) Resolve(ctx context.Context, projectKey string) ([]skill.Resolved, error) {
 	projectID, _, chain, err := sk.projectScope(ctx, projectKey)
@@ -278,7 +278,7 @@ func (sk *Skills) Pins(ctx context.Context, projectKey string) ([]skill.Pin, err
 // SetPin pins a skill name for a project (version 0 = latest) or excludes
 // it. Requires skill.write on the project.
 func (sk *Skills) SetPin(ctx context.Context, projectKey string, p skill.Pin) error {
-	projectID, customerID, chain, err := sk.projectScope(ctx, projectKey)
+	projectID, organizationID, chain, err := sk.projectScope(ctx, projectKey)
 	if err != nil {
 		return err
 	}
@@ -292,7 +292,7 @@ func (sk *Skills) SetPin(ctx context.Context, projectKey string, p skill.Pin) er
 	if p.Version < 0 {
 		return fmt.Errorf("%w: version must be 0 (latest) or a published version", ErrInvalid)
 	}
-	e := event.Event{Customer: customerID, Project: projectID, EntityType: "project", EntityID: projectID,
+	e := event.Event{Organization: organizationID, Project: projectID, EntityType: "project", EntityID: projectID,
 		Type: "project.skill_pinned", Actor: actorOf(id), OccurredAt: sk.Now(),
 		Payload: mustJSON(map[string]any{"name": p.Name, "version": p.Version, "disabled": p.Disabled})}
 	return sk.Store.SetSkillPin(ctx, projectID, p, e)
@@ -300,7 +300,7 @@ func (sk *Skills) SetPin(ctx context.Context, projectKey string, p skill.Pin) er
 
 // DeletePin removes a project's pin for a skill name.
 func (sk *Skills) DeletePin(ctx context.Context, projectKey, name string) error {
-	projectID, customerID, chain, err := sk.projectScope(ctx, projectKey)
+	projectID, organizationID, chain, err := sk.projectScope(ctx, projectKey)
 	if err != nil {
 		return err
 	}
@@ -308,7 +308,7 @@ func (sk *Skills) DeletePin(ctx context.Context, projectKey, name string) error 
 	if err != nil {
 		return err
 	}
-	e := event.Event{Customer: customerID, Project: projectID, EntityType: "project", EntityID: projectID,
+	e := event.Event{Organization: organizationID, Project: projectID, EntityType: "project", EntityID: projectID,
 		Type: "project.skill_unpinned", Actor: actorOf(id), OccurredAt: sk.Now(),
 		Payload: mustJSON(map[string]any{"name": name})}
 	err = sk.Store.DeleteSkillPin(ctx, projectID, name, e)
@@ -332,7 +332,7 @@ func (sk *Skills) ProjectSkillBody(ctx context.Context, projectKey, name string)
 			continue
 		}
 		// Resolve authorized the caller for the project's skills, including
-		// those of the platform and customer it inherits.
+		// those of the platform and organization it inherits.
 		v, err := sk.Store.SkillVersion(ctx, r.Skill.ID, r.Version)
 		if err != nil {
 			return "", err

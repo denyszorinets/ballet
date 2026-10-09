@@ -70,7 +70,7 @@ preparing its workspace, in the session itself, before the run's command:
 Runs also get the project's ``env``, and ``BALLET_TICKET``, ``BALLET_STAGE`` and ``BALLET_BRANCH``.
 The run records its branch.
 
-**Git token.** Set it as the project's (or customer's) ``git`` credential
+**Git token.** Set it as the project's (or organization's) ``git`` credential
 (``PUT /api/v1/projects/{project}/credentials/git``). It is stored
 encrypted and delivered to the agent only with ``run.start``, in the
 spec's ``secret_env``: never stored with the run, never in the remote URL,
@@ -187,7 +187,7 @@ cannot commit it:
   project's skills in the versions it resolves (pins apply);
 - ``.claude/CLAUDE.md`` — standing instructions (ticket, stage);
 - ``.claude.json`` — MCP servers: the tracker (:doc:`tracker-mcp`) and
-  the customer's knowledge (:doc:`knowledge-mcp`), authenticated with the
+  the organization's knowledge (:doc:`knowledge-mcp`), authenticated with the
   run's token (``Bearer ${BALLET_RUN_TOKEN}``, expanded by Claude Code).
 
 opencode
@@ -229,7 +229,7 @@ by Core when the run is queued (Markdown, at most 60 000 bytes):
   run;
 - knowledge: entries linked to the ticket, then up to five more found by
   searching the ticket's title in the project (read with a short-lived
-  Core token limited to reading the customer's knowledge);
+  Core token limited to reading the organization's knowledge);
 - the prompt given when queuing, as additional instructions.
 
 Within the size limit the ticket and the additional instructions always
@@ -239,7 +239,7 @@ instructions in ``CLAUDE.md`` tell the agent that it works unattended,
 should use the knowledge tools, and must commit, push and end with a
 summary.
 
-Each run gets its own **run token** (kind ``run``, the run's customer,
+Each run gets its own **run token** (kind ``run``, the run's organization,
 project and ticket; audiences ``gateway``, ``knowledge``, ``core``;
 ``llm.invoke``, ``knowledge.read``/``write``, ``tracker.read``/``report``;
 valid for ``agents.run_token_ttl``), issued when the run starts and
@@ -334,7 +334,7 @@ relative to it.
 
 The container or VM is the isolation boundary: sessions share it with the
 agent and with later sessions, separated by workspaces and the session
-user. Run agents of different customers in different containers.
+user. Run agents of different organizations in different containers.
 
 The agent image (``make images`` builds ``ballet-agent`` from
 :repo:`deploy/Containerfile`) has git, Claude Code, opencode and common

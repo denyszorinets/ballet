@@ -14,9 +14,9 @@ import (
 // CredentialStore persists encrypted credentials.
 type CredentialStore interface {
 	SetCredential(ctx context.Context, c credential.Credential, ciphertext string, e event.Event) error
-	DeleteCredential(ctx context.Context, customerID, projectID string, p credential.Provider, e event.Event) error
-	ListCredentials(ctx context.Context, customerID string) ([]credential.Credential, error)
-	CredentialCiphertext(ctx context.Context, customerID, projectID string, p credential.Provider) (credential.Credential, string, error)
+	DeleteCredential(ctx context.Context, organizationID, projectID string, p credential.Provider, e event.Event) error
+	ListCredentials(ctx context.Context, organizationID string) ([]credential.Credential, error)
+	CredentialCiphertext(ctx context.Context, organizationID, projectID string, p credential.Provider) (credential.Credential, string, error)
 }
 
 // Sealer encrypts secrets at rest.
@@ -39,59 +39,59 @@ type Credentials struct {
 // CredentialView is a credential without its secret.
 type CredentialView struct {
 	credential.Credential
-	CustomerKey string
-	ProjectKey  string // empty: customer default
+	OrganizationKey string
+	ProjectKey      string // empty: organization default
 }
 
 // aad binds a ciphertext to its scope.
-func aad(customerID, projectID string, p credential.Provider) string {
-	return customerID + "/" + projectID + "/" + string(p)
+func aad(organizationID, projectID string, p credential.Provider) string {
+	return organizationID + "/" + projectID + "/" + string(p)
 }
 
-// scope resolves customer (and optional project) keys and authorizes
+// scope resolves organization (and optional project) keys and authorizes
 // credential.manage.
-func (cr *Credentials) scope(ctx context.Context, customerKey, projectKey string) (identity, tenancy.Customer, tenancy.Project, error) {
+func (cr *Credentials) scope(ctx context.Context, organizationKey, projectKey string) (identity, tenancy.Organization, tenancy.Project, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return identity{}, tenancy.Customer{}, tenancy.Project{}, err
+		return identity{}, tenancy.Organization{}, tenancy.Project{}, err
 	}
 	var p tenancy.Project
 	if projectKey != "" {
 		if p, err = cr.Tenancy.ProjectByKey(ctx, projectKey); err != nil {
-			return identity{}, tenancy.Customer{}, tenancy.Project{}, err
+			return identity{}, tenancy.Organization{}, tenancy.Project{}, err
 		}
 	}
-	var c tenancy.Customer
-	if customerKey != "" {
-		c, err = cr.Tenancy.CustomerByKey(ctx, customerKey)
+	var c tenancy.Organization
+	if organizationKey != "" {
+		c, err = cr.Tenancy.OrganizationByKey(ctx, organizationKey)
 	} else {
-		c, err = cr.Tenancy.CustomerByID(ctx, p.CustomerID)
+		c, err = cr.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	}
 	if err != nil {
-		return identity{}, tenancy.Customer{}, tenancy.Project{}, err
+		return identity{}, tenancy.Organization{}, tenancy.Project{}, err
 	}
-	if projectKey != "" && p.CustomerID != c.ID {
-		return identity{}, tenancy.Customer{}, tenancy.Project{}, fmt.Errorf("%w: project %s", ErrNotFound, projectKey)
+	if projectKey != "" && p.OrganizationID != c.ID {
+		return identity{}, tenancy.Organization{}, tenancy.Project{}, fmt.Errorf("%w: project %s", ErrNotFound, projectKey)
 	}
-	if err := cr.Authz.Authorize(ctx, id, ActCredentialManage, Scope{Customer: c.Key, Project: p.Key}); err != nil {
-		return identity{}, tenancy.Customer{}, tenancy.Project{}, err
+	if err := cr.Authz.Authorize(ctx, id, ActCredentialManage, Scope{Organization: c.Key, Project: p.Key}); err != nil {
+		return identity{}, tenancy.Organization{}, tenancy.Project{}, err
 	}
 	return id, c, p, nil
 }
 
-// SetCredentialInput sets a customer default (ProjectKey empty) or a
-// project override. Exactly one of CustomerKey and ProjectKey is set.
+// SetCredentialInput sets an organization default (ProjectKey empty) or a
+// project override. Exactly one of OrganizationKey and ProjectKey is set.
 type SetCredentialInput struct {
-	CustomerKey string
-	ProjectKey  string
-	Provider    credential.Provider
-	APIKey      string
-	BaseURL     string
+	OrganizationKey string
+	ProjectKey      string
+	Provider        credential.Provider
+	APIKey          string
+	BaseURL         string
 }
 
 // Set stores (or replaces) a credential.
 func (cr *Credentials) Set(ctx context.Context, in SetCredentialInput) (CredentialView, error) {
-	id, c, p, err := cr.scope(ctx, in.CustomerKey, in.ProjectKey)
+	id, c, p, err := cr.scope(ctx, in.OrganizationKey, in.ProjectKey)
 	if err != nil {
 		return CredentialView{}, err
 	}
@@ -104,28 +104,28 @@ func (cr *Credentials) Set(ctx context.Context, in SetCredentialInput) (Credenti
 	}
 	now := cr.Now()
 	cred := credential.Credential{
-		ID: cr.NewID(), CustomerID: c.ID, ProjectID: p.ID, Provider: in.Provider, BaseURL: in.BaseURL,
+		ID: cr.NewID(), OrganizationID: c.ID, ProjectID: p.ID, Provider: in.Provider, BaseURL: in.BaseURL,
 		Fingerprint: credential.Fingerprint(in.APIKey), CreatedAt: now, UpdatedAt: now,
 	}
 	e := event.Event{
-		Customer: c.ID, Project: p.ID, EntityType: "credential", EntityID: aad(c.ID, p.ID, in.Provider),
+		Organization: c.ID, Project: p.ID, EntityType: "credential", EntityID: aad(c.ID, p.ID, in.Provider),
 		Type: "credential.set", Actor: actorOf(id), OccurredAt: now,
 		Payload: mustJSON(map[string]any{"provider": in.Provider, "project": p.Key, "fingerprint": cred.Fingerprint}),
 	}
 	if err := cr.Store.SetCredential(ctx, cred, sealed, e); err != nil {
 		return CredentialView{}, err
 	}
-	return CredentialView{Credential: cred, CustomerKey: c.Key, ProjectKey: p.Key}, nil
+	return CredentialView{Credential: cred, OrganizationKey: c.Key, ProjectKey: p.Key}, nil
 }
 
 // Delete removes a credential.
-func (cr *Credentials) Delete(ctx context.Context, customerKey, projectKey string, provider credential.Provider) error {
-	id, c, p, err := cr.scope(ctx, customerKey, projectKey)
+func (cr *Credentials) Delete(ctx context.Context, organizationKey, projectKey string, provider credential.Provider) error {
+	id, c, p, err := cr.scope(ctx, organizationKey, projectKey)
 	if err != nil {
 		return err
 	}
 	e := event.Event{
-		Customer: c.ID, Project: p.ID, EntityType: "credential", EntityID: aad(c.ID, p.ID, provider),
+		Organization: c.ID, Project: p.ID, EntityType: "credential", EntityID: aad(c.ID, p.ID, provider),
 		Type: "credential.deleted", Actor: actorOf(id), OccurredAt: cr.Now(),
 		Payload: mustJSON(map[string]any{"provider": provider, "project": p.Key}),
 	}
@@ -136,10 +136,10 @@ func (cr *Credentials) Delete(ctx context.Context, customerKey, projectKey strin
 	return err
 }
 
-// List returns the customer's credentials (defaults and project overrides)
+// List returns the organization's credentials (defaults and project overrides)
 // without secrets.
-func (cr *Credentials) List(ctx context.Context, customerKey string) ([]CredentialView, error) {
-	_, c, _, err := cr.scope(ctx, customerKey, "")
+func (cr *Credentials) List(ctx context.Context, organizationKey string) ([]CredentialView, error) {
+	_, c, _, err := cr.scope(ctx, organizationKey, "")
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (cr *Credentials) List(ctx context.Context, customerKey string) ([]Credenti
 	}
 	out := make([]CredentialView, 0, len(creds))
 	for _, cred := range creds {
-		v := CredentialView{Credential: cred, CustomerKey: c.Key}
+		v := CredentialView{Credential: cred, OrganizationKey: c.Key}
 		if cred.ProjectID != "" {
 			p, err := cr.Tenancy.ProjectByID(ctx, cred.ProjectID)
 			if err != nil {
@@ -163,11 +163,11 @@ func (cr *Credentials) List(ctx context.Context, customerKey string) ([]Credenti
 }
 
 // Resolve returns the decrypted credential for a project (its override,
-// else the customer default) or, without a project, the customer default.
+// else the organization default) or, without a project, the organization default.
 // It performs no RBAC check: callers must be services holding
 // credentials.read.
-func (cr *Credentials) Resolve(ctx context.Context, customerKey, projectKey string, provider credential.Provider) (credential.Credential, error) {
-	c, err := cr.Tenancy.CustomerByKey(ctx, customerKey)
+func (cr *Credentials) Resolve(ctx context.Context, organizationKey, projectKey string, provider credential.Provider) (credential.Credential, error) {
+	c, err := cr.Tenancy.OrganizationByKey(ctx, organizationKey)
 	if err != nil {
 		return credential.Credential{}, err
 	}
@@ -177,7 +177,7 @@ func (cr *Credentials) Resolve(ctx context.Context, customerKey, projectKey stri
 		if err != nil {
 			return credential.Credential{}, err
 		}
-		if p.CustomerID != c.ID {
+		if p.OrganizationID != c.ID {
 			return credential.Credential{}, fmt.Errorf("%w: project %s", ErrNotFound, projectKey)
 		}
 		candidates = []string{p.ID, ""}
@@ -195,5 +195,5 @@ func (cr *Credentials) Resolve(ctx context.Context, customerKey, projectKey stri
 		}
 		return cred, nil
 	}
-	return credential.Credential{}, fmt.Errorf("%w: no %s credential for %s", ErrNotFound, provider, customerKey)
+	return credential.Credential{}, fmt.Errorf("%w: no %s credential for %s", ErrNotFound, provider, organizationKey)
 }

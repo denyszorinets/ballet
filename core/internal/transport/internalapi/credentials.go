@@ -17,7 +17,7 @@ type ResolvedCredential struct {
 }
 
 // RegisterCredentials adds GET /internal/v1/credentials/resolve
-// (?customer=<key>&project=<key>&provider=<anthropic|openai>) for holders
+// (?organization=<key>&project=<key>&provider=<anthropic|openai>) for holders
 // of credentials.read.
 func RegisterCredentials(r *Router, cr *app.Credentials) {
 	r.Handle("GET /internal/v1/credentials/resolve", runtoken.CapCredentialsRead, func(w http.ResponseWriter, req *http.Request) {
@@ -28,7 +28,7 @@ func RegisterCredentials(r *Router, cr *app.Credentials) {
 			WriteError(w, http.StatusBadRequest, "invalid_argument", "provider must be an LLM provider")
 			return
 		}
-		c, err := cr.Resolve(req.Context(), q.Get("customer"), q.Get("project"), provider)
+		c, err := cr.Resolve(req.Context(), q.Get("organization"), q.Get("project"), provider)
 		if errors.Is(err, app.ErrNotFound) {
 			WriteError(w, http.StatusNotFound, "not_found", err.Error())
 			return

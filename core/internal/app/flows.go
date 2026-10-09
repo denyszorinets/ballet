@@ -119,17 +119,17 @@ func (fl *Flows) job(kind, dedupe string, p flowJob, at time.Time) Job {
 	return NewJob(fl.NewID(), kind, dedupe, p, at, 10)
 }
 
-func (fl *Flows) itemEvent(it tracker.Item, customerID, typ string, actor event.Actor, payload map[string]any) event.Event {
-	return event.Event{Customer: customerID, Project: it.ProjectID, EntityType: "item", EntityID: it.ID, Type: typ,
+func (fl *Flows) itemEvent(it tracker.Item, organizationID, typ string, actor event.Actor, payload map[string]any) event.Event {
+	return event.Event{Organization: organizationID, Project: it.ProjectID, EntityType: "item", EntityID: it.ID, Type: typ,
 		Actor: actor, OccurredAt: fl.Now(), Payload: mustJSON(payload)}
 }
 
-func (fl *Flows) customer(ctx context.Context, projectID string) (tenancy.Project, tenancy.Customer, error) {
+func (fl *Flows) organization(ctx context.Context, projectID string) (tenancy.Project, tenancy.Organization, error) {
 	p, err := fl.Tenancy.ProjectByID(ctx, projectID)
 	if err != nil {
-		return tenancy.Project{}, tenancy.Customer{}, err
+		return tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := fl.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := fl.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	return p, c, err
 }
 
@@ -151,11 +151,11 @@ func (fl *Flows) Start(ctx context.Context, ticketKey string) (FlowView, error) 
 	if err != nil {
 		return FlowView{}, err
 	}
-	p, c, err := fl.customer(ctx, it.ProjectID)
+	p, c, err := fl.organization(ctx, it.ProjectID)
 	if err != nil {
 		return FlowView{}, err
 	}
-	if err := fl.Authz.Authorize(ctx, id, ActRunManage, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := fl.Authz.Authorize(ctx, id, ActRunManage, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return FlowView{}, err
 	}
 	f, err := fl.start(ctx, it, c, actorIn(ctx, id))
@@ -167,7 +167,7 @@ func (fl *Flows) Start(ctx context.Context, ticketKey string) (FlowView, error) 
 
 // StartTicket starts a ticket's pipeline for Core's scheduler.
 func (fl *Flows) StartTicket(ctx context.Context, it tracker.Item) error {
-	_, c, err := fl.customer(ctx, it.ProjectID)
+	_, c, err := fl.organization(ctx, it.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func (fl *Flows) StartTicket(ctx context.Context, it tracker.Item) error {
 	return err
 }
 
-func (fl *Flows) start(ctx context.Context, it tracker.Item, c tenancy.Customer, actor event.Actor) (Flow, error) {
+func (fl *Flows) start(ctx context.Context, it tracker.Item, c tenancy.Organization, actor event.Actor) (Flow, error) {
 	if it.Kind != tracker.KindTicket || it.State != tracker.StateReady {
 		return Flow{}, fmt.Errorf("%w: only ready tickets start their pipeline (%s is %s)", ErrConflict, it.Key, it.State)
 	}
@@ -222,11 +222,11 @@ func (fl *Flows) Get(ctx context.Context, ticketKey string) (FlowView, error) {
 	if err != nil {
 		return FlowView{}, err
 	}
-	p, c, err := fl.customer(ctx, it.ProjectID)
+	p, c, err := fl.organization(ctx, it.ProjectID)
 	if err != nil {
 		return FlowView{}, err
 	}
-	if err := fl.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := fl.Authz.Authorize(ctx, id, ActTrackerRead, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return FlowView{}, err
 	}
 	f, err := fl.Store.Flow(ctx, it.ID)
@@ -250,11 +250,11 @@ func (fl *Flows) Decide(ctx context.Context, ticketKey string, approve bool, com
 	if err != nil {
 		return FlowView{}, err
 	}
-	p, c, err := fl.customer(ctx, it.ProjectID)
+	p, c, err := fl.organization(ctx, it.ProjectID)
 	if err != nil {
 		return FlowView{}, err
 	}
-	if err := fl.Authz.Authorize(ctx, id, ActTrackerWrite, Scope{Customer: c.Key, Project: p.Key}); err != nil {
+	if err := fl.Authz.Authorize(ctx, id, ActTrackerWrite, Scope{Organization: c.Key, Project: p.Key}); err != nil {
 		return FlowView{}, err
 	}
 	f, err := fl.Store.Flow(ctx, it.ID)
@@ -298,21 +298,21 @@ func (fl *Flows) RunFinished(ctx context.Context, r run.Run) {
 
 // current loads a job's flow and ticket; ok is false when the job is
 // stale or the ticket left the pipeline (the flow is then stopped).
-func (fl *Flows) current(ctx context.Context, p flowJob) (Flow, tracker.Item, tenancy.Customer, bool, error) {
+func (fl *Flows) current(ctx context.Context, p flowJob) (Flow, tracker.Item, tenancy.Organization, bool, error) {
 	f, err := fl.Store.Flow(ctx, p.TicketID)
 	if err != nil {
-		return Flow{}, tracker.Item{}, tenancy.Customer{}, false, err
+		return Flow{}, tracker.Item{}, tenancy.Organization{}, false, err
 	}
 	if (p.FlowVersion != 0 && f.Version != p.FlowVersion) || (f.Status != FlowRunning && f.Status != FlowWaiting) {
-		return f, tracker.Item{}, tenancy.Customer{}, false, nil
+		return f, tracker.Item{}, tenancy.Organization{}, false, nil
 	}
 	it, err := fl.Items.ItemByID(ctx, f.TicketID)
 	if err != nil {
-		return Flow{}, tracker.Item{}, tenancy.Customer{}, false, err
+		return Flow{}, tracker.Item{}, tenancy.Organization{}, false, err
 	}
-	_, c, err := fl.customer(ctx, f.ProjectID)
+	_, c, err := fl.organization(ctx, f.ProjectID)
 	if err != nil {
-		return Flow{}, tracker.Item{}, tenancy.Customer{}, false, err
+		return Flow{}, tracker.Item{}, tenancy.Organization{}, false, err
 	}
 	if it.State != tracker.StateInProgress && it.State != tracker.StateWaitingForAnswer {
 		return f, it, c, false, fl.stop(ctx, f, it, c)
@@ -322,7 +322,7 @@ func (fl *Flows) current(ctx context.Context, p flowJob) (Flow, tracker.Item, te
 
 // stop ends a flow whose ticket a human took out of the pipeline, and
 // cancels its active run.
-func (fl *Flows) stop(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer) error {
+func (fl *Flows) stop(ctx context.Context, f Flow, it tracker.Item, c tenancy.Organization) error {
 	fl.cancelRun(ctx, f.RunID)
 	next := f
 	next.Status, next.Waiting, next.UpdatedAt, next.Version = FlowStopped, "", fl.Now(), f.Version+1
@@ -493,7 +493,7 @@ func (fl *Flows) handleFinished(ctx context.Context, j Job) error {
 // overBudget holds the flow when its ticket's work ran out of budget: a
 // used-up ticket budget asks the humans; a daily budget waits for the
 // next day (or a raised budget). done reports whether it held the flow.
-func (fl *Flows) overBudget(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer) (bool, error) {
+func (fl *Flows) overBudget(ctx context.Context, f Flow, it tracker.Item, c tenancy.Organization) (bool, error) {
 	if fl.Budget == nil {
 		return false, nil
 	}
@@ -543,7 +543,7 @@ func (fl *Flows) paused(ctx context.Context, projectID string) bool {
 
 // hold makes a flow wait before its current stage — for a pause to end
 // ("pause") or for budget ("budget"); the stage then starts (again).
-func (fl *Flows) hold(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer, what string) error {
+func (fl *Flows) hold(ctx context.Context, f Flow, it tracker.Item, c tenancy.Organization, what string) error {
 	next := f
 	next.Status, next.Waiting, next.RunID, next.UpdatedAt, next.Version = FlowWaiting, what, "", fl.Now(), f.Version+1
 	e := fl.itemEvent(it, c.ID, "flow.waiting", event.System, map[string]any{"stage": f.Stage, "for": what})
@@ -576,7 +576,7 @@ func (fl *Flows) unpause(ctx context.Context, f Flow) error {
 	if err != nil {
 		return err
 	}
-	_, c, err := fl.customer(ctx, f.ProjectID)
+	_, c, err := fl.organization(ctx, f.ProjectID)
 	if err != nil {
 		return err
 	}
@@ -627,7 +627,7 @@ func (fl *Flows) blockingQuestions(ctx context.Context, ticketID, runID string) 
 
 // awaitAnswers makes the flow wait for the answers to the questions its
 // stage's run asked; when they are answered already, it resumes at once.
-func (fl *Flows) awaitAnswers(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer, r run.Run, text string) error {
+func (fl *Flows) awaitAnswers(ctx context.Context, f Flow, it tracker.Item, c tenancy.Organization, r run.Run, text string) error {
 	next := f
 	next.Status, next.Waiting, next.RunID, next.Outcome = FlowWaiting, "question", "", ""
 	next.Report = fmt.Sprintf("Report of the %s stage so far (it asked questions):\n\n%s", f.Stage, strings.TrimSpace(text))
@@ -714,7 +714,7 @@ func (fl *Flows) stageOutcome(ctx context.Context, r run.Run) (pipeline.Outcome,
 }
 
 // transition moves the flow on from its current stage by outcome.
-func (fl *Flows) transition(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer, outcome pipeline.Outcome,
+func (fl *Flows) transition(ctx context.Context, f Flow, it tracker.Item, c tenancy.Organization, outcome pipeline.Outcome,
 	text string, actor event.Actor) (Flow, error) {
 	target := f.Definition.Target(f.Stage, outcome)
 	next := f
@@ -827,7 +827,7 @@ func (fl *Flows) handleMerge(ctx context.Context, j Job) error {
 }
 
 // wait records what the merge stage waits for and checks again later.
-func (fl *Flows) wait(ctx context.Context, f Flow, it tracker.Item, c tenancy.Customer, what string) error {
+func (fl *Flows) wait(ctx context.Context, f Flow, it tracker.Item, c tenancy.Organization, what string) error {
 	interval := fl.CheckInterval
 	if interval <= 0 {
 		interval = 30 * time.Second

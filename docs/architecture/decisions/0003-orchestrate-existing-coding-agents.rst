@@ -6,6 +6,13 @@ ADR-0003: Orchestrate Existing Coding Agents Through Runtime Adapters
 
 .. note::
 
+   Since :doc:`0027-tenancy-platform-organization-project`, customers are
+   called **organizations** and the installation-wide level formerly
+   called the organization is the **platform**; this record keeps the
+   terms of its time.
+
+.. note::
+
    Amended by :doc:`0025-agent-fleet-runs-sessions-as-processes`:
    runtime adapters live in the agent, not in Core, as drivers of
    interactive sessions.

@@ -17,8 +17,8 @@
   "templating": {
     "list": [
       {
-        "name": "customer",
-        "label": "Customer",
+        "name": "organization",
+        "label": "Organization",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -34,7 +34,7 @@
         "refresh": 2,
         "sort": 1,
         "query": {
-          "query": "label_values({__name__=~\"ballet_.+\", customer!=\"\"}, customer)",
+          "query": "label_values({__name__=~\"ballet_.+\", organization!=\"\"}, organization)",
           "refId": "var"
         }
       },
@@ -56,7 +56,7 @@
         "refresh": 2,
         "sort": 1,
         "query": {
-          "query": "label_values({__name__=~\"ballet_.+\", customer!=\"\"}, project)",
+          "query": "label_values({__name__=~\"ballet_.+\", organization!=\"\"}, project)",
           "refId": "var"
         }
       }
@@ -162,7 +162,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(ballet_runs_active{customer=~\"$customer\", project=~\"$project\"}) or vector(0)",
+          "expr": "sum(ballet_runs_active{organization=~\"$organization\", project=~\"$project\"}) or vector(0)",
           "legendFormat": "active"
         }
       ],
@@ -236,7 +236,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (status) (ballet_runs_active{customer=~\"$customer\", project=~\"$project\"})",
+          "expr": "sum by (status) (ballet_runs_active{organization=~\"$organization\", project=~\"$project\"})",
           "legendFormat": "{{status}}"
         }
       ],
@@ -268,7 +268,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (status) (increase(ballet_runs_finished_total{customer=~\"$customer\", project=~\"$project\"}[1h]))",
+          "expr": "sum by (status) (increase(ballet_runs_finished_total{organization=~\"$organization\", project=~\"$project\"}[1h]))",
           "legendFormat": "{{status}}"
         }
       ],
@@ -300,7 +300,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "histogram_quantile(0.9, sum by (le, stage) (increase(ballet_run_duration_seconds_bucket{customer=~\"$customer\", project=~\"$project\"}[1h])))",
+          "expr": "histogram_quantile(0.9, sum by (le, stage) (increase(ballet_run_duration_seconds_bucket{organization=~\"$organization\", project=~\"$project\"}[1h])))",
           "legendFormat": "{{stage}}"
         }
       ],

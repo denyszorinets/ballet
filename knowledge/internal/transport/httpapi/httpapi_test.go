@@ -27,7 +27,7 @@ import (
 
 type env struct {
 	api   http.Handler
-	issue func(customer string, caps ...string) string
+	issue func(organization string, caps ...string) string
 }
 
 // contract validates responses against Core's OpenAPI spec, which
@@ -77,10 +77,10 @@ func setup(t *testing.T) env {
 	mux := http.NewServeMux()
 	httpapi.Register(mux, runtoken.NewStaticVerifier(ring.PublicKeys(), time.Now), svc)
 	issuer := runtoken.NewIssuer(ring, time.Now)
-	return env{api: contract(t, mux), issue: func(customer string, caps ...string) string {
+	return env{api: contract(t, mux), issue: func(organization string, caps ...string) string {
 		raw, err := issuer.Issue(runtoken.Claims{
 			Kind: runtoken.KindService, Subject: "service:core", Audience: []string{httpapi.Audience},
-			Customer: customer, ActingFor: "user-bob", Capabilities: caps,
+			Organization: organization, ActingFor: "user-bob", Capabilities: caps,
 		}, time.Hour)
 		require.NoError(t, err)
 		return raw
@@ -107,7 +107,7 @@ func (e env) call(t *testing.T, tok, method, path, body string) (int, map[string
 	return rec.Code, out
 }
 
-const base = "/v1/customers/acme/knowledge/entries"
+const base = "/v1/organizations/acme/knowledge/entries"
 
 func TestKnowledgeAPI_EntryLifecycle(t *testing.T) {
 	e := setup(t)
@@ -156,8 +156,8 @@ func TestKnowledgeAPI_TokenScopeIsEnforced(t *testing.T) {
 	unscoped := e.issue("", runtoken.CapKnowledgeRead)
 
 	code, _ := e.call(t, globex, "GET", base, "")
-	assert.Equal(t, http.StatusForbidden, code, "another customer's token")
-	code, _ = e.call(t, globex, "GET", "/v1/customers/globex/knowledge/entries/"+id, "")
+	assert.Equal(t, http.StatusForbidden, code, "another organization's token")
+	code, _ = e.call(t, globex, "GET", "/v1/organizations/globex/knowledge/entries/"+id, "")
 	assert.Equal(t, http.StatusNotFound, code, "entry IDs do not leak across spaces")
 	code, _ = e.call(t, readOnly, "POST", base, `{"kind":"note","title":"x"}`)
 	assert.Equal(t, http.StatusForbidden, code)
@@ -175,13 +175,13 @@ func TestKnowledgeAPI_Search(t *testing.T) {
 	e.call(t, rw, "POST", base, `{"kind":"decision","title":"Invoice export","body":"CSV files"}`)
 	e.call(t, rw, "POST", base, `{"kind":"note","title":"Login"}`)
 
-	code, out := e.call(t, rw, "GET", "/v1/customers/acme/knowledge/search?q=csv+invoice", "")
+	code, out := e.call(t, rw, "GET", "/v1/organizations/acme/knowledge/search?q=csv+invoice", "")
 	require.Equal(t, http.StatusOK, code, out)
 	items := out["items"].([]any)
 	require.Len(t, items, 1)
 	assert.Equal(t, "Invoice export", items[0].(map[string]any)["entry"].(map[string]any)["title"])
 
 	globex := e.issue("globex", runtoken.CapKnowledgeRead)
-	code, _ = e.call(t, globex, "GET", "/v1/customers/acme/knowledge/search?q=csv", "")
+	code, _ = e.call(t, globex, "GET", "/v1/organizations/acme/knowledge/search?q=csv", "")
 	assert.Equal(t, http.StatusForbidden, code)
 }

@@ -1,7 +1,7 @@
 {
   "uid": "ballet-llm-usage",
   "title": "Ballet \u00b7 LLM usage",
-  "description": "Tokens and requests per customer, project and model.",
+  "description": "Tokens and requests per organization, project and model.",
   "tags": [
     "ballet"
   ],
@@ -17,8 +17,8 @@
   "templating": {
     "list": [
       {
-        "name": "customer",
-        "label": "Customer",
+        "name": "organization",
+        "label": "Organization",
         "type": "query",
         "datasource": {
           "type": "prometheus",
@@ -34,7 +34,7 @@
         "refresh": 2,
         "sort": 1,
         "query": {
-          "query": "label_values({__name__=~\"ballet_.+\", customer!=\"\"}, customer)",
+          "query": "label_values({__name__=~\"ballet_.+\", organization!=\"\"}, organization)",
           "refId": "var"
         }
       },
@@ -56,7 +56,7 @@
         "refresh": 2,
         "sort": 1,
         "query": {
-          "query": "label_values({__name__=~\"ballet_.+\", customer!=\"\"}, project)",
+          "query": "label_values({__name__=~\"ballet_.+\", organization!=\"\"}, project)",
           "refId": "var"
         }
       }
@@ -78,7 +78,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(ballet_usage_tokens_total{type=~\"input|output|cache_write\", customer=~\"$customer\", project=~\"$project\"}[$__range])) or vector(0)",
+          "expr": "sum(increase(ballet_usage_tokens_total{type=~\"input|output|cache_write\", organization=~\"$organization\", project=~\"$project\"}[$__range])) or vector(0)",
           "legendFormat": "tokens"
         }
       ],
@@ -122,7 +122,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(ballet_llm_requests_total{customer=~\"$customer\", project=~\"$project\"}[$__range])) or vector(0)",
+          "expr": "sum(increase(ballet_llm_requests_total{organization=~\"$organization\", project=~\"$project\"}[$__range])) or vector(0)",
           "legendFormat": "requests"
         }
       ],
@@ -164,7 +164,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(increase(ballet_llm_requests_total{status!~\"2..\", customer=~\"$customer\", project=~\"$project\"}[$__range])) or vector(0)",
+          "expr": "sum(increase(ballet_llm_requests_total{status!~\"2..\", organization=~\"$organization\", project=~\"$project\"}[$__range])) or vector(0)",
           "legendFormat": "errors"
         }
       ],
@@ -206,7 +206,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (project) (increase(ballet_llm_tokens_total{customer=~\"$customer\", project=~\"$project\"}[1h]))",
+          "expr": "sum by (project) (increase(ballet_llm_tokens_total{organization=~\"$organization\", project=~\"$project\"}[1h]))",
           "legendFormat": "{{project}}"
         }
       ],
@@ -240,7 +240,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (model) (increase(ballet_llm_tokens_total{customer=~\"$customer\", project=~\"$project\"}[1h]))",
+          "expr": "sum by (model) (increase(ballet_llm_tokens_total{organization=~\"$organization\", project=~\"$project\"}[1h]))",
           "legendFormat": "{{model}}"
         }
       ],
@@ -274,7 +274,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (token_type) (increase(ballet_llm_tokens_total{customer=~\"$customer\", project=~\"$project\"}[1h]))",
+          "expr": "sum by (token_type) (increase(ballet_llm_tokens_total{organization=~\"$organization\", project=~\"$project\"}[1h]))",
           "legendFormat": "{{token_type}}"
         }
       ],
@@ -308,7 +308,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (status) (increase(ballet_llm_requests_total{customer=~\"$customer\", project=~\"$project\"}[1h]))",
+          "expr": "sum by (status) (increase(ballet_llm_requests_total{organization=~\"$organization\", project=~\"$project\"}[1h]))",
           "legendFormat": "{{status}}"
         }
       ],
@@ -327,7 +327,7 @@
     },
     {
       "id": 8,
-      "title": "Tokens per customer (range)",
+      "title": "Tokens per organization (range)",
       "type": "bargauge",
       "datasource": {
         "type": "prometheus",
@@ -340,8 +340,8 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (customer) (increase(ballet_usage_tokens_total{type=~\"input|output|cache_write\", customer=~\"$customer\", project=~\"$project\"}[$__range]))",
-          "legendFormat": "{{customer}}"
+          "expr": "sum by (organization) (increase(ballet_usage_tokens_total{type=~\"input|output|cache_write\", organization=~\"$organization\", project=~\"$project\"}[$__range]))",
+          "legendFormat": "{{organization}}"
         }
       ],
       "gridPos": {
@@ -384,7 +384,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (project) (increase(ballet_usage_tokens_total{type=~\"input|output|cache_write\", customer=~\"$customer\", project=~\"$project\"}[$__range]))",
+          "expr": "sum by (project) (increase(ballet_usage_tokens_total{type=~\"input|output|cache_write\", organization=~\"$organization\", project=~\"$project\"}[$__range]))",
           "legendFormat": "{{project}}"
         }
       ],

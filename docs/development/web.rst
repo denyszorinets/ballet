@@ -51,9 +51,9 @@ Pages
    * - Route
      - Purpose
    * - ``/``
-     - Customers the user can see; new customer (platform admins)
-   * - ``/customers/{customer}``
-     - Customer: rename, projects, new project
+     - Organizations the user can see; new organization (platform admins)
+   * - ``/organizations/{organization}``
+     - Organization: rename, projects, new project
    * - ``/projects/{project}``
      - Board: tickets by state, *Blocked* badge for ready tickets with
        unresolved blockers, quick ticket creation, epics and milestones;
@@ -62,17 +62,17 @@ Pages
      - Item: edit (title, description, type, criteria, policy, epic,
        milestone), state transitions, dependencies, history; live through
        the ``item:<KEY>`` stream
-   * - ``/customers/{customer}/knowledge``
+   * - ``/organizations/{organization}/knowledge``
      - Knowledge space: entries filtered by kind and project, hybrid
        search (:doc:`/concepts/knowledge`)
-   * - ``/customers/{customer}/knowledge/new``
+   * - ``/organizations/{organization}/knowledge/new``
      - New entry; ``?item=WEB-12`` pre-links a tracker item and its project
        (the item page's *Add knowledge* link)
-   * - ``/customers/{customer}/knowledge/{entry}``
+   * - ``/organizations/{organization}/knowledge/{entry}``
      - Entry: rendered Markdown, links to projects and items, edit
        (Markdown with preview), version history
    * - ``/skills?scope=…``
-     - Skills of one scope (``platform``, ``customer:<key>``,
+     - Skills of one scope (``platform``, ``organization:<key>``,
        ``project:<key>``); new skill
    * - ``/skills/{skill}``
      - Skill: draft editor (description, ``SKILL.md``, files), publish,

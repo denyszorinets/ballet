@@ -6,10 +6,10 @@
 	import { apiError, type Schemas } from '$lib/api/client';
 	import { getSession, type Session } from '$lib/session';
 
-	const key = $derived(page.params.customer ?? '');
+	const key = $derived(page.params.organization ?? '');
 
 	let session = $state<Session>();
-	let customer = $state<Schemas['Customer']>();
+	let organization = $state<Schemas['Organization']>();
 	let projects = $state<Schemas['Project'][]>([]);
 	let error = $state<string>();
 
@@ -22,14 +22,16 @@
 
 	async function load(s: Session, k: string) {
 		const [c, p] = await Promise.all([
-			s.api.GET('/api/v1/customers/{customer}', { params: { path: { customer: k } } }),
-			s.api.GET('/api/v1/customers/{customer}/projects', { params: { path: { customer: k } } })
+			s.api.GET('/api/v1/organizations/{organization}', { params: { path: { organization: k } } }),
+			s.api.GET('/api/v1/organizations/{organization}/projects', {
+				params: { path: { organization: k } }
+			})
 		]);
 		if (!c.data) {
 			error = apiError(c.error);
 			return;
 		}
-		customer = c.data;
+		organization = c.data;
 		projects = p.data?.items ?? [];
 	}
 
@@ -45,16 +47,16 @@
 
 	async function rename(e: SubmitEvent) {
 		e.preventDefault();
-		if (!session || !customer) return;
-		const { data, error: err } = await session.api.PATCH('/api/v1/customers/{customer}', {
-			params: { path: { customer: key } },
-			body: { name: newName, version: customer.version }
+		if (!session || !organization) return;
+		const { data, error: err } = await session.api.PATCH('/api/v1/organizations/{organization}', {
+			params: { path: { organization: key } },
+			body: { name: newName, version: organization.version }
 		});
 		if (err) {
 			renameError = apiError(err);
 			return;
 		}
-		customer = data;
+		organization = data;
 		renaming = false;
 	}
 
@@ -62,8 +64,8 @@
 		e.preventDefault();
 		if (!session) return;
 		formError = undefined;
-		const { error: err } = await session.api.POST('/api/v1/customers/{customer}/projects', {
-			params: { path: { customer: key } },
+		const { error: err } = await session.api.POST('/api/v1/organizations/{organization}/projects', {
+			params: { path: { organization: key } },
 			body: form
 		});
 		if (err) {
@@ -75,28 +77,28 @@
 	}
 </script>
 
-<svelte:head><title>{customer?.name ?? key} · Ballet</title></svelte:head>
+<svelte:head><title>{organization?.name ?? key} · Ballet</title></svelte:head>
 
 {#if error}
 	<p class="error" role="alert">{error}</p>
-{:else if !customer}
+{:else if !organization}
 	<p class="muted">Loading…</p>
 {:else}
 	<div class="title">
 		{#if renaming}
-			<form class="form" onsubmit={rename} aria-label="Rename customer">
+			<form class="form" onsubmit={rename} aria-label="Rename organization">
 				<label>Name <input bind:value={newName} required /></label>
 				<button class="primary" type="submit">Save</button>
 				<button type="button" onclick={() => (renaming = false)}>Cancel</button>
 				{#if renameError}<p class="error" role="alert">{renameError}</p>{/if}
 			</form>
 		{:else}
-			<h1>{customer.name}</h1>
-			<span class="mono muted">{customer.key}</span>
-			{#if session?.permissions.can('customer.update', { customer: key })}
+			<h1>{organization.name}</h1>
+			<span class="mono muted">{organization.key}</span>
+			{#if session?.permissions.can('organization.update', { organization: key })}
 				<button
 					onclick={() => {
-						newName = customer?.name ?? '';
+						newName = organization?.name ?? '';
 						renameError = undefined;
 						renaming = true;
 					}}>Rename</button
@@ -105,8 +107,12 @@
 		{/if}
 	</div>
 
-	{#if session?.permissions.can('knowledge.read', { customer: key })}
-		<p><a href={resolve('/customers/[customer]/knowledge', { customer: key })}>Knowledge</a></p>
+	{#if session?.permissions.can('knowledge.read', { organization: key })}
+		<p>
+			<a href={resolve('/organizations/[organization]/knowledge', { organization: key })}
+				>Knowledge</a
+			>
+		</p>
 	{/if}
 
 	<h2>Projects</h2>
@@ -131,13 +137,13 @@
 		</div>
 	{/if}
 
-	<BudgetEditor customer={key} />
+	<BudgetEditor organization={key} />
 
-	{#if session?.permissions.can('credential.manage', { customer: key })}
-		<LLMCredentials customer={key} />
+	{#if session?.permissions.can('credential.manage', { organization: key })}
+		<LLMCredentials organization={key} />
 	{/if}
 
-	{#if session?.permissions.can('project.create', { customer: key })}
+	{#if session?.permissions.can('project.create', { organization: key })}
 		<h2>New project</h2>
 		<form class="form card" onsubmit={createProject} aria-label="New project">
 			<label

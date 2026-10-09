@@ -20,11 +20,11 @@ func filesJSON(f map[string]string) string {
 }
 
 // CreateSkill inserts a skill (draft only) and records e.
-func (s *Store) CreateSkill(ctx context.Context, sk skill.Skill, customerID string, e event.Event) error {
+func (s *Store) CreateSkill(ctx context.Context, sk skill.Skill, organizationID string, e event.Event) error {
 	return mapWriteErr("create skill", s.db.Batch(ctx,
-		sqlstore.Exec(`INSERT INTO skills (id, scope_kind, customer_key, project_key, customer_id, name, description, body,
+		sqlstore.Exec(`INSERT INTO skills (id, scope_kind, organization_key, project_key, organization_id, name, description, body,
 				files, latest_version, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			sk.ID, string(sk.Scope.Kind), sk.Scope.Customer, sk.Scope.Project, customerID, sk.Name, sk.Draft.Description,
+			sk.ID, string(sk.Scope.Kind), sk.Scope.Organization, sk.Scope.Project, organizationID, sk.Name, sk.Draft.Description,
 			sk.Draft.Body, filesJSON(sk.Draft.Files), sk.LatestVersion, formatTime(sk.CreatedAt), formatTime(sk.UpdatedAt), sk.Version),
 		s.AppendEvent(e),
 	))
@@ -53,7 +53,7 @@ func (s *Store) PublishSkill(ctx context.Context, sk skill.Skill, v skill.Versio
 	))
 }
 
-const skillCols = `id, scope_kind, customer_key, project_key, name, description, body, files, latest_version,
+const skillCols = `id, scope_kind, organization_key, project_key, name, description, body, files, latest_version,
 	created_at, updated_at, version`
 
 // Skill returns a skill by ID.
@@ -64,8 +64,8 @@ func (s *Store) Skill(ctx context.Context, id string) (skill.Skill, error) {
 
 // ListSkills returns the skills of exactly one scope, by name.
 func (s *Store) ListSkills(ctx context.Context, scope skill.Scope) ([]skill.Skill, error) {
-	return s.querySkills(ctx, `WHERE scope_kind = ? AND customer_key = ? AND project_key = ? ORDER BY name`,
-		string(scope.Kind), scope.Customer, scope.Project)
+	return s.querySkills(ctx, `WHERE scope_kind = ? AND organization_key = ? AND project_key = ? ORDER BY name`,
+		string(scope.Kind), scope.Organization, scope.Project)
 }
 
 // SkillsInScopes returns the skills of several scopes (resolution).
@@ -73,8 +73,8 @@ func (s *Store) SkillsInScopes(ctx context.Context, scopes []skill.Scope) ([]ski
 	var conds []string
 	var args []any
 	for _, sc := range scopes {
-		conds = append(conds, "(scope_kind = ? AND customer_key = ? AND project_key = ?)")
-		args = append(args, string(sc.Kind), sc.Customer, sc.Project)
+		conds = append(conds, "(scope_kind = ? AND organization_key = ? AND project_key = ?)")
+		args = append(args, string(sc.Kind), sc.Organization, sc.Project)
 	}
 	if len(conds) == 0 {
 		return nil, nil
@@ -128,7 +128,7 @@ func (s *Store) SkillVersion(ctx context.Context, skillID string, number int64) 
 func scanSkill(r scanner) (skill.Skill, error) {
 	var sk skill.Skill
 	var kind, files, created, updated string
-	if err := r.Scan(&sk.ID, &kind, &sk.Scope.Customer, &sk.Scope.Project, &sk.Name, &sk.Draft.Description,
+	if err := r.Scan(&sk.ID, &kind, &sk.Scope.Organization, &sk.Scope.Project, &sk.Name, &sk.Draft.Description,
 		&sk.Draft.Body, &files, &sk.LatestVersion, &created, &updated, &sk.Version); err != nil {
 		return skill.Skill{}, err
 	}

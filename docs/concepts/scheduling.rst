@@ -18,7 +18,7 @@ re-validated against the updated graph.
 Dependencies are limited to items of the same project for now.
 
 The scheduler keeps a ready queue and starts runs up to the configured
-concurrency limits (globally, per customer, per project). Anything ready
+concurrency limits (globally, per organization, per project). Anything ready
 runs in parallel; nothing starts before its prerequisites.
 
 The Gantt chart is a forecast

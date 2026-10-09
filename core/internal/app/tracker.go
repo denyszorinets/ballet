@@ -43,13 +43,13 @@ type Tracker struct {
 	NewID   func() string
 }
 
-// ItemView is an item with the keys of its project, customer and relations.
+// ItemView is an item with the keys of its project, organization and relations.
 type ItemView struct {
 	tracker.Item
-	ProjectKey   string
-	CustomerKey  string
-	EpicKey      string
-	MilestoneKey string
+	ProjectKey      string
+	OrganizationKey string
+	EpicKey         string
+	MilestoneKey    string
 }
 
 // CreateItemInput is the input of CreateItem.
@@ -85,7 +85,7 @@ func (t *Tracker) CreateItem(ctx context.Context, in CreateItemInput) (ItemView,
 			it.Policy = *in.Policy
 		}
 	}
-	view := ItemView{ProjectKey: p.Key, CustomerKey: c.Key, EpicKey: in.EpicKey, MilestoneKey: in.MilestoneKey}
+	view := ItemView{ProjectKey: p.Key, OrganizationKey: c.Key, EpicKey: in.EpicKey, MilestoneKey: in.MilestoneKey}
 	if it.EpicID, err = t.relation(ctx, p, in.EpicKey, tracker.KindEpic, in.Kind == tracker.KindTicket); err != nil {
 		return ItemView{}, err
 	}
@@ -138,7 +138,7 @@ func (t *Tracker) ListItems(ctx context.Context, projectKey string, kind tracker
 	out := make([]ItemView, 0, len(items))
 	for _, it := range items {
 		out = append(out, ItemView{
-			Item: it, ProjectKey: p.Key, CustomerKey: c.Key,
+			Item: it, ProjectKey: p.Key, OrganizationKey: c.Key,
 			EpicKey: keys[it.EpicID], MilestoneKey: keys[it.MilestoneID],
 		})
 	}
@@ -235,43 +235,43 @@ func (t *Tracker) ItemHistory(ctx context.Context, key string) ([]event.Event, e
 	return t.Events.EntityHistory(ctx, "item", it.ID)
 }
 
-// authorizeProject loads a project and its customer and checks action on it.
-func (t *Tracker) authorizeProject(ctx context.Context, projectKey string, a Action) (identity, tenancy.Project, tenancy.Customer, error) {
+// authorizeProject loads a project and its organization and checks action on it.
+func (t *Tracker) authorizeProject(ctx context.Context, projectKey string, a Action) (identity, tenancy.Project, tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	p, err := t.Tenancy.ProjectByKey(ctx, projectKey)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := t.Tenancy.CustomerByID(ctx, p.CustomerID)
+	c, err := t.Tenancy.OrganizationByID(ctx, p.OrganizationID)
 	if err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	if err := t.Authz.Authorize(ctx, id, a, Scope{Customer: c.Key, Project: p.Key}); err != nil {
-		return identity{}, tenancy.Project{}, tenancy.Customer{}, err
+	if err := t.Authz.Authorize(ctx, id, a, Scope{Organization: c.Key, Project: p.Key}); err != nil {
+		return identity{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	return id, p, c, nil
 }
 
-// authorizeItem loads an item with its project and customer and checks
+// authorizeItem loads an item with its project and organization and checks
 // action on the project.
-func (t *Tracker) authorizeItem(ctx context.Context, key string, a Action) (identity, tracker.Item, tenancy.Project, tenancy.Customer, error) {
+func (t *Tracker) authorizeItem(ctx context.Context, key string, a Action) (identity, tracker.Item, tenancy.Project, tenancy.Organization, error) {
 	id, err := caller(ctx)
 	if err != nil {
-		return identity{}, tracker.Item{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tracker.Item{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	it, err := t.Items.ItemByKey(ctx, key)
 	if err != nil {
-		return identity{}, tracker.Item{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tracker.Item{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	p, c, err := t.projectOf(ctx, it.ProjectID)
 	if err != nil {
-		return identity{}, tracker.Item{}, tenancy.Project{}, tenancy.Customer{}, err
+		return identity{}, tracker.Item{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
-	if err := t.Authz.Authorize(ctx, id, a, Scope{Customer: c.Key, Project: p.Key}); err != nil {
-		return identity{}, tracker.Item{}, tenancy.Project{}, tenancy.Customer{}, err
+	if err := t.Authz.Authorize(ctx, id, a, Scope{Organization: c.Key, Project: p.Key}); err != nil {
+		return identity{}, tracker.Item{}, tenancy.Project{}, tenancy.Organization{}, err
 	}
 	return id, it, p, c, nil
 }
@@ -295,12 +295,12 @@ func (t *Tracker) relation(ctx context.Context, p tenancy.Project, key string, k
 	return rel.ID, nil
 }
 
-func (t *Tracker) view(ctx context.Context, it tracker.Item, p tenancy.Project, c tenancy.Customer) (ItemView, error) {
+func (t *Tracker) view(ctx context.Context, it tracker.Item, p tenancy.Project, c tenancy.Organization) (ItemView, error) {
 	keys, err := t.projectKeys(ctx, []tracker.Item{it})
 	if err != nil {
 		return ItemView{}, err
 	}
-	return ItemView{Item: it, ProjectKey: p.Key, CustomerKey: c.Key, EpicKey: keys[it.EpicID], MilestoneKey: keys[it.MilestoneID]}, nil
+	return ItemView{Item: it, ProjectKey: p.Key, OrganizationKey: c.Key, EpicKey: keys[it.EpicID], MilestoneKey: keys[it.MilestoneID]}, nil
 }
 
 // projectKeys maps the IDs of epics and milestones referenced by items to
@@ -322,18 +322,18 @@ func (t *Tracker) projectKeys(ctx context.Context, items []tracker.Item) (map[st
 	return keys, nil
 }
 
-func (t *Tracker) projectOf(ctx context.Context, projectID string) (tenancy.Project, tenancy.Customer, error) {
+func (t *Tracker) projectOf(ctx context.Context, projectID string) (tenancy.Project, tenancy.Organization, error) {
 	ps, err := t.Tenancy.ProjectByID(ctx, projectID)
 	if err != nil {
-		return tenancy.Project{}, tenancy.Customer{}, err
+		return tenancy.Project{}, tenancy.Organization{}, err
 	}
-	c, err := t.Tenancy.CustomerByID(ctx, ps.CustomerID)
+	c, err := t.Tenancy.OrganizationByID(ctx, ps.OrganizationID)
 	return ps, c, err
 }
 
-func itemEvent(it tracker.Item, customerID, typ string, actor event.Actor, payload map[string]any) event.Event {
+func itemEvent(it tracker.Item, organizationID, typ string, actor event.Actor, payload map[string]any) event.Event {
 	return event.Event{
-		Customer: customerID, Project: it.ProjectID, EntityType: "item", EntityID: it.ID, Type: typ,
+		Organization: organizationID, Project: it.ProjectID, EntityType: "item", EntityID: it.ID, Type: typ,
 		Actor: actor, OccurredAt: it.UpdatedAt, Payload: mustJSON(payload),
 	}
 }

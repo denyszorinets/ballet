@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Re-records the README's GIFs and stills into docs/_static/readme: runs a
-# throwaway Ballet with the fake model, drives it (record.mjs) and builds
-# the GIFs (gif.py). Needs what `make run` needs, plus Chrome and uv.
+# Re-records the README GIFs (docs/_static/readme) and the docs screenshots
+# (docs/_static/screenshots): runs a throwaway Ballet with the fake model,
+# drives it (record.mjs) and builds the GIFs (gif.py). Needs what `make run` needs, plus Chrome and uv.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 tmp=$(mktemp -d)
@@ -13,5 +13,5 @@ for _ in $(seq 120); do
 	kill -0 "$pid" 2>/dev/null || { cat "$tmp/run.log"; exit 1; }
 	sleep 1
 done
-node scripts/readme-media/record.mjs "$tmp/frames"
-uv run --quiet scripts/readme-media/gif.py "$tmp/frames" docs/_static/readme
+node scripts/media/record.mjs "$tmp/frames"
+uv run --quiet scripts/media/gif.py "$tmp/frames" docs/_static/readme

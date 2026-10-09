@@ -63,7 +63,7 @@ good team follows, and keeps humans in control of the plan.
    (:doc:`questions`).
 
 **Knowledge grows with every ticket.**
-   Documentation, decisions and debt are written back to a per-customer
+   Documentation, decisions and debt are written back to a per-organization
    knowledge base, and every human answer becomes a decision record
    (:doc:`knowledge`). Each new session starts from that onboarding
    bundle instead of a blank context.
@@ -73,19 +73,19 @@ good team follows, and keeps humans in control of the plan.
    each project's devcontainer — a laptop, VMs or N containers on
    Kubernetes — with no Docker socket or cluster API in Ballet
    (:doc:`/architecture/decisions/0025-agent-fleet-runs-sessions-as-processes`).
-   Every model call goes through Ballet's gateway with the customer's
+   Every model call goes through Ballet's gateway with the organization's
    own key.
 
 **Safe to leave alone.**
-   Token budgets per ticket, project and customer, enforced at the
+   Token budgets per ticket, project and organization, enforced at the
    gateway; pause and kill switches; retries and stuck detection;
    durable state; a morning digest (:doc:`unattended-operation`).
 
-**Built for many customers.**
-   Customers are hard isolation boundaries for code, knowledge, keys and
+**Built for many organizations.**
+   Organizations are hard isolation boundaries for code, knowledge, keys and
    budgets, with OIDC sign-in and role bindings
-   (:doc:`/architecture/security`) — Ballet is meant to run a
-   development shop, not one developer's afternoon.
+   (:doc:`/architecture/security`) — one platform serves many teams and
+   companies, not one developer's afternoon.
 
 At a glance
 -----------
@@ -141,7 +141,7 @@ Typical of each group as of the date above; individual products vary.
      - Plan limits
      - No
      - Some
-   * - Multi-customer isolation
+   * - Multi-organization isolation
      - Yes
      - Teams and organizations
      - No

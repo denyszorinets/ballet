@@ -57,9 +57,9 @@ func setup(t *testing.T) fixture {
 	authz := &app.RBAC{Store: st, Bootstrap: []rbac.Binding{boot}}
 	admin := auth.WithIdentity(t.Context(), auth.Identity{Kind: auth.KindHuman, Subject: "alice", Claims: map[string]any{"groups": []any{"admins"}}})
 	ten := &app.Tenancy{Store: st, Authz: authz, Now: time.Now, NewID: store.NewID}
-	_, err = ten.CreateCustomer(admin, app.CreateCustomerInput{Key: "acme", Name: "Acme"})
+	_, err = ten.CreateOrganization(admin, app.CreateOrganizationInput{Key: "acme", Name: "Acme"})
 	require.NoError(t, err)
-	_, err = ten.CreateProject(admin, app.CreateProjectInput{CustomerKey: "acme", Key: "WEB", Name: "Web"})
+	_, err = ten.CreateProject(admin, app.CreateProjectInput{OrganizationKey: "acme", Key: "WEB", Name: "Web"})
 	require.NoError(t, err)
 	tr := &app.Tracker{Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID}
 	it, err := tr.CreateItem(admin, app.CreateItemInput{ProjectKey: "WEB", Kind: tracker.KindTicket, Title: "Login"})
@@ -90,7 +90,7 @@ func setup(t *testing.T) fixture {
 
 func (f fixture) token(t *testing.T, kind runtoken.Kind, ticket string, caps ...string) string {
 	t.Helper()
-	c := runtoken.Claims{Kind: kind, Subject: "run:" + f.runID, Audience: []string{"core"}, Customer: "acme",
+	c := runtoken.Claims{Kind: kind, Subject: "run:" + f.runID, Audience: []string{"core"}, Organization: "acme",
 		Project: "WEB", Ticket: ticket, Capabilities: caps}
 	if kind == runtoken.KindService {
 		c.Subject, c.Project, c.Ticket = "service:x", "", ""

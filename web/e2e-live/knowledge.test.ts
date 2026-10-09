@@ -18,13 +18,16 @@ async function api(method: string, p: string, body?: unknown) {
 // Needs the Knowledge service on :8081 behind Core (Core [knowledge] url).
 test('alice writes, edits, finds and links knowledge through Core', async ({ page }) => {
 	const suffix = Date.now().toString(36);
-	const customer = `kn-${suffix}`;
+	const organization = `kn-${suffix}`;
 	const project = `K${suffix
 		.toUpperCase()
 		.replace(/[^A-Z0-9]/g, '')
 		.slice(-8)}`;
-	await api('POST', '/customers', { key: customer, name: 'Knowledge test' });
-	await api('POST', `/customers/${customer}/projects`, { key: project, name: 'Knowledge project' });
+	await api('POST', '/organizations', { key: organization, name: 'Knowledge test' });
+	await api('POST', `/organizations/${organization}/projects`, {
+		key: project,
+		name: 'Knowledge project'
+	});
 	const ticket = await api('POST', `/projects/${project}/items`, {
 		kind: 'ticket',
 		title: 'Cache'
@@ -40,7 +43,7 @@ test('alice writes, edits, finds and links knowledge through Core', async ({ pag
 		.first()
 		.fill('alice');
 	await page.getByRole('button', { name: /sign in/i }).click();
-	await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
 
 	await page.goto(`/items/${ticket.key}`);
 	await expect(page.getByText('No linked knowledge.')).toBeVisible();

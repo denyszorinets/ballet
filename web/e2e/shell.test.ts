@@ -5,7 +5,7 @@ import { fakeOIDC } from './fixtures/oidc';
 test.beforeEach(async ({ page }) => {
 	await fakeOIDC(page);
 	await fakeCore(page);
-	await page.route('**/api/v1/customers', (r) =>
+	await page.route('**/api/v1/organizations', (r) =>
 		r.fulfill({
 			json: {
 				items: [
@@ -23,13 +23,13 @@ test.beforeEach(async ({ page }) => {
 	);
 });
 
-test('signs in, shows the shell and customers, and signs out', async ({ page }) => {
+test('signs in, shows the shell and organizations, and signs out', async ({ page }) => {
 	await page.goto('/');
 	await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
 
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
-	await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Organizations' })).toBeVisible();
 	await expect(page.getByTestId('user-name')).toHaveText('Alice Admin');
 	await expect(page.getByText('Acme Corporation')).toBeVisible();
 	await expect(page).toHaveURL('/');
@@ -40,7 +40,7 @@ test('signs in, shows the shell and customers, and signs out', async ({ page }) 
 
 test('sends the access token to the API', async ({ page }) => {
 	let authorization: string | null = null;
-	await page.route('**/api/v1/customers', (r) => {
+	await page.route('**/api/v1/organizations', (r) => {
 		authorization = r.request().headers()['authorization'] ?? null;
 		return r.fulfill({ json: { items: [] } });
 	});
@@ -48,7 +48,7 @@ test('sends the access token to the API', async ({ page }) => {
 	await page.goto('/');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
-	await expect(page.getByText('There are no customers you can see yet.')).toBeVisible();
+	await expect(page.getByText('There are no organizations you can see yet.')).toBeVisible();
 	expect(authorization).toMatch(/^Bearer ey/);
 });
 
@@ -60,14 +60,17 @@ test('returns to the page the user started on', async ({ page }) => {
 });
 
 test('shows API errors', async ({ page }) => {
-	await page.route('**/api/v1/customers', (r) =>
-		r.fulfill({ status: 403, json: { error: 'forbidden', message: 'forbidden: customer.read' } })
+	await page.route('**/api/v1/organizations', (r) =>
+		r.fulfill({
+			status: 403,
+			json: { error: 'forbidden', message: 'forbidden: organization.read' }
+		})
 	);
 
 	await page.goto('/');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
-	await expect(page.getByRole('alert')).toHaveText('forbidden: customer.read');
+	await expect(page.getByRole('alert')).toHaveText('forbidden: organization.read');
 });
 
 test('toggles and remembers the theme', async ({ page }) => {

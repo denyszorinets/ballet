@@ -30,7 +30,7 @@ func runClaims() runtoken.Claims {
 		Kind:         runtoken.KindRun,
 		Subject:      "run:r-42",
 		Audience:     []string{"knowledge", "gateway"},
-		Customer:     "acme",
+		Organization: "acme",
 		Project:      "ACME",
 		Ticket:       "ACME-7",
 		Capabilities: []string{runtoken.CapKnowledgeRead, runtoken.CapLLMInvoke},
@@ -49,7 +49,7 @@ func TestIssueAndVerify_RoundTripsClaims(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, runtoken.KindRun, got.Kind)
 	assert.Equal(t, "run:r-42", got.Subject)
-	assert.Equal(t, "acme", got.Customer)
+	assert.Equal(t, "acme", got.Organization)
 	assert.Equal(t, "ACME", got.Project)
 	assert.Equal(t, "ACME-7", got.Ticket)
 	assert.True(t, got.Can(runtoken.CapLLMInvoke))
@@ -63,7 +63,7 @@ func TestIssue_PlannerTokenRecordsActingHuman(t *testing.T) {
 	ring := newRing(t, clock)
 	c := runtoken.Claims{
 		Kind: runtoken.KindPlanner, Subject: "planner:s-1", Audience: []string{"knowledge"},
-		Customer: "acme", Project: "ACME", Session: "s-1", ActingFor: "user-bob",
+		Organization: "acme", Project: "ACME", Session: "s-1", ActingFor: "user-bob",
 	}
 
 	raw, err := runtoken.NewIssuer(ring, clock.Now).Issue(c, time.Hour)
@@ -245,7 +245,7 @@ func TestIssue_PlannerActsForAHumanOrOnATicket(t *testing.T) {
 	clock := &fakeClock{now: time.Now()}
 	issuer := runtoken.NewIssuer(newRing(t, clock), clock.Now)
 	planner := runtoken.Claims{Kind: runtoken.KindPlanner, Subject: "planner:s-1", Audience: []string{"gateway"},
-		Customer: "acme", Project: "ACME", Session: "s-1"}
+		Organization: "acme", Project: "ACME", Session: "s-1"}
 	_, err := issuer.Issue(planner, time.Hour)
 	assert.Error(t, err, "neither a human nor a ticket")
 

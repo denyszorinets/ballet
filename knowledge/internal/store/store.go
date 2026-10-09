@@ -1,5 +1,5 @@
 // Package store is Knowledge's SQLite persistence. Every query is scoped
-// to one customer (knowledge space).
+// to one organization (knowledge space).
 package store
 
 import (
@@ -50,9 +50,9 @@ func (s *Store) DB() *sqlstore.DB { return s.db }
 func (s *Store) Create(ctx context.Context, e domain.Entry) error {
 	projects, items := jsonList(e.Projects), jsonList(e.Items)
 	return s.db.Batch(ctx,
-		sqlstore.Exec(`INSERT INTO entries (id, customer, kind, title, body, projects, items, version,
+		sqlstore.Exec(`INSERT INTO entries (id, organization, kind, title, body, projects, items, version,
 				created_by, updated_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			e.ID, e.Customer, string(e.Kind), e.Title, e.Body, projects, items, e.Version,
+			e.ID, e.Organization, string(e.Kind), e.Title, e.Body, projects, items, e.Version,
 			e.CreatedBy, e.UpdatedBy, ts(e.CreatedAt), ts(e.UpdatedAt)),
 		versionStmt(e),
 	)
@@ -62,9 +62,9 @@ func (s *Store) Create(ctx context.Context, e domain.Entry) error {
 func (s *Store) Update(ctx context.Context, e domain.Entry, expected int64) error {
 	err := s.db.Batch(ctx,
 		sqlstore.ExecOne(`UPDATE entries SET kind = ?, title = ?, body = ?, projects = ?, items = ?, version = ?,
-				updated_by = ?, updated_at = ? WHERE id = ? AND customer = ? AND version = ?`,
+				updated_by = ?, updated_at = ? WHERE id = ? AND organization = ? AND version = ?`,
 			string(e.Kind), e.Title, e.Body, jsonList(e.Projects), jsonList(e.Items), e.Version,
-			e.UpdatedBy, ts(e.UpdatedAt), e.ID, e.Customer, expected),
+			e.UpdatedBy, ts(e.UpdatedAt), e.ID, e.Organization, expected),
 		versionStmt(e),
 	)
 	if errors.Is(err, sqlstore.ErrConflict) {
@@ -78,20 +78,20 @@ func versionStmt(e domain.Entry) sqlstore.Stmt {
 		VALUES (?, ?, ?, ?, ?, ?)`, e.ID, e.Version, e.Title, e.Body, e.UpdatedBy, ts(e.UpdatedAt))
 }
 
-const cols = `id, customer, kind, title, body, projects, items, version, created_by, updated_by, created_at, updated_at`
+const cols = `id, organization, kind, title, body, projects, items, version, created_by, updated_by, created_at, updated_at`
 
-// Get returns an entry of customer.
-func (s *Store) Get(ctx context.Context, customer, id string) (domain.Entry, error) {
-	e, err := scan(s.db.QueryRow(ctx, `SELECT `+cols+` FROM entries WHERE customer = ? AND id = ?`, customer, id))
+// Get returns an entry of organization.
+func (s *Store) Get(ctx context.Context, organization, id string) (domain.Entry, error) {
+	e, err := scan(s.db.QueryRow(ctx, `SELECT `+cols+` FROM entries WHERE organization = ? AND id = ?`, organization, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Entry{}, fmt.Errorf("entry %s: %w", id, app.ErrNotFound)
 	}
 	return e, err
 }
 
-// List returns a customer's entries, most recently updated first.
-func (s *Store) List(ctx context.Context, customer string, f app.Filter) ([]domain.Entry, error) {
-	where, args := []string{"customer = ?"}, []any{customer}
+// List returns an organization's entries, most recently updated first.
+func (s *Store) List(ctx context.Context, organization string, f app.Filter) ([]domain.Entry, error) {
+	where, args := []string{"organization = ?"}, []any{organization}
 	if f.Kind != "" {
 		where, args = append(where, "kind = ?"), append(args, string(f.Kind))
 	}
@@ -122,9 +122,9 @@ func (s *Store) List(ctx context.Context, customer string, f app.Filter) ([]doma
 	return out, rows.Err()
 }
 
-// Versions returns the versions of an entry of customer, newest first.
-func (s *Store) Versions(ctx context.Context, customer, id string) ([]domain.Version, error) {
-	if _, err := s.Get(ctx, customer, id); err != nil {
+// Versions returns the versions of an entry of organization, newest first.
+func (s *Store) Versions(ctx context.Context, organization, id string) ([]domain.Version, error) {
+	if _, err := s.Get(ctx, organization, id); err != nil {
 		return nil, err
 	}
 	rows, err := s.db.Query(ctx, `SELECT version, title, body, author, created_at FROM entry_versions
