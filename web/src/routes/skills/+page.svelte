@@ -57,8 +57,7 @@
 					if (!s.permissions.loaded) await s.permissions.load(s.api);
 					defaultScope = s.permissions.can('skill.read')
 						? 'platform'
-						: (s.permissions.bindings.find((b) => b.scope !== 'platform')?.scope ??
-							'platform');
+						: (s.permissions.bindings.find((b) => b.scope !== 'platform')?.scope ?? 'platform');
 					return; // the effect reruns with the default scope
 				}
 				return load(s, sc);

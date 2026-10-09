@@ -54,9 +54,7 @@ test('admins pause, resume and kill a project', async ({ page }) => {
 
 test('engineers see the state but no controls', async ({ page }) => {
 	await open(page, [{ role: 'engineer', scope: 'customer:acme' }], '/projects/WEB', {
-		pauses: [
-			{ scope: 'platform', paused_by: 'user-alice', paused_at: new Date().toISOString() }
-		]
+		pauses: [{ scope: 'platform', paused_by: 'user-alice', paused_at: new Date().toISOString() }]
 	});
 	const control = page.getByRole('region', { name: 'Autonomous work' });
 	await expect(control.getByRole('status')).toContainText('all autonomous work is paused');

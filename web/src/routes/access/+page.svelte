@@ -97,7 +97,9 @@
 						<td class="mono">{b.scope}</td>
 						<td>
 							{#if b.bootstrap}
-								<span class="badge" title="Configured in rbac.bootstrap_platform_admins">bootstrap</span>
+								<span class="badge" title="Configured in rbac.bootstrap_platform_admins"
+									>bootstrap</span
+								>
 							{:else}
 								<button
 									onclick={() => remove(b)}

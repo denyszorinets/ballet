@@ -89,8 +89,8 @@
 <p><a href={resolve('/projects/[project]', { project })}>← {project}</a></p>
 <h1>Project skills</h1>
 <p class="muted">
-	Published skills of the platform, the customer and the project; the most specific scope wins
-	per name. Pin a version or disable a skill for this project.
+	Published skills of the platform, the customer and the project; the most specific scope wins per
+	name. Pin a version or disable a skill for this project.
 </p>
 
 {#if error}
