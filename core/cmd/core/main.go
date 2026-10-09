@@ -337,7 +337,7 @@ func run() error {
 		Items: st, Deps: st, Tenancy: st, Events: st, Authz: authz, Now: time.Now, NewID: store.NewID,
 	}
 	skills := &app.Skills{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID}
-	features := &app.Features{Store: st, Tenancy: st, Authz: authz, Now: time.Now, NewID: store.NewID}
+	features := &app.Features{Store: st, Tenancy: st, Execution: st, Authz: authz, Now: time.Now, NewID: store.NewID}
 	jobResults := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "ballet_jobs_total",
 		Help: "Durable jobs executed, by kind and result (done, retry, dead).",

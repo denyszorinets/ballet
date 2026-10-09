@@ -468,6 +468,32 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FeatureRevisionList" } } } }
         default: { $ref: "#/components/responses/Error" }
 
+  /api/v1/organizations/{organization}/features/{feature}/revisions/{revision}/review:
+    parameters:
+      - { $ref: "#/components/parameters/Organization" }
+      - { $ref: "#/components/parameters/Feature" }
+      - { name: revision, in: path, required: true, schema: { type: integer, format: int64 }, description: Revision number }
+    post:
+      operationId: reviewFeatureRevision
+      tags: [features]
+      summary: Confirm or revert a revision waiting for review (humans only)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ReviewFeatureRevision" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FeatureRevision" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/organizations/{organization}/feature-reviews:
+    parameters: [{ $ref: "#/components/parameters/Organization" }]
+    get:
+      operationId: listFeatureReviews
+      tags: [features]
+      summary: Revisions waiting for review, oldest first, with the state before each
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/FeatureReviewList" } } } }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/organizations/{organization}/feature-links:
     parameters: [{ $ref: "#/components/parameters/Organization" }]
     post:
@@ -1197,11 +1223,12 @@ components:
     Organization:
       type: object
       additionalProperties: false
-      required: [id, key, name, created_at, updated_at, version]
+      required: [id, key, name, feature_policy, created_at, updated_at, version]
       properties:
         id: { type: string }
         key: { type: string }
         name: { type: string }
+        feature_policy: { $ref: "#/components/schemas/FeaturePolicy" }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         version: { type: integer, format: int64 }
@@ -1220,9 +1247,10 @@ components:
     UpdateOrganization:
       type: object
       additionalProperties: false
-      required: [name, version]
+      required: [version]
       properties:
-        name: { type: string }
+        name: { type: string, description: "Absent: unchanged" }
+        feature_policy: { $ref: "#/components/schemas/FeaturePolicy" }
         version: { type: integer, format: int64 }
 
     Project:
@@ -1332,6 +1360,10 @@ components:
         state: { $ref: "#/components/schemas/ItemState" }
         version: { type: integer, format: int64 }
 
+    FeaturePolicy:
+      type: string
+      enum: [direct, proposal, read_only]
+      description: "How agents may change features: direct (review afterwards), proposal (changeset to approve) or read_only"
     FeatureStatus: { type: string, enum: [planned, in_progress, live, changing, deprecated, removed] }
     FeatureLinkType: { type: string, enum: [derived_from, split_from, merged_into, supersedes, depends_on, relates] }
     Feature:
@@ -1408,6 +1440,41 @@ components:
         reviewed_by: { type: string }
         reviewed_at: { type: string, format: date-time }
         created_at: { type: string, format: date-time }
+    ReviewFeatureRevision:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action: { type: string, enum: [confirm, revert] }
+        comment: { type: string, description: "Recorded with the review; a revert's reason" }
+    FeatureReviewList:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [feature, number, title, description, status, projects, author, created_at, feature_title]
+            properties:
+              feature: { type: string }
+              number: { type: integer, format: int64 }
+              title: { type: string }
+              description: { type: string }
+              status: { $ref: "#/components/schemas/FeatureStatus" }
+              projects: { type: array, items: { type: string } }
+              author: { $ref: "#/components/schemas/Actor" }
+              reason: { type: string }
+              cause_kind: { type: string }
+              cause_ref: { type: string }
+              review: { type: string, enum: [pending, confirmed, reverted] }
+              reviewed_by: { type: string }
+              reviewed_at: { type: string, format: date-time }
+              created_at: { type: string, format: date-time }
+              feature_title: { type: string }
+              previous: { $ref: "#/components/schemas/FeatureRevision" }
     FeatureRevisionList:
       type: object
       additionalProperties: false
@@ -1524,7 +1591,7 @@ components:
       type: object
       additionalProperties: false
       required: [project, repo_url, default_branch, setup, env, branch_template, git_name, git_email, forge,
-        forge_api_url, link_template, answer_window_minutes, pool, version]
+        forge_api_url, link_template, answer_window_minutes, pool, feature_policy, version]
       properties:
         project: { type: string }
         repo_url: { type: string, description: "https, ssh, git@host:path or file URL; empty: no repository" }
@@ -1543,6 +1610,7 @@ components:
           maximum: 1440
           description: "How long a session waits online for answers before it parks; 0: Ballet's default"
         pool: { type: string, description: "Agent pool of the project's runs (agents labelled pool=<pool>); empty: any agent" }
+        feature_policy: { type: string, enum: ["", direct, proposal, read_only], description: "Overrides the organization's feature policy; empty: inherit" }
         updated_at: { type: string, format: date-time }
         version: { type: integer, format: int64 }
     SetExecutionSettings:
@@ -1562,6 +1630,7 @@ components:
         link_template: { type: string }
         answer_window_minutes: { type: integer, minimum: 0, maximum: 1440 }
         pool: { type: string }
+        feature_policy: { type: string, enum: ["", direct, proposal, read_only] }
         version: { type: integer, format: int64, description: "The version read (0 the first time)" }
     Report:
       type: object

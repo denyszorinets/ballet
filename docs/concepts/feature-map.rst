@@ -79,7 +79,7 @@ Tickets derive from features
 .. note::
 
    Planning features in changesets, ticket links and automatic status
-   arrive with :issue:`193`; the feature policy with :issue:`192`. Until
+   arrive with :issue:`193`, and agents' tools with :issue:`194`. Until
    then features and links are edited through the REST API.
 
 Planning starts from features: the planner proposes the change to a
@@ -89,12 +89,25 @@ feature moves from ``planned`` to ``in_progress`` to ``live``, and a live
 feature becomes ``changing`` while tickets change it. The map starts
 empty and grows with new work.
 
+.. _concepts-feature-map-policy:
+
 Who may change features
 -----------------------
 
 People change features directly. Agents change them according to the
-organization's **feature policy**: directly with a human review
-afterwards, as proposals a human approves, or not at all.
+**feature policy** of their organization (organization page → *Feature
+changes by agents*), which a project may override in its settings:
+
+``direct`` (default)
+   The change applies at once. Its revision waits in the **review
+   queue**, where a person **confirms** it or **reverts** it — a revert
+   appends a revision restoring the state before (and a reverted creation
+   marks the feature removed). Only the latest revision can be reverted;
+   otherwise edit the feature.
+``proposal``
+   The change becomes a changeset a person approves, like the planner's.
+``read_only``
+   Agents cannot change features.
 
 Storage
 -------

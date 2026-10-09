@@ -234,3 +234,42 @@ func DeliveryStatus(current Status, tickets []tracker.State) Status {
 	}
 	return current
 }
+
+// Policy says how agents may change features (ADR-0028).
+type Policy string
+
+// Policies. Humans always change features directly.
+const (
+	// PolicyDirect applies agents' changes at once; their revisions wait
+	// for a human review.
+	PolicyDirect Policy = "direct"
+	// PolicyProposal turns agents' changes into changesets for a human to
+	// approve.
+	PolicyProposal Policy = "proposal"
+	// PolicyReadOnly refuses agents' changes.
+	PolicyReadOnly Policy = "read_only"
+)
+
+// Policies lists every policy.
+var Policies = []Policy{PolicyDirect, PolicyProposal, PolicyReadOnly}
+
+// ValidatePolicy checks a policy; inherit allows "" (a project inheriting
+// its organization's).
+func ValidatePolicy(p Policy, inherit bool) error {
+	if (p == "" && inherit) || slices.Contains(Policies, p) {
+		return nil
+	}
+	return fmt.Errorf("feature policy %q must be one of %v", p, Policies)
+}
+
+// EffectivePolicy is a project's policy: its own, else its organization's,
+// else direct.
+func EffectivePolicy(organization, project Policy) Policy {
+	switch {
+	case project != "":
+		return project
+	case organization != "":
+		return organization
+	}
+	return PolicyDirect
+}

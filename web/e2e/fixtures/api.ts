@@ -2,7 +2,13 @@ import type { Page, Route } from '@playwright/test';
 
 /** In-memory fake of Core's REST API for e2e tests. */
 export interface FakeCore {
-	organizations: { id: string; key: string; name: string; version: number }[];
+	organizations: {
+		id: string;
+		key: string;
+		name: string;
+		feature_policy?: string;
+		version: number;
+	}[];
 	projects: {
 		id: string;
 		key: string;
@@ -345,7 +351,7 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			if (core.organizations.some((c) => c.key === body.key)) {
 				return err(r, 409, 'already_exists', `create organization: already exists`);
 			}
-			const c = { id: id(), key: body.key, name: body.name, version: 1 };
+			const c = { id: id(), key: body.key, name: body.name, feature_policy: 'direct', version: 1 };
 			core.organizations.push(c);
 			return r.fulfill({ status: 201, json: withTimes(c) });
 		}
@@ -354,10 +360,11 @@ export async function fakeCore(page: Page, state: Partial<FakeCore> = {}): Promi
 			if (!c) return err(r, 404, 'not_found', 'organization not found');
 			if (method === 'PATCH') {
 				if (body.version !== c.version) return err(r, 409, 'conflict', 'stale version');
-				c.name = body.name;
+				if (body.name) c.name = body.name;
+				if (body.feature_policy) c.feature_policy = body.feature_policy;
 				c.version++;
 			}
-			return r.fulfill({ json: withTimes(c) });
+			return r.fulfill({ json: withTimes({ feature_policy: 'direct', ...c }) });
 		}
 		if ((m = path.match(/^\/organizations\/([^/]+)\/projects$/))) {
 			if (method === 'POST') {

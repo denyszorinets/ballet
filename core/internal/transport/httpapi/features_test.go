@@ -69,3 +69,28 @@ func TestFeaturesAPI_Lifecycle(t *testing.T) {
 	require.Equal(t, http.StatusOK, code)
 	assert.Empty(t, d["links"])
 }
+
+func TestFeaturesAPI_PolicyAndReviews(t *testing.T) {
+	api := newAPI(t, testUser, allow{})
+	code, o := call(t, api, "POST", "/api/v1/organizations", "alice", `{"key":"acme","name":"Acme"}`)
+	require.Equal(t, http.StatusCreated, code, o)
+	assert.Equal(t, "direct", o["feature_policy"])
+
+	code, o = call(t, api, "PATCH", "/api/v1/organizations/acme", "alice", `{"feature_policy":"proposal","version":1}`)
+	require.Equal(t, http.StatusOK, code, o)
+	assert.Equal(t, "proposal", o["feature_policy"])
+	assert.Equal(t, "Acme", o["name"], "name unchanged")
+	code, _ = call(t, api, "PATCH", "/api/v1/organizations/acme", "alice", `{"feature_policy":"never","version":2}`)
+	assert.Equal(t, http.StatusBadRequest, code)
+
+	code, q := call(t, api, "GET", "/api/v1/organizations/acme/feature-reviews", "alice", "")
+	require.Equal(t, http.StatusOK, code, q)
+	assert.Empty(t, q["items"])
+
+	code, _ = call(t, api, "POST", "/api/v1/organizations/acme/features", "alice", `{"title":"Export"}`)
+	require.Equal(t, http.StatusCreated, code)
+	code, body := call(t, api, "POST", "/api/v1/organizations/acme/features/F-1/revisions/1/review", "alice", `{"action":"confirm"}`)
+	assert.Equal(t, http.StatusConflict, code, body, "human revisions need no review")
+	code, body = call(t, api, "POST", "/api/v1/organizations/acme/features/F-1/revisions/x/review", "alice", `{"action":"confirm"}`)
+	assert.Equal(t, http.StatusBadRequest, code, body)
+}

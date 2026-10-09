@@ -12,8 +12,9 @@ import (
 // CreateOrganization inserts c and records e.
 func (s *Store) CreateOrganization(ctx context.Context, c tenancy.Organization, e event.Event) error {
 	return mapWriteErr("create organization", s.db.Batch(ctx,
-		sqlstore.Exec(`INSERT INTO organizations (id, key, name, created_at, updated_at, version)
-			VALUES (?, ?, ?, ?, ?, ?)`, c.ID, c.Key, c.Name, formatTime(c.CreatedAt), formatTime(c.UpdatedAt), c.Version),
+		sqlstore.Exec(`INSERT INTO organizations (id, key, name, feature_policy, created_at, updated_at, version)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`, c.ID, c.Key, c.Name, policyOrDefault(c.FeaturePolicy),
+			formatTime(c.CreatedAt), formatTime(c.UpdatedAt), c.Version),
 		s.AppendEvent(e),
 	))
 }
@@ -21,13 +22,14 @@ func (s *Store) CreateOrganization(ctx context.Context, c tenancy.Organization, 
 // UpdateOrganization stores c if the stored version equals expectedVersion.
 func (s *Store) UpdateOrganization(ctx context.Context, c tenancy.Organization, expectedVersion int64, e event.Event) error {
 	return mapWriteErr("update organization", s.db.Batch(ctx,
-		sqlstore.ExecOne(`UPDATE organizations SET name = ?, updated_at = ?, version = ?
-			WHERE id = ? AND version = ?`, c.Name, formatTime(c.UpdatedAt), c.Version, c.ID, expectedVersion),
+		sqlstore.ExecOne(`UPDATE organizations SET name = ?, feature_policy = ?, updated_at = ?, version = ?
+			WHERE id = ? AND version = ?`, c.Name, policyOrDefault(c.FeaturePolicy), formatTime(c.UpdatedAt), c.Version,
+			c.ID, expectedVersion),
 		s.AppendEvent(e),
 	))
 }
 
-const organizationCols = `id, key, name, created_at, updated_at, version`
+const organizationCols = `id, key, name, feature_policy, created_at, updated_at, version`
 
 // OrganizationByKey returns the organization with key.
 func (s *Store) OrganizationByKey(ctx context.Context, key string) (tenancy.Organization, error) {
@@ -115,7 +117,7 @@ type scanner interface{ Scan(dest ...any) error }
 func scanOrganization(r scanner) (tenancy.Organization, error) {
 	var c tenancy.Organization
 	var created, updated string
-	if err := r.Scan(&c.ID, &c.Key, &c.Name, &created, &updated, &c.Version); err != nil {
+	if err := r.Scan(&c.ID, &c.Key, &c.Name, &c.FeaturePolicy, &created, &updated, &c.Version); err != nil {
 		return tenancy.Organization{}, err
 	}
 	var err error
@@ -142,4 +144,12 @@ func scanProject(r scanner) (tenancy.Project, error) {
 		return tenancy.Project{}, err
 	}
 	return p, nil
+}
+
+// policyOrDefault stores organizations without a feature policy as direct.
+func policyOrDefault(p string) string {
+	if p == "" {
+		return "direct"
+	}
+	return p
 }

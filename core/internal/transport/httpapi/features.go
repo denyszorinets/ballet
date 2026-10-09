@@ -3,6 +3,7 @@ package httpapi
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/denyszorinets/ballet/core/internal/app"
@@ -208,6 +209,54 @@ func registerFeatures(mux *router, fs *app.Features) {
 	mux.handle("POST /api/v1/organizations/{organization}/feature-links", link)
 	mux.handle("DELETE /api/v1/organizations/{organization}/feature-links/{link}", unlink)
 	mux.handle("GET /api/v1/organizations/{organization}/feature-graph", graph)
+
+	reviews := func(w http.ResponseWriter, r *http.Request) {
+		queue, err := fs.Reviews(r.Context(), org(r))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		type reviewJSON struct {
+			revisionJSON
+			FeatureTitle string        `json:"feature_title"`
+			Previous     *revisionJSON `json:"previous,omitempty"`
+		}
+		out := struct {
+			Items []reviewJSON `json:"items"`
+		}{Items: []reviewJSON{}}
+		for _, rv := range queue {
+			item := reviewJSON{revisionJSON: toRevisionJSON(rv.RevisionView), FeatureTitle: rv.FeatureTitle}
+			if rv.Previous.Number > 0 {
+				prev := toRevisionJSON(rv.Previous)
+				item.Previous = &prev
+			}
+			out.Items = append(out.Items, item)
+		}
+		writeJSON(w, http.StatusOK, out)
+	}
+	review := func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Action  string `json:"action"`
+			Comment string `json:"comment"`
+		}
+		if err := decode(r, &in); err != nil {
+			writeError(w, err)
+			return
+		}
+		n, err := strconv.ParseInt(r.PathValue("revision"), 10, 64)
+		if err != nil {
+			writeError(w, fmt.Errorf("%w: revision must be a number", app.ErrInvalid))
+			return
+		}
+		rv, err := fs.Review(r.Context(), org(r), r.PathValue("feature"), n, app.ReviewInput{Action: in.Action, Comment: in.Comment})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, toRevisionJSON(rv))
+	}
+	mux.handle("GET /api/v1/organizations/{organization}/feature-reviews", reviews)
+	mux.handle("POST /api/v1/organizations/{organization}/features/{feature}/revisions/{revision}/review", review)
 }
 
 type graphFeatureJSON struct {

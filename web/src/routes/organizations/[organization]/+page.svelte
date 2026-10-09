@@ -17,6 +17,9 @@
 	let newName = $state('');
 	let renameError = $state<string>();
 
+	let policy = $state<Schemas['FeaturePolicy']>('direct');
+	let policyMessage = $state<string>();
+
 	let form = $state({ key: '', name: '', description: '' });
 	let formError = $state<string>();
 
@@ -32,6 +35,7 @@
 			return;
 		}
 		organization = c.data;
+		policy = c.data.feature_policy;
 		projects = p.data?.items ?? [];
 	}
 
@@ -58,6 +62,21 @@
 		}
 		organization = data;
 		renaming = false;
+	}
+
+	async function savePolicy(e: SubmitEvent) {
+		e.preventDefault();
+		if (!session || !organization) return;
+		const { data, error: err } = await session.api.PATCH('/api/v1/organizations/{organization}', {
+			params: { path: { organization: key } },
+			body: { feature_policy: policy, version: organization.version }
+		});
+		if (err) {
+			policyMessage = apiError(err);
+			return;
+		}
+		organization = data;
+		policyMessage = 'Saved.';
 	}
 
 	async function createProject(e: SubmitEvent) {
@@ -138,6 +157,31 @@
 	{/if}
 
 	<BudgetEditor organization={key} />
+
+	<section aria-labelledby="feature-policy-h">
+		<h2 id="feature-policy-h">Feature changes by agents</h2>
+		<p class="muted">
+			How agents may change this organization's features on the feature map. People always can;
+			projects may override this in their settings.
+		</p>
+		<form class="form card" onsubmit={savePolicy} aria-label="Feature policy">
+			<label
+				>Policy
+				<select
+					bind:value={policy}
+					disabled={!session?.permissions.can('organization.update', { organization: key })}
+				>
+					<option value="direct">Apply, then review</option>
+					<option value="proposal">Propose for approval</option>
+					<option value="read_only">Not allowed</option>
+				</select>
+			</label>
+			{#if session?.permissions.can('organization.update', { organization: key })}
+				<button type="submit">Save policy</button>
+			{/if}
+		</form>
+		{#if policyMessage}<p role="status">{policyMessage}</p>{/if}
+	</section>
 
 	{#if session?.permissions.can('credential.manage', { organization: key })}
 		<LLMCredentials organization={key} />

@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/denyszorinets/ballet/core/internal/domain/event"
 	"github.com/denyszorinets/ballet/core/internal/domain/feature"
 	"github.com/denyszorinets/ballet/core/internal/domain/tenancy"
+	"github.com/denyszorinets/ballet/kit/auth"
 )
 
 // FeatureStore persists the feature map (ADR-0028).
@@ -34,6 +36,12 @@ type FeatureStore interface {
 	AddFeatureLink(ctx context.Context, l feature.Link, e event.Event) error
 	// RemoveFeatureLink marks a valid link removed.
 	RemoveFeatureLink(ctx context.Context, l feature.Link, e event.Event) error
+	// PendingRevisions returns the revisions of an organization's
+	// features that wait for review, oldest first.
+	PendingRevisions(ctx context.Context, organizationID string) ([]feature.Revision, error)
+	// ReviewRevision records the review of a pending revision; ErrConflict
+	// when it is no longer pending.
+	ReviewRevision(ctx context.Context, m ReviewMark, e event.Event) error
 }
 
 // FeatureWrite is a feature's new state, its revision and its event.
@@ -41,6 +49,18 @@ type FeatureWrite struct {
 	Feature  feature.Feature
 	Revision feature.Revision
 	Event    event.Event
+	// Reviews marks a pending revision reviewed in the same write (a
+	// revert); nil: none.
+	Reviews *ReviewMark
+}
+
+// ReviewMark is the review of a pending revision.
+type ReviewMark struct {
+	FeatureID string
+	Number    int64
+	Review    feature.Review
+	By        string
+	At        time.Time
 }
 
 // Features implements the feature map's use cases. Reading needs
@@ -48,11 +68,12 @@ type FeatureWrite struct {
 // features of the projects it can read. Writing needs tracker.write on the
 // organization, or on every project of the feature.
 type Features struct {
-	Store   FeatureStore
-	Tenancy TenancyStore
-	Authz   Authorizer
-	Now     func() time.Time
-	NewID   func() string
+	Store     FeatureStore
+	Tenancy   TenancyStore
+	Execution ExecutionStore // projects' policy overrides; nil: the organization's policy
+	Authz     Authorizer
+	Now       func() time.Time
+	NewID     func() string
 }
 
 // FeatureView is a feature with its organization's and projects' keys.
@@ -674,4 +695,155 @@ func revisionSummary(r feature.Revision) string {
 		return strings.TrimSpace(r.Reason)
 	}
 	return fmt.Sprintf("revision %d (%s)", r.Number, r.Status)
+}
+
+// Policy returns how agents of a project (projectID "": of the
+// organization) may change features: the project's override, else the
+// organization's policy.
+func (fs *Features) Policy(ctx context.Context, org tenancy.Organization, projectID string) (feature.Policy, error) {
+	var project feature.Policy
+	if projectID != "" && fs.Execution != nil {
+		x, err := fs.Execution.ExecutionSettings(ctx, projectID)
+		switch {
+		case err == nil:
+			project = feature.Policy(x.FeaturePolicy)
+		case !errors.Is(err, ErrNotFound):
+			return "", err
+		}
+	}
+	return feature.EffectivePolicy(feature.Policy(org.FeaturePolicy), project), nil
+}
+
+// ReviewView is a revision waiting for review, with the feature's title
+// and the state before it (zero for a creation) to compare against.
+type ReviewView struct {
+	RevisionView
+	FeatureTitle string
+	Previous     RevisionView
+}
+
+// Reviews returns the revisions of features the caller can see that wait
+// for review, oldest first.
+func (fs *Features) Reviews(ctx context.Context, orgKey string) ([]ReviewView, error) {
+	s, err := fs.scope(ctx, orgKey)
+	if err != nil {
+		return nil, err
+	}
+	pending, err := fs.Store.PendingRevisions(ctx, s.org.ID)
+	if err != nil {
+		return nil, err
+	}
+	features, err := fs.byID(ctx, s)
+	if err != nil {
+		return nil, err
+	}
+	out := []ReviewView{}
+	history := map[string][]feature.Revision{}
+	for _, r := range pending {
+		f := features[r.FeatureID]
+		if !s.sees(f.ProjectIDs) {
+			continue
+		}
+		if _, ok := history[f.ID]; !ok {
+			if history[f.ID], err = fs.Store.FeatureRevisions(ctx, f.ID); err != nil {
+				return nil, err
+			}
+		}
+		v := ReviewView{RevisionView: s.revisionView(f, r), FeatureTitle: f.Title}
+		for _, prev := range history[f.ID] {
+			if prev.Number == r.Number-1 {
+				v.Previous = s.revisionView(f, prev)
+			}
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+func (s featureScope) revisionView(f feature.Feature, r feature.Revision) RevisionView {
+	return RevisionView{Revision: r, FeatureKey: f.Key, ProjectKeys: s.projectKeys(r.ProjectIDs)}
+}
+
+// ReviewInput is a human's review of a revision.
+type ReviewInput struct {
+	Action  string // "confirm" or "revert"
+	Comment string
+}
+
+// Review confirms or reverts a revision waiting for review. Reverting
+// appends a revision restoring the state before it (a reverted creation
+// removes the feature); only the latest revision can be reverted. Only
+// humans review.
+func (fs *Features) Review(ctx context.Context, orgKey, key string, number int64, in ReviewInput) (RevisionView, error) {
+	s, err := fs.scope(ctx, orgKey)
+	if err != nil {
+		return RevisionView{}, err
+	}
+	if _, planner := PlannerSessionOf(ctx); planner || s.id.Kind != auth.KindHuman {
+		return RevisionView{}, fmt.Errorf("%w: only a human can review", ErrForbidden)
+	}
+	if in.Action != "confirm" && in.Action != "revert" {
+		return RevisionView{}, invalid(fmt.Errorf("action %q must be confirm or revert", in.Action))
+	}
+	if err := feature.ValidateReason(in.Comment); err != nil {
+		return RevisionView{}, invalid(err)
+	}
+	f, err := fs.load(ctx, s, key)
+	if err != nil {
+		return RevisionView{}, err
+	}
+	if err := fs.canWrite(ctx, s, f.ProjectIDs); err != nil {
+		return RevisionView{}, err
+	}
+	revs, err := fs.Store.FeatureRevisions(ctx, f.ID) // newest first
+	if err != nil {
+		return RevisionView{}, err
+	}
+	i := slices.IndexFunc(revs, func(r feature.Revision) bool { return r.Number == number })
+	if i < 0 {
+		return RevisionView{}, fmt.Errorf("revision %d of %s: %w", number, key, ErrNotFound)
+	}
+	rev := revs[i]
+	if rev.Review != feature.ReviewPending {
+		return RevisionView{}, fmt.Errorf("%w: revision %d of %s does not wait for review", ErrConflict, number, key)
+	}
+	now := fs.Now()
+	mark := ReviewMark{FeatureID: f.ID, Number: number, By: s.id.Subject, At: now}
+	payload := map[string]any{"key": f.Key, "revision": number}
+	if in.Comment != "" {
+		payload["comment"] = in.Comment
+	}
+	if in.Action == "confirm" {
+		mark.Review = feature.ReviewConfirmed
+		e := event.Event{Organization: s.org.ID, EntityType: "feature", EntityID: f.ID, Type: "feature.revision_confirmed",
+			Actor: actorOf(s.id), OccurredAt: now, Payload: mustJSON(payload)}
+		if err := fs.Store.ReviewRevision(ctx, mark, e); err != nil {
+			return RevisionView{}, err
+		}
+	} else {
+		if f.Version != number {
+			return RevisionView{}, fmt.Errorf("%w: %s has later revisions; edit it instead", ErrConflict, key)
+		}
+		mark.Review = feature.ReviewReverted
+		next := f
+		if i+1 < len(revs) {
+			prev := revs[i+1]
+			next.Title, next.Description, next.Status, next.ProjectIDs = prev.Title, prev.Description, prev.Status, prev.ProjectIDs
+		} else {
+			next.Status = feature.StatusRemoved
+		}
+		next.Version, next.UpdatedAt = f.Version+1, now
+		reason := fmt.Sprintf("Reverted revision %d", number)
+		if in.Comment != "" {
+			reason += ": " + in.Comment
+		}
+		w := fs.write(next, actorOf(s.id), reason, feature.Cause{Kind: "revert", Ref: strconv.FormatInt(number, 10)},
+			"feature.revision_reverted", payload)
+		w.Reviews = &mark
+		if err := fs.Store.UpdateFeature(ctx, w, f.Version); err != nil {
+			return RevisionView{}, err
+		}
+	}
+	rev.Review, rev.ReviewedBy, rev.ReviewedAt = mark.Review, mark.By, mark.At
+	return s.revisionView(f, rev), nil
 }

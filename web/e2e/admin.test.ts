@@ -30,6 +30,14 @@ test('a platform admin creates and renames an organization and adds a project', 
 	await project.getByLabel('Name').fill('Web shop');
 	await project.getByRole('button', { name: 'Create project' }).click();
 	await expect(page.getByRole('cell', { name: 'WEB', exact: true })).toBeVisible();
+
+	const policy = page.getByRole('form', { name: 'Feature policy' });
+	await expect(policy.getByLabel('Policy')).toHaveValue('direct');
+	await policy.getByLabel('Policy').selectOption('proposal');
+	await policy.getByRole('button', { name: 'Save policy' }).click();
+	await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+	await page.reload();
+	await expect(policy.getByLabel('Policy')).toHaveValue('proposal');
 });
 
 test('API errors are shown on the form', async ({ page }) => {

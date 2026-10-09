@@ -1,6 +1,7 @@
 package app_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -8,8 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/denyszorinets/ballet/core/internal/app"
+	"github.com/denyszorinets/ballet/core/internal/domain/execution"
 	"github.com/denyszorinets/ballet/core/internal/domain/feature"
 	"github.com/denyszorinets/ballet/core/internal/infra/store"
+	"github.com/denyszorinets/ballet/kit/auth"
 )
 
 // clock is a settable time source.
@@ -183,4 +186,131 @@ func TestFeatures_AuthorizationFollowsOrganizationAndProjects(t *testing.T) {
 	assert.ErrorIs(t, err, app.ErrForbidden)
 	_, err = fs.List(bob, "globex", app.FeatureFilter{})
 	assert.ErrorIs(t, err, app.ErrForbidden, "other organization")
+}
+
+// allowAgents authorizes everything (agents are authorized by their run
+// tokens, outside role bindings).
+type allowAgents struct{}
+
+func (allowAgents) Authorize(context.Context, auth.Identity, app.Action, app.Scope) error { return nil }
+
+func agentRun(t *testing.T) context.Context {
+	return auth.WithIdentity(t.Context(), auth.Identity{Kind: auth.KindService, Subject: "run:r1"})
+}
+
+func TestFeatures_PolicyInheritsFromOrganization(t *testing.T) {
+	env := newRBACEnv(t)
+	seed(t, env)
+	fs := &app.Features{Store: env.store, Tenancy: env.store, Execution: env.store, Authz: env.rbac, Now: time.Now, NewID: store.NewID}
+	alice := user(t, "alice", "ballet-admins")
+	org, err := env.store.OrganizationByKey(t.Context(), "acme")
+	require.NoError(t, err)
+	web, err := env.store.ProjectByKey(t.Context(), "WEB")
+	require.NoError(t, err)
+
+	p, err := fs.Policy(t.Context(), org, web.ID)
+	require.NoError(t, err)
+	assert.Equal(t, feature.PolicyDirect, p, "default")
+
+	org, err = env.tenancy.UpdateOrganization(alice, app.UpdateOrganizationInput{Key: "acme", FeaturePolicy: "proposal", Version: org.Version})
+	require.NoError(t, err)
+	p, err = fs.Policy(t.Context(), org, web.ID)
+	require.NoError(t, err)
+	assert.Equal(t, feature.PolicyProposal, p, "organization")
+
+	ex := &app.Execution{Store: env.store, Tenancy: env.store, Authz: env.rbac, Now: time.Now}
+	_, err = ex.Set(alice, "WEB", execution.Settings{FeaturePolicy: "read_only"}, 0)
+	require.NoError(t, err)
+	p, err = fs.Policy(t.Context(), org, web.ID)
+	require.NoError(t, err)
+	assert.Equal(t, feature.PolicyReadOnly, p, "project override")
+
+	_, err = ex.Set(alice, "APP", execution.Settings{FeaturePolicy: "sometimes"}, 0)
+	assert.ErrorIs(t, err, app.ErrInvalid)
+}
+
+func TestFeatures_AgentRevisionsWaitForReview(t *testing.T) {
+	env := newRBACEnv(t)
+	seed(t, env)
+	c := &clock{t: time.Date(2026, 10, 1, 9, 0, 0, 0, time.UTC)}
+	agents := &app.Features{Store: env.store, Tenancy: env.store, Authz: allowAgents{}, Now: c.Now, NewID: store.NewID}
+	humans := &app.Features{Store: env.store, Tenancy: env.store, Authz: env.rbac, Now: c.Now, NewID: store.NewID}
+	bob := user(t, "bob", "acme-devs")
+
+	_, err := humans.Create(bob, "acme", app.CreateFeatureInput{Title: "Export", Description: "CSV."})
+	require.NoError(t, err)
+	c.Advance(time.Minute)
+	_, err = agents.Update(agentRun(t), "acme", "F-1", app.UpdateFeatureInput{Version: 1, Description: ptr("CSV, PDF."), Reason: "Added PDF"})
+	require.NoError(t, err)
+	c.Advance(time.Minute)
+	_, err = agents.Create(agentRun(t), "acme", app.CreateFeatureInput{Title: "Export scheduling"})
+	require.NoError(t, err)
+
+	queue, err := humans.Reviews(bob, "acme")
+	require.NoError(t, err)
+	require.Len(t, queue, 2, "the agent's update and creation")
+	assert.Equal(t, "F-1", queue[0].FeatureKey, "oldest first")
+	assert.Equal(t, int64(2), queue[0].Number)
+	assert.Equal(t, "Export", queue[0].FeatureTitle)
+	assert.Equal(t, "CSV.", queue[0].Previous.Description, "with the state before, for a diff")
+
+	_, err = humans.Review(agentRun(t), "acme", "F-1", 2, app.ReviewInput{Action: "confirm"})
+	assert.ErrorIs(t, err, app.ErrForbidden, "only humans review")
+
+	r, err := humans.Review(bob, "acme", "F-1", 2, app.ReviewInput{Action: "confirm"})
+	require.NoError(t, err)
+	assert.Equal(t, feature.ReviewConfirmed, r.Review)
+	assert.Equal(t, "bob", r.ReviewedBy)
+	_, err = humans.Review(bob, "acme", "F-1", 2, app.ReviewInput{Action: "revert"})
+	assert.ErrorIs(t, err, app.ErrConflict, "already reviewed")
+
+	c.Advance(time.Minute)
+	r, err = humans.Review(bob, "acme", "F-2", 1, app.ReviewInput{Action: "revert", Comment: "Not a feature"})
+	require.NoError(t, err)
+	assert.Equal(t, feature.ReviewReverted, r.Review)
+	f, err := humans.Get(bob, "acme", "F-2")
+	require.NoError(t, err)
+	assert.Equal(t, feature.StatusRemoved, f.Status, "reverting a creation removes the feature")
+	revs, err := humans.Revisions(bob, "acme", "F-2")
+	require.NoError(t, err)
+	require.Len(t, revs, 2)
+	assert.Equal(t, "Reverted revision 1: Not a feature", revs[0].Reason)
+	assert.Equal(t, feature.Cause{Kind: "revert", Ref: "1"}, revs[0].Cause)
+
+	queue, err = humans.Reviews(bob, "acme")
+	require.NoError(t, err)
+	assert.Empty(t, queue)
+}
+
+func TestFeatures_RevertRestoresThePreviousRevision(t *testing.T) {
+	env := newRBACEnv(t)
+	seed(t, env)
+	agents := &app.Features{Store: env.store, Tenancy: env.store, Authz: allowAgents{}, Now: time.Now, NewID: store.NewID}
+	humans := &app.Features{Store: env.store, Tenancy: env.store, Authz: env.rbac, Now: time.Now, NewID: store.NewID}
+	bob := user(t, "bob", "acme-devs")
+	_, err := humans.Create(bob, "acme", app.CreateFeatureInput{Title: "Export", Description: "CSV.", ProjectKeys: []string{"WEB"}})
+	require.NoError(t, err)
+	_, err = agents.Update(agentRun(t), "acme", "F-1", app.UpdateFeatureInput{Version: 1, Title: ptr("Exports"),
+		Status: ptr(feature.StatusDeprecated), ProjectKeys: &[]string{"APP"}})
+	require.NoError(t, err)
+	_, err = humans.Update(bob, "acme", "F-1", app.UpdateFeatureInput{Version: 2, Description: ptr("CSV only.")})
+	require.NoError(t, err)
+
+	_, err = humans.Review(bob, "acme", "F-1", 2, app.ReviewInput{Action: "revert"})
+	assert.ErrorIs(t, err, app.ErrConflict, "later revisions exist")
+	_, err = humans.Review(bob, "acme", "F-1", 1, app.ReviewInput{Action: "confirm"})
+	assert.ErrorIs(t, err, app.ErrConflict, "human revisions need no review")
+	_, err = humans.Review(bob, "acme", "F-1", 2, app.ReviewInput{Action: "maybe"})
+	assert.ErrorIs(t, err, app.ErrInvalid)
+
+	_, err = humans.Update(bob, "acme", "F-1", app.UpdateFeatureInput{Version: 3, Description: ptr("CSV.")})
+	require.NoError(t, err)
+	_, err = agents.Update(agentRun(t), "acme", "F-1", app.UpdateFeatureInput{Version: 4, Title: ptr("Data exports")})
+	require.NoError(t, err)
+	_, err = humans.Review(bob, "acme", "F-1", 5, app.ReviewInput{Action: "revert"})
+	require.NoError(t, err)
+	f, err := humans.Get(bob, "acme", "F-1")
+	require.NoError(t, err)
+	assert.Equal(t, "Exports", f.Title, "restored revision 4")
+	assert.Equal(t, int64(6), f.Version)
 }

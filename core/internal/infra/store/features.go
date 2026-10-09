@@ -101,7 +101,34 @@ func (s *Store) updateFeatureStmts(w app.FeatureWrite, expected int64) ([]sqlsto
 			updated_at = ?, version = ? WHERE id = ? AND version = ?`,
 		f.Title, f.Description, string(f.Status), formatTime(f.UpdatedAt), f.Version, f.ID, expected)}
 	stmts = append(stmts, featureProjectStmts(f)...)
+	if w.Reviews != nil {
+		stmts = append(stmts, reviewStmt(*w.Reviews))
+	}
 	return append(stmts, rev, s.AppendEvent(w.Event)), nil
+}
+
+// reviewStmt records the review of a revision still pending.
+func reviewStmt(m app.ReviewMark) sqlstore.Stmt {
+	return sqlstore.ExecOne(`UPDATE feature_revisions SET review = ?, reviewed_by = ?, reviewed_at = ?
+		WHERE feature_id = ? AND number = ? AND review = 'pending'`,
+		string(m.Review), m.By, formatTime(m.At), m.FeatureID, m.Number)
+}
+
+// ReviewRevision records the review of a pending revision and e.
+func (s *Store) ReviewRevision(ctx context.Context, m app.ReviewMark, e event.Event) error {
+	return mapWriteErr("review feature revision", s.db.Batch(ctx, reviewStmt(m), s.AppendEvent(e)))
+}
+
+// PendingRevisions returns the revisions of an organization's features
+// waiting for review, oldest first.
+func (s *Store) PendingRevisions(ctx context.Context, organizationID string) ([]feature.Revision, error) {
+	revs, err := s.revisions(ctx, `SELECT `+fmt.Sprintf(revisionCols, "description")+` FROM feature_revisions
+		WHERE review = 'pending' AND feature_id IN (SELECT id FROM features WHERE organization_id = ?)`, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	slices.SortStableFunc(revs, func(a, b feature.Revision) int { return a.CreatedAt.Compare(b.CreatedAt) })
+	return revs, nil
 }
 
 const featureCols = `f.id, f.organization_id, f.number, f.key, f.title, f.description, f.status, f.created_at,
